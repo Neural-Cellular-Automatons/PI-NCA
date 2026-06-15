@@ -37,3 +37,20 @@ Running, append-only log. Newest entries at the bottom of each day. Times are th
 - [ ] Per-branch migration docs under `docs/migration/`.
 - [ ] Define the shared equation suite + reduced-scale configs (`src/pinca_jax/equations/`).
 - [ ] Then baselines: PINN, NCA, PI-NCA, FNO; then hybrids; then ablations; then `research/final-comparison`.
+
+### Update — Phase 1 (heat/`main` branch migration) COMPLETE
+- Built shared JAX core `src/pinca_jax/`: `equations/heat.py` (roll-based periodic
+  Laplacian + `lax.scan` rollouts), `models/flux_nca.py` (Flax linen DeepFluxNCA,
+  NHWC, circular padding, zero-init flux head), `physics.py` (divergence update +
+  energy projection), `data.py` (vectorised periodic-blob ICs), `train_nca.py`
+  (jit/optax/scan trainer), `configs.py` (SMOKE/CPU_REDUCED/GPU_FULL presets).
+- **Correctness gate: `pytest tests/` → 7/7 pass.** JAX Laplacian == PyTorch circular
+  conv; single-step + 25-step rollout match; weight-ported NCA matches with non-zero
+  flux head (divergence path exercised, atol 1e-5); mass conservation + energy
+  projection verified; end-to-end training reduces loss.
+- **End-to-end:** `train_nca --smoke` → loss 1.11e-1→7.22e-3 (15.4×) in 2.0s CPU.
+- Migration docs: `docs/migration/README.md`, `docs/migration/01_heat_pinca_main.md`
+  (port table, correctness evidence, intentional behavioural diffs, hardware honesty).
+- **Gate satisfied → architecture work on the heat branch is now unblocked.**
+- Next: migrate the three notebook branches' equations (heterogeneous heat, Gray–Scott,
+  SWE/FHN/Cahn–Hilliard) into `equations/`, then fork baseline branches.
