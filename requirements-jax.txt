@@ -1,0 +1,21 @@
+# JAX scientific-ML stack for the PI-NCA research migration.
+# CPU host this session; on GPU use the matching jax[cuda12] wheel instead of jax[cpu].
+# NOTE: on Windows without admin, see docs/environment.md for the --no-deps workaround
+#       (orbax test paths exceed MAX_PATH). On Linux/macOS this file installs cleanly.
+
+jax[cpu]==0.10.1
+optax==0.2.8
+flax==0.12.7
+cax==0.3.3
+pillow
+
+# reference implementation (original, for migration-correctness comparison)
+torch==2.12.0
+
+# data / viz / io
+numpy
+matplotlib
+imageio
+
+# dev
+pytest

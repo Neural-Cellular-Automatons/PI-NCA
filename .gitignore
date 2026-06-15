@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+.venv/
+# large/run artifacts (keep small summary CSV/JSON in results/, ignore heavy media)
+results/**/*.gif
+results/**/*.npz
+results/**/*.png
+*.zip
