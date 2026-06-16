@@ -52,6 +52,40 @@ C=1 only) · `fno` (global spectral). PINN/DeepONet tracked separately (differen
 - **Note on FNO size:** at width=24/modes=8/depth=4 the spectral weights dominate (5.9×10⁵
   params). A fair iso-parameter comparison is queued as an ablation (`research/ablation-studies`).
 
+### Cahn–Hilliard  (grid=24, train_steps=12, eval_steps=48, epochs=200, seeds=3)
+
+**Reference scale / floor:** the order parameter lives in [−1,1]; an *identity*
+"predict-no-change" baseline scores **rel-L2 ≈ 0.93** (CH evolves a lot, so doing
+nothing is ~93% error). This is the floor every model must beat.
+
+| arch | rel_l2 | mse | psnr | conservation_err | params | infer_s/step |
+|---|---|---|---|---|---|---|
+| plain_nca | 14.0±3.4 | 138±61 | −15.0±2.4 | 3.36e+2±3.7e2 | 6 784 | 9.7e-4 |
+| pi_nca | 17.9±2.6 | 220±64 | −17.3±1.2 | **3.12e-5±7.4e-6** | **4 576** | **7.8e-4** |
+| fno | 15.4±**15.1** | 266±375 | −11.9±12 | 1.93e+3±1.9e3 | 592 897 | 4.4e-3 |
+| _identity (floor)_ | _0.93_ | — | — | _0_ | _0_ | — |
+
+**Analysis (Cahn–Hilliard, stiff 4th-order — a clear FAILURE regime).** A deliberately
+honest negative result:
+- **Every trained emulator is 15–20× WORSE than the identity floor** (14–18 vs 0.93).
+  They do not just under-fit — they **diverge**: unbounded network outputs blow up over
+  the 48-step horizon (4× the 12-step training horizon) on stiff, sharp-interface CH
+  dynamics, whereas the solver stays bounded by its clamp. PSNR is negative for all.
+- **H2 is NOT supported here:** FNO's global mixing did *not* rescue it — it had
+  **catastrophic seed variance** (rel-L2 15±15; conservation 1926±1925 — one seed exploded).
+- **Conservation ≠ correctness (lit-review caveat, now empirical):** `pi_nca` conserves
+  mass to 3e-5 while being the *least* accurate — it faithfully conserves the *wrong*
+  dynamics. Exact conservation is necessary but far from sufficient on stiff PDEs.
+- **Diagnosis & queued fixes** (ablations): (1) bounded output (tanh/clamp) to prevent
+  blow-up; (2) longer / curriculum training horizon so train≈eval; (3) more epochs;
+  (4) implicit/multi-step integration. Heat used the *identical* protocol and worked
+  (rel-L2 0.035–0.23), so the protocol is fair — CH genuinely exposes the limits of
+  short-horizon one-step emulation.
+- **Takeaway:** strong evidence *against* a blanket "NCA/operator emulators solve PDEs"
+  claim. On stiff 4th-order dynamics at modest budget, all three fail; the open question
+  is which fix (bounded conservative NCA vs. operator vs. hybrid) recovers fastest — the
+  ablation/hybrid phase targets exactly this.
+
 ### (further PDEs appended as runs complete)
 
 ## Reading guide / hypotheses under test
