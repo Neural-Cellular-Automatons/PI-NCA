@@ -62,6 +62,8 @@ stiff-CH accuracy (there, bounding is what matters). The regime selects the comp
    (confirmed, not just hypothesised): multi-scale conservative NCA wins heat (0.0183 < FNO
    0.0352, 110× fewer params); bounded conservation-preserving NCA wins stiff CH (0.603 below
    floor with 2.4e-4 conservation — accuracy of clipping *and* conservation of the flux form).
+7. **Stacking fixes compounds on stiff PDEs:** bounding (A1) + matched train/eval horizon (A3)
+   takes CH to **0.511** with conservation **6.8e-5** — both fixes contribute independently.
 
 ## Conclusions
 For PDE-governed systems, "NCA vs PINN vs operator" is the wrong framing — the right one is

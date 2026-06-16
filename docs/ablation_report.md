@@ -40,11 +40,31 @@ a **conservation-preserving bounded update** (e.g. clip the flux/potential rathe
 state, or project back onto the mass-constraint after clipping) is a concrete next
 architecture — flagged for the hybrid phase.
 
+## Ablation 2 — Training-horizon curriculum on stiff Cahn–Hilliard (A3)
+**Question.** CH eval is 48 steps but training used 12. Does training on longer rollouts
+(train→eval horizon match) reduce the stiff-PDE error, independent of the bounding fix?
+
+**Setup.** `bounded_cons_nca` (the CH winner), grid 24, eval 48 steps, 150 epochs, 2 seeds,
+`rollout_steps ∈ {12, 24, 48}`.
+
+| train_steps | rel-L2 | conservation err | train wall (s) |
+|---|---|---|---|
+| 12 | 0.633 ± 0.026 | 3.16e-4 | 45.6 |
+| 24 | 0.619 ± 0.022 | 2.48e-4 | 88.6 |
+| **48** (= eval) | **0.511 ± 0.023** | **6.84e-5** | 176 |
+
+**Findings.**
+1. **Monotonic improvement with horizon:** matching train to eval cuts rel-L2 0.633→**0.511**
+   (~19% relative) and conservation error 3.2e-4→6.8e-5 — so the train/eval-horizon gap was a
+   real, *separate* contributor to the stiff-PDE error, on top of the bounding fix (A1).
+2. **Cost is proportional** (BPTT depth): 4× horizon ≈ 4× training time. A practical recipe is a
+   curriculum (grow horizon during training) to get most of the gain at lower cost — queued.
+3. **Combined recipe** for stiff PDEs: bounded + conserving (A1) **and** train≈eval horizon (A3)
+   → CH rel-L2 0.51, well below the 0.93 identity floor, with near-exact conservation (7e-5).
+
 ## Planned ablations (infrastructure ready)
 - **A2 Iso-parameter** — match FNO params (~5.9e5) to NCA (~5e3) budget, or shrink FNO, to
   separate "spectral global mixing" from "more parameters" in the heat result.
-- **A3 Training-horizon curriculum** — train_steps ∈ {6,12,24,48}; does train≈eval close
-  the stiff-PDE gap independent of clipping?
 - **A4 Conservation on/off at fixed backbone** — flux-divergence head vs direct residual
   head, same perceive+MLP (isolated conservation contribution; partially covered by
   plain_nca vs pi_nca but with matched widths).
