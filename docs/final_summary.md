@@ -83,6 +83,18 @@ stiff-CH accuracy (there, bounding is what matters). The regime selects the comp
    conserving models stall at 0.379 while unconstrained `plain_nca`/`fno` reach 0.118.
 13. **Hybrid NCA is ~200× more parameter-efficient than FNO** on heat (rel-L2×params 101 vs
    20,875): more accurate at 107× fewer parameters and ~6× cheaper inference (`docs/efficiency_comparison.md`).
+14. **Where the NCAs' error lives (spectral diagnostic):** on heat the NCAs' high-frequency error
+   fraction is 0.44–0.89 vs FNO's **0.004** — NCAs over-smooth (residual error in fine scales),
+   FNO's error is broadband-flat. This explains FNO's wins on sharp-interface (Allen–Cahn) and
+   fine-scale regimes despite NCAs' lower *total* error on smooth ones.
+15. **A4/A5 isolate the mechanisms cleanly:** at matched backbone width, the conservation head
+   helps heat (0.104 vs 0.353) and hurts Nagumo (0.379 vs 0.123); widening perception helps
+   monotonically on heat, but on Navier–Stokes only *dilated multi-scale* helps — a plain 5×5
+   stencil destabilises (1.49 vs 3×3's 0.58). Multi-scale dilation is the robust reach mechanism.
+
+**Coverage:** 10 emulator phenomena (heat, advection–diffusion, Allen–Cahn, wave, shallow-water,
+Nagumo, FitzHugh–Nagumo, Navier–Stokes, Cahn–Hilliard, Gray–Scott) with 20-metric multi-seed
+tables; ablations A1–A6; PINN + DeepONet + Darcy operator baselines; CAX eval; GIFs/error-maps.
 
 ## Conclusions
 For PDE-governed systems, "NCA vs PINN vs operator" is the wrong framing — the right one is

@@ -62,9 +62,43 @@ architecture — flagged for the hybrid phase.
 3. **Combined recipe** for stiff PDEs: bounded + conserving (A1) **and** train≈eval horizon (A3)
    → CH rel-L2 0.51, well below the 0.93 identity floor, with near-exact conservation (7e-5).
 
-## Planned ablations (infrastructure ready)
-- **A2 Iso-parameter** — match FNO params (~5.9e5) to NCA (~5e3) budget, or shrink FNO, to
-  separate "spectral global mixing" from "more parameters" in the heat result.
+## Ablation A2 — iso-parameter FNO on heat (3 seeds)
+Shrinking FNO to NCA budget (8.4k params) degrades it 3.4× (0.035→0.119), losing to the
+NCA-budget models — FNO's heat edge was largely parameter count (see experimental_report A2).
+
+## Ablation A4 — conservation on/off at matched backbone width (2 seeds)
+Same `AblationNCA` backbone (32/64, 3×3); only the head differs: `flux` (mass-conserving
+divergence) vs `residual` (free). Isolates the conservation inductive bias.
+
+| PDE | abl_flux (conserving) | abl_residual (free) | verdict |
+|---|---|---|---|
+| Heat (conservative) | **0.104** | 0.353 | conservation **helps** 3.4× |
+| Nagumo (non-conservative) | 0.379 | **0.123** | conservation **hurts** 3.1× |
+
+**A4 is the clean, matched-width proof of the central rule:** the flux/conservation head helps
+when the PDE conserves mass and hurts when it does not — same backbone, opposite outcome.
+(Detailed 20-metric tables: `results/bench_{heat,nagumo}_A4.md`.)
+
+## Ablation A5 — perception / receptive-field size (2 seeds)
+Same head (`flux`), same widths; vary perception: 3×3 single-scale vs 5×5 vs dilated
+multi-scale (1,2,4).
+
+| PDE | 3×3 (4.6k) | 5×5 (5.1k) | multi-scale (9.3k) | verdict |
+|---|---|---|---|---|
+| Heat (local) | 0.104 | 0.046 | **0.024** | wider perception monotonically better |
+| Navier–Stokes (global) | 0.576 | 1.486 | **0.388** | multi-scale best; plain 5×5 **destabilises** |
+
+**A5 findings.** Widening the receptive field helps both regimes, but *how* matters: on heat
+all three improve with reach; on globally-coupled NS, a plain 5×5 stencil **destabilises**
+(1.49, worse than 3×3) while the **dilated multi-scale** perception (reaching dilation-4
+neighbours cheaply) is best (0.388). Multi-scale dilation is the robust way to widen reach —
+it is what lets the multi-scale NCA partially cope with NS's non-locality.
+
+## Ablation A6 — single-step vs multi-step (BPTT) training
+<!-- A6:results -->
+_(train_steps ∈ {1,4,12}, eval 48; appended when the run completes.)_
+
+## Other planned ablations (infrastructure ready)
 - **A4 Conservation on/off at fixed backbone** — flux-divergence head vs direct residual
   head, same perceive+MLP (isolated conservation contribution; partially covered by
   plain_nca vs pi_nca but with matched widths).

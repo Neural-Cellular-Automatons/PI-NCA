@@ -4,19 +4,35 @@ One-stop index of all benchmarks (reduced-scale CPU, mean ± std over seeds). De
 analysis in `docs/experimental_report.md`; efficiency in `docs/efficiency_comparison.md`;
 ablations in `docs/ablation_report.md`. **Bold** = best in column. rel-L2 lower is better.
 
-## 0. Regime map (the headline)
-| PDE | character | winner | why |
-|---|---|---|---|
-| Heat | smooth, local | **multiscale_flux_nca** (0.0183) | local multi-scale + conservation |
-| Cahn–Hilliard | stiff, 4th-order, bounded | **bounded_cons_nca** (0.603→0.511 w/ A3) | bounding + conservation |
-| Shallow-water | conservative, multi-field | **mc_flux_nca** (0.031, ≈FNO @54× fewer params) | per-field conservation correct |
-| FitzHugh–Nagumo | non-conservative reaction | **plain_nca** (0.154) | conservation prior would hurt |
-| Nagumo | non-conservative bistable | **fno / plain_nca** (0.118) | conservation prior hurts |
-| Navier–Stokes | global Poisson coupling | **fno** (0.145) | global spectral mixing; locality fails |
+> **Full 20-metric detailed tables** (MSE, RMSE, MAE, rel-L2, L∞, PSNR, SSIM, high-freq error
+> fraction, error-growth profile T/4→T, conservation, BC residual, grad-energy, params, train
+> wall, inference latency, throughput) for every phenomenon live in
+> `results/bench_<pde>_full.md`. This file is the summary index.
+
+## 0. Regime map (the headline — 10 phenomena, rel-L2, 2–3 seeds)
+| PDE | character | winner | rel-L2 | runner-up | why |
+|---|---|---|---|---|---|
+| Heat | smooth, local | **spectral_flux_nca** | 0.0158 | multiscale 0.021 | local multi-scale + spectral |
+| Advection–diffusion | linear transport | **fno** | 0.0074 | pi_nca 0.0147 | smooth global; conservation 2nd |
+| Allen–Cahn | non-cons. phase sep. | **fno** | 0.0079 | NCAs ~0.063 | sharp interfaces (fine scales) |
+| Wave | 2nd-order hyperbolic | **fno ≈ mc_flux** | 0.108 | all ~0.11 | tie; all comparable |
+| Shallow-water | conservative, multi-field | **fno** | 0.048 | mc_flux 0.059 @54× fewer params | global; cons. NCA close |
+| Nagumo | non-cons. bistable | **fno / plain_nca** | 0.118 | — | conservation prior hurts |
+| FitzHugh–Nagumo | non-cons. reaction | **plain_nca** | 0.154 | fno 0.45 | conservation prior hurts badly |
+| Navier–Stokes | global Poisson coupling | **fno** | 0.145 | multiscale 0.284 | global spectral; locality fails |
+| Cahn–Hilliard | stiff 4th-order, bounded | **bounded_cons_nca** | 0.603→0.511 (A3) | bounded_multiscale 0.674 | bounding + conservation |
+| Gray–Scott | reaction–diffusion patterns | **mc_flux_nca** | 0.671 | fno 1.07 | hard; conservation helps relatively |
 
 **Thesis:** no universal winner. The PDE's structure — conservation, boundedness, and
-information-propagation range — selects the architecture. Hybrids that compose the matching
-inductive biases win every *local/bounded* regime; FNO wins the *globally-coupled* regime.
+information-propagation range — selects the architecture. Local/multi-scale conservative NCAs
+win **smooth local & conservative** regimes (heat, adv-diff 2nd, SWE-competitive, CH-bounded);
+FNO wins **fine-scale, globally-coupled, or non-conservative** regimes (Allen–Cahn, Navier–Stokes,
+Nagumo); the unconstrained NCA wins **non-conservative reaction** (FHN).
+
+**New insight from the spectral metric:** on heat the NCAs' high-frequency error fraction is
+0.44–0.89 vs FNO's **0.004** — NCAs are accurate overall but place their residual error in fine
+scales (mild over-smoothing); FNO's error is broadband-flat. This is *why* FNO wins the
+sharp-interface (Allen–Cahn) and fine-scale regimes despite NCAs' lower total error on smooth ones.
 
 ## 1. Emulator benchmarks (per PDE, all architectures)
 
