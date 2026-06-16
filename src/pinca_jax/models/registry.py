@@ -11,6 +11,7 @@ from typing import Callable
 from .nca import NCA
 from .flux_nca import DeepFluxNCA
 from .fno import FNO2d
+from .hybrids import BoundedConsFluxNCA, SpectralFluxNCA, MultiScaleFluxNCA
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,20 @@ REGISTRY: dict[str, ArchSpec] = {
     "fno": ArchSpec(
         "fno", lambda C: (lambda: FNO2d(out_channels=C, width=24, modes=8, depth=4)),
         note="global spectral operator"),
+    # --- hybrids (scalar conservative fields) ---
+    "bounded_cons_nca": ArchSpec(
+        "bounded_cons_nca", lambda C: (lambda: BoundedConsFluxNCA(bounds=(-1.0, 1.0))),
+        scalar_only=True, note="flux NCA + clip + mass re-projection (bounded AND conserving)"),
+    "spectral_flux_nca": ArchSpec(
+        "spectral_flux_nca", lambda C: (lambda: SpectralFluxNCA(conserve=True)),
+        scalar_only=True, note="local conservative flux + global FNO spectral correction"),
+    "multiscale_flux_nca": ArchSpec(
+        "multiscale_flux_nca", lambda C: (lambda: MultiScaleFluxNCA(conserve=True)),
+        scalar_only=True, note="dilated multi-scale perception + conservative flux"),
 }
+
+# bounds for hybrids assume the field is in [-1,1] (Cahn-Hilliard / Allen-Cahn).
+# For unbounded fields (heat) use bounds wide enough to be inert, or the plain pi_nca.
 
 
 def applicable(channels: int):

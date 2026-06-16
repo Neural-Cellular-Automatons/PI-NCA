@@ -24,9 +24,11 @@ LOWER_BETTER = {"mse", "rel_l2", "rmse", "conservation_err", "bc_residual",
                 "final_train_loss", "train_wall_s", "infer_s_per_step"}
 
 
-def run_pde(pde: str, cfg: EmuConfig, seeds):
+def run_pde(pde: str, cfg: EmuConfig, seeds, arch_names=None):
     channels = pdes.REGISTRY[pde].channels
     archs = registry.applicable(channels)
+    if arch_names:
+        archs = {k: v for k, v in archs.items() if k in arch_names}
     out = {}
     for name, spec in archs.items():
         ctor = spec.make(channels)
@@ -75,19 +77,25 @@ def main():
     ap.add_argument("--grid", type=int, default=24)
     ap.add_argument("--rollout", type=int, default=12)
     ap.add_argument("--eval", type=int, default=48)
+    ap.add_argument("--archs", default=None, help="comma-separated arch names (default: all applicable)")
+    ap.add_argument("--tag", default=None, help="output filename suffix")
+    ap.add_argument("--clip", default=None, help="lo,hi to clip each step (bounded ablation)")
     args = ap.parse_args()
 
+    clip = tuple(float(v) for v in args.clip.split(",")) if args.clip else None
     cfg = EmuConfig(pde=args.pde, grid_size=args.grid, rollout_steps=args.rollout,
-                    eval_steps=args.eval, epochs=args.epochs)
+                    eval_steps=args.eval, epochs=args.epochs, output_clip=clip)
     seeds = tuple(range(args.seeds))
-    print(f"Benchmark {args.pde}: archs vs teacher, seeds={seeds}")
-    results = run_pde(args.pde, cfg, seeds)
+    arch_names = args.archs.split(",") if args.archs else None
+    print(f"Benchmark {args.pde}: archs={arch_names or 'all'}, seeds={seeds}, clip={clip}")
+    results = run_pde(args.pde, cfg, seeds, arch_names)
 
+    suffix = f"_{args.tag}" if args.tag else ""
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}.json"), "w") as f:
+    with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.json"), "w") as f:
         json.dump({"config": asdict(cfg), "seeds": list(seeds), "results": results}, f, indent=2)
     md = to_markdown(args.pde, results, cfg)
-    with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}.md"), "w") as f:
+    with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.md"), "w") as f:
         f.write(md)
     print("\n" + md)
 
