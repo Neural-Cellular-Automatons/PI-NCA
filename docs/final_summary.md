@@ -38,8 +38,11 @@ different components.
 **The hybrids win.** A motivated hybrid is the single best model in *each* regime, beating every
 pure baseline: a **multi-scale conservative NCA** on smooth local diffusion (beats FNO at 110×
 fewer params) and a **bounded conservation-preserving NCA** on stiff 4th-order dynamics (the only
-model that is both accurate and mass-conserving). The capstone `bounded_multiscale_nca` unifies
-both ideas in one architecture.
+model both accurate and mass-conserving). One architecture — `MultiScaleFluxNCA` with PDE-
+appropriate bounds — is best-or-near-best in both regimes (`bounds=None` wins heat;
+`bounds=(-1,1)` ties the CH winner at ~6× lower variance). Honest caveat: stacking *all*
+components is not automatically better — multi-scale perception helps smooth transport but **not**
+stiff-CH accuracy (there, bounding is what matters). The regime selects the component.
 
 ### Findings (honest, anti-confirmation-bias)
 1. **Conservation makes the local NCA viable** on heat: the unconstrained NCA diverges;
