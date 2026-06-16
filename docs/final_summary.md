@@ -87,21 +87,27 @@ regime**, and a single unified `bounded_multiscale_nca` carries both biases. The
 NCA's flux structure is the key reusable component: cheap, exactly mass-conserving, and
 composable with wider perception or bounding as the PDE demands.
 
+## Coverage (what was run)
+Emulator benchmarks (multi-seed): **heat, Cahn–Hilliard, shallow-water, FitzHugh–Nagumo**;
+ablations **A1** (output bounding) and **A3** (horizon curriculum); **A2** iso-parameter FNO.
+Three hybrids + a unified capstone. Continuous/operator baselines: **PINN** and **DeepONet**
+(3-seed). **CAX** accelerator evaluated. Correctness gate **41/41**.
+
 ## Limitations
 - Reduced-scale CPU (small grids/horizons/epochs, 2–3 seeds); single device ⇒ `pmap`/
-  sharding unused. Absolute numbers are not GPU-scale.
-- Benchmarks so far: heat + Cahn–Hilliard (+ CH ablation). SWE/FHN multi-channel, the full
-  multi-seed PINN sweep, and hybrids are scaffolded but not yet run at scale.
+  sharding unused. Absolute numbers are not GPU-scale; *relative orderings* are the object.
+- PINN/DeepONet are heat-only and use different horizons/metrics than the emulators (reported as
+  a separate paradigm, not head-to-head).
 - FHN initial condition is a standard choice (not recovered from the notebook source).
+- `gray_scott`/`wave`/`adv_diff`/`allen_cahn` emulator sweeps and ablations A4–A6 (conservation
+  on/off at matched width, neighbourhood size, physics-loss weighting) remain to run; all are
+  scaffolded (`bench.py --pde ... --archs ...`).
 
 ## Future work (infrastructure ready)
-- Multi-channel conservative NCA → SWE/FHN/Gray–Scott benchmarks.
-- Hybrids: FNO-latent + NCA refinement; conservation-preserving bounded NCA; multi-scale
-  perception (lit review §7, ablation A5).
-- Ablations A2–A6 (iso-parameter FNO, horizon curriculum, conservation on/off, neighbourhood
-  size, physics-loss weighting).
-- Full multi-seed PINN across horizons; DeepONet baseline.
-- CAX integration for accelerated NCA rollouts (evaluate vs hand-written `lax.scan`).
+- Remaining PDE emulator sweeps + ablations A4–A6; multi-channel hybrids (bounded+multiscale on SWE).
+- Operator hybrids on the stiff regime (FNO-latent + bounded conservative NCA refinement).
+- GPU full-scale re-run (configs unchanged) + `jax.sharding`; CAX CA-zoo targets (Lenia) and its
+  Moore/von-Neumann perception as A5 neighbourhood variants.
 
 ## Artifacts
 `docs/{literature_review, architecture_report, experimental_report, ablation_report,
