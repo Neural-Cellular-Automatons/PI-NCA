@@ -89,11 +89,17 @@ def ref_fhn(s, p):
     return torch.cat([u + p["dt"] * du, v + p["dt"] * dv], 1)
 
 
+def ref_nagumo(s, p):
+    return s + p["dt"] * (p["D"] * t_lap(s) + s * (1.0 - s) * (s - p["a"]))
+
+
+# Verbatim references for the finite-difference PDEs. (navier_stokes is pseudo-spectral
+# — no roll-based torch ref; it is covered by the IC+rollout stability test instead.)
 REFS = {
     "heat": ref_heat, "wave": ref_wave, "adv_diff": ref_adv_diff,
     "allen_cahn": ref_allen_cahn, "gray_scott": ref_gray_scott,
     "shallow_water": ref_shallow_water, "cahn_hilliard": ref_cahn_hilliard,
-    "fitzhugh_nagumo": ref_fhn,
+    "fitzhugh_nagumo": ref_fhn, "nagumo": ref_nagumo,
 }
 
 
@@ -112,7 +118,7 @@ def _make_state(name, C, rng):
     return s
 
 
-@pytest.mark.parametrize("name", list(pdes.REGISTRY))
+@pytest.mark.parametrize("name", list(REFS))
 def test_pde_step_matches_torch(name):
     spec = pdes.REGISTRY[name]
     rng = np.random.default_rng(_seed(name))
@@ -132,7 +138,7 @@ def test_pde_step_matches_torch(name):
 _ROLLOUT_TOL = {"shallow_water": (1e-2, 1e-2)}
 
 
-@pytest.mark.parametrize("name", list(pdes.REGISTRY))
+@pytest.mark.parametrize("name", list(REFS))
 def test_pde_rollout_matches_torch(name):
     spec = pdes.REGISTRY[name]
     rng = np.random.default_rng(_seed(name) + 1)
