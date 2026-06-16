@@ -86,7 +86,49 @@ honest negative result:
   is which fix (bounded conservative NCA vs. operator vs. hybrid) recovers fastest — the
   ablation/hybrid phase targets exactly this.
 
-### (further PDEs appended as runs complete)
+## Hybrid architectures (the payoff)
+
+Three hybrids, each motivated by a specific baseline failure (see `docs/architecture_report.md §E`,
+`docs/ablation_report.md`): `bounded_cons_nca` (clip + mass re-projection),
+`spectral_flux_nca` (local conservative flux + global FNO spectral term),
+`multiscale_flux_nca` (dilated 1/2/4 perception + conservative flux).
+
+### Heat — hybrids vs baselines (grid 24, train 12 / eval 48, 200 ep, 3 seeds)
+| arch | rel_l2 | conservation_err | params | infer_s/step |
+|---|---|---|---|---|
+| pi_nca | 4.38e-2±3.5e-2 | **3.80e-4** | 4 576 | 5.7e-4 |
+| fno | 3.52e-2±3.5e-3 | 21.3 | 592 897 | 3.1e-3 |
+| spectral_flux_nca | 1.99e-2±1.4e-2 | 1.52e-3 | 134 225 | 1.4e-3 |
+| **multiscale_flux_nca** | **1.83e-2±1.6e-3** | 1.38e-3 | **5 520** | 7.5e-4 |
+
+**Heat result — a hybrid WIN.** `multiscale_flux_nca` is **best overall (1.83e-2)**, beating
+FNO (3.52e-2) and the plain conservative PI-NCA (4.38e-2) — at **~110× fewer params than FNO**,
+low variance, fast inference, and near-conserving. Dilated (1/2/4) perception widens the
+receptive field per step, closing the locality gap that limited the single-stencil NCA, without
+the FNO's full-FFT parameter cost. `spectral_flux_nca` is a close second (1.99e-2) but needs
+134k params. → On smooth local diffusion, **a multi-scale conservative NCA dominates** the
+pure-local NCA and the global FNO simultaneously.
+
+### Cahn–Hilliard — hybrids vs the failure regime (same config; identity floor 0.93)
+| arch | rel_l2 | conservation_err | params |
+|---|---|---|---|
+| plain_nca / pi_nca / fno (baselines) | 14–18 (diverge) | — | — |
+| spectral_flux_nca | 24.4±20 (diverge) | 6.6e-4 | 134 225 |
+| multiscale_flux_nca | 23.8±8 (diverge) | **3.98e-5** | 5 520 |
+| **bounded_cons_nca** | **0.603±0.012** | **2.42e-4** | **4 576** |
+
+**Cahn–Hilliard result — a hybrid WIN that resolves the tension.** `bounded_cons_nca` is the
+**only** architecture that is *both* accurate (**0.603, below the 0.93 floor**) *and*
+mass-conserving (**2.4e-4**). Recall the dilemma: unbounded models diverge (14–24); the naive
+clip ablation recovered accuracy (0.54–0.60) but **destroyed conservation** (consErr 7.6). The
+bounded-conserving hybrid gets the accuracy **and** keeps conservation to 2.4e-4 — **4 orders
+of magnitude better conservation than naive clip at equal accuracy.** Note the non-bounding
+hybrids (spectral, multiscale) still diverge: on stiff CH, *bounding is the necessary ingredient*,
+and combining it with conservation is the right design.
+
+### Unified capstone (running): `bounded_multiscale_nca`
+Combines the heat-winner (multi-scale perception) with the CH-winner (bounded + conserving).
+<!-- UNIFIED:cahn_hilliard --> _(CH table appended when the run completes)_
 
 ## Reading guide / hypotheses under test
 - **H1 (conservation).** `pi_nca` should show conservation error orders of magnitude

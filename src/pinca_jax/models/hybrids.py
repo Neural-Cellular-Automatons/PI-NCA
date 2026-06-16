@@ -88,12 +88,18 @@ class SpectralFluxNCA(nn.Module):
 
 
 class MultiScaleFluxNCA(nn.Module):
-    """Dilated multi-scale perception (1,2,4) + conservative flux-divergence."""
+    """Dilated multi-scale perception (1,2,4) + conservative flux-divergence.
+
+    Unified capstone: with `bounds` set it also clips + re-projects mass, combining
+    the heat-winning multi-scale receptive field with the CH-winning bounded-conserving
+    update. bounds=None (default) → unbounded fields (heat); bounds=(-1,1) → stiff
+    bounded fields (Cahn-Hilliard / Allen-Cahn)."""
     out_channels: int = 1
     features: int = 24
     hidden_features: int = 64
     dilations: tuple = (1, 2, 4)
     conserve: bool = True
+    bounds: tuple | None = None
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -108,6 +114,8 @@ class MultiScaleFluxNCA(nn.Module):
         flux = nn.Conv(2, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         out = divergence_flux_update(x, flux)
+        if self.bounds is not None:
+            out = jnp.clip(out, self.bounds[0], self.bounds[1])
         if self.conserve:
-            out = conserve_energy(out, tgt)
+            out = conserve_energy(out, tgt)  # restores exact mass (post-clip too)
         return out

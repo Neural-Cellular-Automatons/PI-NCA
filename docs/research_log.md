@@ -131,3 +131,20 @@ Running, append-only log. Newest entries at the bottom of each day. Times are th
 - Deliverables now drafted: lit review, migration (4 reports), architecture, experimental,
   ablation, reproducibility, research log. Remaining: multi-channel NCA + SWE/FHN runs,
   hybrids, full multi-seed PINN sweep, final paper-style summary.
+
+### Update — Phase 5: HYBRIDS WIN (3-seed benchmarks)
+Three finding-motivated hybrids (`models/hybrids.py`), benchmarked vs baselines:
+- **Heat (smooth/local): `multiscale_flux_nca` is BEST overall — rel-L2 0.0183 ± 0.0016**,
+  beating fno (0.0352) and pi_nca (0.0438) at **~110× fewer params than fno** (5,520 vs 593k),
+  low variance, fast inference. Dilated (1/2/4) perception closes the locality gap.
+  `spectral_flux_nca` second (0.0199) but 134k params.
+- **Cahn-Hilliard (stiff): `bounded_cons_nca` is the WINNER — rel-L2 0.603 ± 0.012 (below the
+  0.93 floor) AND conservation 2.4e-4.** Only model both accurate and conserving. Resolves the
+  ablation-A1 tension: naive clip gave 0.54-0.60 but consErr 7.6; bounded_cons gives equal
+  accuracy with 4-orders-better conservation. Non-bounding hybrids (spectral 24.4, multiscale
+  23.8) still diverge → on stiff CH, bounding is the necessary ingredient.
+- **Capstone (running): `bounded_multiscale_nca`** = multi-scale (heat winner) + bounded+conserving
+  (CH winner) in one architecture; CH 3-seed benchmark in flight.
+- **Refined conclusion:** hybrids composing the right inductive biases beat EVERY pure baseline
+  in their regime. The flux-divergence conservation structure is the key reusable component.
+- Remaining: unified-model table, multi-channel SWE/FHN, full PINN sweep, A2-A6, DeepONet, CAX.

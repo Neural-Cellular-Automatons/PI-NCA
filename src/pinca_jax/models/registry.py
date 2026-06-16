@@ -42,6 +42,11 @@ REGISTRY: dict[str, ArchSpec] = {
     "multiscale_flux_nca": ArchSpec(
         "multiscale_flux_nca", lambda C: (lambda: MultiScaleFluxNCA(conserve=True)),
         scalar_only=True, note="dilated multi-scale perception + conservative flux"),
+    "bounded_multiscale_nca": ArchSpec(
+        "bounded_multiscale_nca",
+        lambda C: (lambda: MultiScaleFluxNCA(conserve=True, bounds=(-1.0, 1.0))),
+        scalar_only=True,
+        note="UNIFIED: multi-scale perception + bounded + mass-conserving (for stiff bounded fields)"),
 }
 
 # bounds for hybrids assume the field is in [-1,1] (Cahn-Hilliard / Allen-Cahn).
