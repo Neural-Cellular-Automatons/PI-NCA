@@ -193,9 +193,40 @@ making it *worse* than both NCA-budget models. So FNO's heat advantage was subst
 both full and iso-param FNO at ~1% of the parameters. Local multi-scale priors are genuinely
 parameter-efficient; FNO trades parameters for accuracy.
 
-## Operator/continuous baselines (separate paradigm)
-PINN (`pinn_heat.py`) and DeepONet (`deeponet_heat.py`) — multi-seed sweeps appended below.
-<!-- SWEEP:pinn_deeponet -->
+## Operator/continuous baselines (separate paradigm, heat, 3 seeds)
+
+> **Not directly comparable to the emulator table.** PINN solves a *single* IVP in continuous
+> (x,t) and is scored at T=32 steps; DeepONet learns the operator u0↦u(·,T=24) and is scored
+> across held-out ICs; the emulators are scored on a 48-step autoregressive rollout. Different
+> tasks, horizons, and metrics — read these as *within-paradigm* baselines, not head-to-head.
+
+| model | rel-L2 @ T | params | train wall | paradigm |
+|---|---|---|---|---|
+| PINN | 0.208 ± 0.018 | 14 209 | ~88 s | single-IVP, mesh-free, **no data** |
+| DeepONet | **0.075 ± 0.009** | 126 593 | ~9 s | operator, cross-IC, solver-trained |
+
+**Analysis.** Among the continuous/operator track, **DeepONet (0.075) clearly beats the PINN
+(0.208)** on heat: it is an *operator* trained on solver data that generalises across initial
+conditions (like FNO), whereas the vanilla PINN solves one IVP from the equation alone and pays
+the spectral-bias/loss-balancing tax (lit review §2). Trade-off: the PINN needs **no training
+data** and is mesh-free/continuously queryable; DeepONet needs solver pairs but is far more
+accurate and trains in seconds. Neither matches the best autoregressive emulator's rollout
+accuracy on heat, but the metrics are not commensurable — the value of each paradigm is
+qualitative (single-IVP vs operator vs autoregressive emulator), as characterised in
+`docs/final_summary.md`.
+
+## Consolidated cross-architecture picture (heat, emulator track)
+| arch | rel_l2 | conservation | params | class |
+|---|---|---|---|---|
+| **multiscale_flux_nca** | **0.0183** | 1.4e-3 | 5 520 | hybrid (local multi-scale) |
+| spectral_flux_nca | 0.0199 | 1.5e-3 | 134 225 | hybrid (local+global) |
+| fno | 0.0352 | 21.3 | 592 897 | operator (global) |
+| pi_nca | 0.0438 | **3.8e-4** | 4 576 | conservative NCA |
+| fno_small | 0.119 | 80.1 | 8 433 | operator (iso-param) |
+| plain_nca | 0.234 | 33.3 | 6 784 | NCA (no conservation) |
+
+Best heat emulator = a **multi-scale conservative NCA** at 5.5k params, beating FNO (16× larger
+effect on params) and every other model. The conservative `pi_nca` is the conservation champion.
 
 ## Reading guide / hypotheses under test
 - **H1 (conservation).** `pi_nca` should show conservation error orders of magnitude
