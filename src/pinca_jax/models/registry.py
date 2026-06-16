@@ -12,6 +12,7 @@ from .nca import NCA
 from .flux_nca import DeepFluxNCA, MultiChannelFluxNCA
 from .fno import FNO2d
 from .hybrids import BoundedConsFluxNCA, SpectralFluxNCA, MultiScaleFluxNCA
+from .ablation_nca import AblationNCA
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,23 @@ REGISTRY: dict[str, ArchSpec] = {
     "mc_flux_nca": ArchSpec(
         "mc_flux_nca", lambda C: (lambda: MultiChannelFluxNCA(out_channels=C)),
         note="multi-channel per-field conservative flux NCA (SWE/FHN/GS)"),
+    # --- A4: conservation on/off at MATCHED backbone width (32/64, 3x3, single-scale) ---
+    "abl_flux": ArchSpec(
+        "abl_flux", lambda C: (lambda: AblationNCA(out_channels=C, head="flux")),
+        scalar_only=True, note="A4: conservative flux head (matched backbone)"),
+    "abl_residual": ArchSpec(
+        "abl_residual", lambda C: (lambda: AblationNCA(out_channels=C, head="residual")),
+        scalar_only=True, note="A4: residual head, no conservation (matched backbone)"),
+    # --- A5: perception / receptive-field size (same head=flux, same widths) ---
+    "abl_k3": ArchSpec(
+        "abl_k3", lambda C: (lambda: AblationNCA(out_channels=C, kernel=3, dilations=(1,))),
+        scalar_only=True, note="A5: 3x3 single-scale perception"),
+    "abl_k5": ArchSpec(
+        "abl_k5", lambda C: (lambda: AblationNCA(out_channels=C, kernel=5, dilations=(1,))),
+        scalar_only=True, note="A5: 5x5 perception (wider single-scale)"),
+    "abl_multiscale": ArchSpec(
+        "abl_multiscale", lambda C: (lambda: AblationNCA(out_channels=C, kernel=3, dilations=(1, 2, 4))),
+        scalar_only=True, note="A5: 3x3 dilated multi-scale (1,2,4)"),
     # --- hybrids (scalar conservative fields) ---
     "bounded_cons_nca": ArchSpec(
         "bounded_cons_nca", lambda C: (lambda: BoundedConsFluxNCA(bounds=(-1.0, 1.0))),
