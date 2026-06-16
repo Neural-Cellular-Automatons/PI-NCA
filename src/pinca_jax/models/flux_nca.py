@@ -25,7 +25,7 @@ from __future__ import annotations
 import flax.linen as nn
 import jax
 
-from ..physics import divergence_flux_update
+from ..physics import divergence_flux_update, multichannel_divergence_update
 
 
 class DeepFluxNCA(nn.Module):
@@ -50,3 +50,26 @@ class DeepFluxNCA(nn.Module):
         )(h)
         # Conservative discrete-divergence update.
         return divergence_flux_update(x, flux)
+
+
+class MultiChannelFluxNCA(nn.Module):
+    """Conservative flux-divergence NCA for multi-field states (SWE C=3, FHN/GS C=2).
+
+    Predicts a 2-component flux per channel and applies a per-channel discrete
+    divergence, so each field's total sum is conserved on the periodic grid. Correct
+    prior for periodic conservation laws (shallow-water); intentionally mismatched for
+    source-term reaction systems (FHN) — a probe of when conservation helps vs hurts."""
+
+    out_channels: int = 3
+    perceive_features: int = 48
+    hidden_features: int = 96
+
+    @nn.compact
+    def __call__(self, x: jax.Array) -> jax.Array:
+        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", name="perceive")(x)
+        h = nn.relu(p)
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), name="proc2")(h))
+        flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
+                       kernel_init=nn.initializers.zeros, name="flux_head")(h)
+        return multichannel_divergence_update(x, flux)

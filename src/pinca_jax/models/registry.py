@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .nca import NCA
-from .flux_nca import DeepFluxNCA
+from .flux_nca import DeepFluxNCA, MultiChannelFluxNCA
 from .fno import FNO2d
 from .hybrids import BoundedConsFluxNCA, SpectralFluxNCA, MultiScaleFluxNCA
 
@@ -31,7 +31,13 @@ REGISTRY: dict[str, ArchSpec] = {
         note="conservative flux-divergence NCA (C=1)"),
     "fno": ArchSpec(
         "fno", lambda C: (lambda: FNO2d(out_channels=C, width=24, modes=8, depth=4)),
-        note="global spectral operator"),
+        note="global spectral operator (~5.9e5 params)"),
+    "fno_small": ArchSpec(
+        "fno_small", lambda C: (lambda: FNO2d(out_channels=C, width=8, modes=4, depth=2)),
+        note="iso-parameter FNO (~NCA budget) — A2 ablation: spectral mixing vs param count"),
+    "mc_flux_nca": ArchSpec(
+        "mc_flux_nca", lambda C: (lambda: MultiChannelFluxNCA(out_channels=C)),
+        note="multi-channel per-field conservative flux NCA (SWE/FHN/GS)"),
     # --- hybrids (scalar conservative fields) ---
     "bounded_cons_nca": ArchSpec(
         "bounded_cons_nca", lambda C: (lambda: BoundedConsFluxNCA(bounds=(-1.0, 1.0))),

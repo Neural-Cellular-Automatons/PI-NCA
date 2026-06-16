@@ -36,6 +36,22 @@ def test_conserving_hybrids_conserve_mass(ctor):
     assert metrics.conservation_error(y, x) < 1e-2
 
 
+def test_multichannel_flux_conserves_each_channel():
+    """Per-channel flux-divergence conserves EACH field's total sum (periodic grid)."""
+    from pinca_jax.models.flux_nca import MultiChannelFluxNCA
+    model = MultiChannelFluxNCA(out_channels=3)
+    rng = np.random.default_rng(0)
+    x = jnp.asarray(rng.standard_normal((2, 12, 12, 3)).astype(np.float32))
+    # non-zero flux head so the update is non-trivial
+    params = model.init(jax.random.PRNGKey(0), x)
+    params = jax.tree_util.tree_map(
+        lambda a: a + 0.1 * jax.random.normal(jax.random.PRNGKey(1), a.shape)
+        if a.ndim == 4 else a, params)
+    y = model.apply(params, x)
+    dmass = (y - x).sum(axis=(1, 2))  # per-channel mass change (B,C)
+    np.testing.assert_allclose(np.asarray(dmass), 0.0, atol=1e-3)
+
+
 def test_hybrids_start_near_identity():
     # zero-init heads → first step is ~identity (NCA stabiliser); check small change.
     model = MultiScaleFluxNCA(conserve=True)

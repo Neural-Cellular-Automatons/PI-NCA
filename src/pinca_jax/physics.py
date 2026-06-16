@@ -45,3 +45,20 @@ def divergence_flux_update(x: jax.Array, flux: jax.Array) -> jax.Array:
     fy = flux[..., 1:2]
     dx = (jnp.roll(fx, 1, axis=2) - fx) + (jnp.roll(fy, 1, axis=1) - fy)
     return x + dx
+
+
+def multichannel_divergence_update(x: jax.Array, flux: jax.Array) -> jax.Array:
+    """Per-channel discrete-divergence update for multi-field states.
+
+    x: (B,H,W,C); flux: (B,H,W,2C) as [fx_0,fy_0, fx_1,fy_1, ...]. Each channel gets
+    its own conservative flux-divergence increment, so EACH channel's total sum is
+    conserved on a periodic grid (telescoping). Physically correct on a periodic
+    domain for conserved quantities (e.g. shallow-water mass+momentum); a deliberately
+    *wrong* prior for reaction systems with source terms (FitzHugh-Nagumo) — which is
+    itself a test of when the conservation bias helps vs hurts.
+    """
+    B, H, W, C = x.shape
+    f = flux.reshape(B, H, W, C, 2)
+    fx, fy = f[..., 0], f[..., 1]  # (B,H,W,C)
+    dx = (jnp.roll(fx, 1, axis=2) - fx) + (jnp.roll(fy, 1, axis=1) - fy)
+    return x + dx
