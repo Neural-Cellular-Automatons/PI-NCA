@@ -94,9 +94,31 @@ all three improve with reach; on globally-coupled NS, a plain 5×5 stencil **des
 neighbours cheaply) is best (0.388). Multi-scale dilation is the robust way to widen reach —
 it is what lets the multi-scale NCA partially cope with NS's non-locality.
 
-## Ablation A6 — single-step vs multi-step (BPTT) training
-<!-- A6:results -->
-_(train_steps ∈ {1,4,12}, eval 48; appended when the run completes.)_
+## Ablation A6 — single-step vs multi-step (BPTT) training (2 seeds)
+`multiscale_flux_nca`, trained with `rollout_steps ∈ {1, 4, 12}` (BPTT depth), evaluated on a
+48-step rollout. Tests whether training through the trajectory (vs one-step supervision) matters.
+
+| PDE | train_steps=1 | =4 | =12 | err-growth ratio (1→12) |
+|---|---|---|---|---|
+| Heat (stable) | 0.0250 | 0.0236 | **0.0210** | 2.61 → 2.17 |
+| Navier–Stokes (unstable) | 1.562 | 0.541 | **0.284** | **13.5 → 2.76** |
+
+**A6 findings.** Multi-step BPTT training is **nearly irrelevant on stable heat** (0.025→0.021,
+16%) but **decisive on unstable Navier–Stokes**: single-step-trained emulators **diverge**
+(rel-L2 1.56, error-growth 13.5×) whereas 12-step training stabilises the long rollout (0.284,
+error-growth 2.76×) — a 5.5× accuracy gain. The model must *see* its own accumulated error during
+training to control it. This mirrors A3 (horizon curriculum): **the training horizon matters most
+exactly where the dynamics are hardest** (stiff/globally-coupled), and is cheap insurance
+elsewhere. Detailed tables: `results/bench_{heat,navier_stokes}_A6.md`.
+
+## Summary — which component matters, by regime
+| component (ablation) | helps when | hurts / irrelevant when |
+|---|---|---|
+| Conservation head (A4) | PDE conserves mass (heat, SWE) | non-conservative reaction (Nagumo, FHN) |
+| Output bounding (A1) | stiff, bounded fields (Cahn–Hilliard) | unbounded fields (would clip signal) |
+| Wider/multi-scale perception (A5) | always helps; essential for global coupling (NS) | plain large stencil can destabilise |
+| Multi-step BPTT training (A3, A6) | stiff / unstable / globally-coupled (CH, NS) | stable local diffusion (cheap insurance) |
+| Spectral global mixing / FNO (A2) | fine-scale, global, non-conservative regimes | local conservative regimes (param-inefficient) |
 
 ## Other planned ablations (infrastructure ready)
 - **A4 Conservation on/off at fixed backbone** — flux-divergence head vs direct residual
