@@ -36,15 +36,19 @@ class EmuConfig:
     weight_decay: float = 1e-5
     seed: int = 0
     n_eval: int = 8
+    output_clip: tuple | None = None  # (lo,hi): clip each emulator step (bounded ablation)
 
     def spec(self):
         # use the numerically stable teacher config where one exists (e.g. gray_scott)
         return pdes.STABLE.get(self.pde, pdes.REGISTRY[self.pde])
 
 
-def _emu_rollout(model, params, x0, steps):
+def _emu_rollout(model, params, x0, steps, clip=None):
     def body(x, _):
-        return model.apply(params, x), None
+        x = model.apply(params, x)
+        if clip is not None:
+            x = jnp.clip(x, clip[0], clip[1])
+        return x, None
     xf, _ = jax.lax.scan(body, x0, xs=None, length=steps)
     return xf
 
@@ -67,7 +71,7 @@ def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):
         target = pdes.rollout(spec, x0, cfg.rollout_steps)
 
         def loss_fn(p):
-            pred = _emu_rollout(model, p, x0, cfg.rollout_steps)
+            pred = _emu_rollout(model, p, x0, cfg.rollout_steps, cfg.output_clip)
             return jnp.mean((pred - target) ** 2)
 
         loss, grads = jax.value_and_grad(loss_fn)(params)
@@ -92,7 +96,7 @@ def evaluate_emulator(model, params, cfg: EmuConfig):
     key = jax.random.PRNGKey(cfg.seed + 10_000)
     x0 = ic.make_state(key, cfg.pde, cfg.n_eval, cfg.grid_size)
     target = pdes.rollout(spec, x0, cfg.eval_steps)
-    pred = _emu_rollout(model, params, x0, cfg.eval_steps)
+    pred = _emu_rollout(model, params, x0, cfg.eval_steps, cfg.output_clip)
 
     one_step = jax.jit(lambda x: model.apply(params, x))
     return {
