@@ -77,9 +77,13 @@ def render(pde, arch=None, grid=32, epochs=150, eval_steps=64, every=4, seed=0,
     emax = float(jnp.quantile(err_traj, 0.99)) + 1e-6
 
     os.makedirs(GIF_DIR, exist_ok=True); os.makedirs(FIG_DIR, exist_ok=True)
-    _save_gifs(pde, solver_traj, model_traj, err_traj, vmin, vmax, emax, every)
+    # Montage (committed artifact) first — matplotlib only, never blocked by imageio.
     montage = _save_montage(pde, arch, solver_traj, model_traj, err_traj,
                             vmin, vmax, emax, eval_steps)
+    try:
+        _save_gifs(pde, solver_traj, model_traj, err_traj, vmin, vmax, emax, every)
+    except Exception as e:
+        print(f"[viz] {pde}: gif step skipped ({repr(e)[:80]})")
     final_relerr = float(jnp.linalg.norm(model_traj[-1] - solver_traj[-1]) /
                          (jnp.linalg.norm(solver_traj[-1]) + 1e-8))
     print(f"[viz] {pde}: montage -> {montage} | final-frame rel-err {final_relerr:.3e}")
@@ -89,12 +93,11 @@ def render(pde, arch=None, grid=32, epochs=150, eval_steps=64, every=4, seed=0,
 def _save_gifs(pde, solver, model, err, vmin, vmax, emax, every):
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.cm as cm
     import imageio.v2 as imageio
 
     def colorize(a, lo, hi, cmap):
         x = np.clip((a - lo) / (hi - lo + 1e-9), 0, 1)
-        return (cm.get_cmap(cmap)(x)[..., :3] * 255).astype(np.uint8)
+        return (matplotlib.colormaps[cmap](x)[..., :3] * 255).astype(np.uint8)
 
     idx = range(0, solver.shape[0], every)
     imageio.mimsave(os.path.join(GIF_DIR, f"{pde}_analytic.gif"),

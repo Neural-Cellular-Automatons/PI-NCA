@@ -81,12 +81,20 @@ inductive biases win every *local/bounded* regime; FNO wins the *globally-couple
 | DeepONet | **0.075±0.009** | 126 593 | ~9 s | operator, cross-IC |
 | PINN | 0.208±0.018 | 14 209 | ~88 s | single-IVP, no data |
 
-## 4. Darcy flow (steady elliptic operator a↦u) — see `darcy.py`
-| model | rel-L2 | note |
-|---|---|---|
-| fno (direct operator) | _see results/darcy.*_ | global spectral |
-| nca_solver (learned iterative) | _see results/darcy.*_ | local relaxation on a global elliptic problem |
-<!-- DARCY:results -->
+## 4. Darcy flow (steady elliptic operator a↦u, grid 20, 256 train, 2 seeds) — `darcy.py`
+| model | rel-L2 | params | train |
+|---|---|---|---|
+| **nca_solver** (learned iterative) | **0.535±0.062** | **4 112** | ~246 s |
+| fno (direct operator) | 0.594±0.008 | 592 897 | ~44 s |
+
+**Darcy — both mediocre at reduced scale; the local NCA solver edges FNO at 144× fewer params.**
+High-contrast piecewise coefficients (a∈{3,9}) with only 256 samples are hard; neither learns the
+operator well here. Notably the **NCA learned-iterative-solver (0.535, 4.1k params) ≥ FNO (0.594,
+593k params)**: relaxing u from 0 over 24 local steps is a natural fit for an elliptic solve (akin
+to a learned Jacobi/multigrid smoother), and over a 20-grid 24 steps nearly suffices to propagate
+boundary information. Caveat: FNO trains 5× faster (no inner rollout); both would improve with more
+data/iters/grid at full scale. An honest "neither is great yet, but locality is not disqualifying
+on a static elliptic problem the way it is on dynamic Navier–Stokes."
 
 ## 5. Efficiency (heat) — param-cost of accuracy (rel-L2 × params, lower better)
 | model | rel-L2 × params | vs best |
