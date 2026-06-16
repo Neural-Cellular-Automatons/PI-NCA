@@ -16,6 +16,14 @@ characterize **the regimes where PINNs, NCAs, operators, and hybrids each win.**
 | 7 | Reproducibility guide | `docs/reproducibility.md` + `environment.md` | ✅ done |
 | 8 | Final paper-style summary | `docs/final_summary.md` | ✅ done |
 | — | Running research log | `docs/research_log.md` | ✅ live |
+| + | Master results (all tables) | `docs/master_results.md` | ✅ done |
+| + | Efficiency comparison | `docs/efficiency_comparison.md` | ✅ done |
+| + | Visual gallery (analytic/model/error) | `docs/figures.md` + `docs/figures/*.png` | ✅ 8 phenomena |
+| + | CAX accelerator evaluation | `docs/cax_evaluation.md` | ✅ done |
+
+**Phenomena benchmarked:** heat, Cahn–Hilliard, Allen–Cahn, shallow-water, Gray–Scott,
+FitzHugh–Nagumo, Nagumo, Navier–Stokes (emulators); Darcy (steady operator); PINN + DeepONet
+(continuous/operator, heat). **Gate: 45/45** (`python -m pytest tests/`).
 
 ## Branch map (research trail)
 ```
