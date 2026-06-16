@@ -52,6 +52,7 @@ class FNO2d(nn.Module):
     width: int = 24
     modes: int = 8
     depth: int = 4
+    residual: bool = True  # True: emulator (x+delta); False: direct operator a↦u (Darcy)
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -61,6 +62,6 @@ class FNO2d(nn.Module):
             local = nn.Conv(self.width, (1, 1), name=f"w{d}")(v)
             v = nn.gelu(spec + local)
         v = nn.gelu(nn.Conv(self.width, (1, 1), name="proj1")(v))
-        delta = nn.Conv(self.out_channels, (1, 1), name="proj2",
-                        kernel_init=nn.initializers.zeros)(v)
-        return x + delta  # residual one-step emulator (parity with NCA framing)
+        out = nn.Conv(self.out_channels, (1, 1), name="proj2",
+                      kernel_init=nn.initializers.zeros)(v)
+        return x + out if self.residual else out  # emulator vs direct operator
