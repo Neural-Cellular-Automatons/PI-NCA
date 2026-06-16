@@ -7,14 +7,14 @@ characterize **the regimes where PINNs, NCAs, operators, and hybrids each win.**
 ## Deliverables (status)
 | # | Deliverable | File(s) | Status |
 |---|---|---|---|
-| 1 | Migration report | `docs/migration/` (per branch) | in progress |
-| 2 | Literature review | `docs/literature_review.md` | ✅ draft |
-| 3 | Architecture report | `docs/architecture_report.md` | pending |
-| 4 | Experimental report | `docs/experimental_report.md` | pending |
-| 5 | Ablation report | `docs/ablation_report.md` | pending |
-| 6 | Performance benchmarks | `results/` | pending |
-| 7 | Reproducibility guide | `docs/environment.md` + this file | ✅ draft |
-| 8 | Final paper-style summary | `docs/final_summary.md` | pending |
+| 1 | Migration report | `docs/migration/` (4 docs) | ✅ done (gate 36/36) |
+| 2 | Literature review | `docs/literature_review.md` | ✅ done |
+| 3 | Architecture report | `docs/architecture_report.md` | ✅ done |
+| 4 | Experimental report | `docs/experimental_report.md` | ✅ heat + CH (more queued) |
+| 5 | Ablation report | `docs/ablation_report.md` | ✅ A1 (A2–A6 queued) |
+| 6 | Performance benchmarks | `results/bench_*.{json,md}` | ✅ heat, CH, CH-ablation |
+| 7 | Reproducibility guide | `docs/reproducibility.md` + `environment.md` | ✅ done |
+| 8 | Final paper-style summary | `docs/final_summary.md` | ✅ done |
 | — | Running research log | `docs/research_log.md` | ✅ live |
 
 ## Branch map (research trail)
