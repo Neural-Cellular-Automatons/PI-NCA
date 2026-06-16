@@ -83,6 +83,44 @@ def fitzhugh_nagumo_step(s, p):  # (u, v)
     return jnp.concatenate([u + p["dt"] * du, v + p["dt"] * dv], axis=-1)
 
 
+def nagumo_step(s, p):  # scalar bistable reaction-diffusion (Nagumo equation)
+    # u_t = D ∇²u + u(1-u)(u-a)
+    return s + p["dt"] * (p["D"] * laplacian(s) + s * (1.0 - s) * (s - p["a"]))
+
+
+def _ns_wavenumbers(N):
+    k = jnp.fft.fftfreq(N) * N  # integer modes on a 2π-periodic domain
+    ky = k[:, None]             # (N,1) along height/y (axis 1)
+    kx = k[None, :]             # (1,N) along width/x  (axis 2)
+    k2 = kx ** 2 + ky ** 2
+    k2_safe = k2.at[0, 0].set(1.0)
+    return kx, ky, k2, k2_safe
+
+
+def navier_stokes_step(s, p):
+    """2-D incompressible Navier-Stokes, vorticity form, pseudo-spectral (periodic).
+
+    ω_t + u·∇ω = ν ∇²ω,  with u from streamfunction ψ: ∇²ψ = -ω, u=(ψ_y, -ψ_x).
+    Diffusion handled by an exact integrating factor in Fourier space (stable); the
+    nonlinear advection by explicit Euler. The Poisson solve ∇²ψ=-ω is GLOBAL — the
+    regime where local NCAs are expected to struggle (lit review §1/§7)."""
+    nu, dt = p["nu"], p["dt"]
+    w = s[..., 0]                      # (B,H,W)
+    N = w.shape[-1]
+    kx, ky, k2, k2_safe = _ns_wavenumbers(N)
+    w_h = jnp.fft.fft2(w, axes=(1, 2))
+    psi_h = w_h / k2_safe[None]
+    psi_h = psi_h.at[:, 0, 0].set(0.0)
+    u = jnp.real(jnp.fft.ifft2(1j * ky[None] * psi_h, axes=(1, 2)))     # ψ_y
+    v = jnp.real(jnp.fft.ifft2(-1j * kx[None] * psi_h, axes=(1, 2)))    # -ψ_x
+    wx = jnp.real(jnp.fft.ifft2(1j * kx[None] * w_h, axes=(1, 2)))
+    wy = jnp.real(jnp.fft.ifft2(1j * ky[None] * w_h, axes=(1, 2)))
+    adv_h = jnp.fft.fft2(-(u * wx + v * wy), axes=(1, 2))
+    w_h_new = jnp.exp(-nu * k2[None] * dt) * (w_h + dt * adv_h)
+    w_new = jnp.real(jnp.fft.ifft2(w_h_new, axes=(1, 2)))
+    return w_new[..., None]
+
+
 # --------------------------------------------------------------------------- #
 # Registry
 # --------------------------------------------------------------------------- #
@@ -104,6 +142,8 @@ REGISTRY: dict[str, PDESpec] = {
     "shallow_water": PDESpec("shallow_water", 3, shallow_water_step, dict(g=1.0, dt=0.05), conserves_mass=True),
     "cahn_hilliard": PDESpec("cahn_hilliard", 1, cahn_hilliard_step, dict(eps2=0.01, dt=0.5), conserves_mass=True),
     "fitzhugh_nagumo": PDESpec("fitzhugh_nagumo", 2, fitzhugh_nagumo_step, dict(Du=0.5, Dv=0.1, a=0.7, b=0.8, tau=12.5, eps=0.08, dt=0.1)),
+    "nagumo": PDESpec("nagumo", 1, nagumo_step, dict(D=0.1, a=0.3, dt=0.1)),
+    "navier_stokes": PDESpec("navier_stokes", 1, navier_stokes_step, dict(nu=1e-2, dt=0.05)),
 }
 
 

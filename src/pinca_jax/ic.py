@@ -86,6 +86,22 @@ def make_state(key, pde_name, batch, size):
                  for dy in (-1, 0, 1) for dx in (-1, 0, 1)) / 9.0
         return jnp.clip(sm, -0.99, 0.99)
 
+    if pde_name == "nagumo":
+        # bistable RD: smoothed random field in (0,1)
+        noise = jax.random.normal(key, (batch, size, size, 1)) * 0.5
+        sm = sum(jnp.roll(jnp.roll(noise, dy, 1), dx, 2)
+                 for dy in (-1, 0, 1) for dx in (-1, 0, 1)) / 9.0
+        return jax.nn.sigmoid(3.0 * sm)
+
+    if pde_name == "navier_stokes":
+        # random low-wavenumber vorticity field, zero mean (decaying turbulence IC)
+        w = gaussian_blobs(key, batch, size, n_min=3, n_max=6,
+                           amp_lo=-3.0, amp_hi=3.0, sigma_frac=0.10)
+        k2 = jax.random.split(key)[0]
+        signs = jnp.sign(jax.random.normal(k2, (batch, 1, 1, 1)))
+        w = w * signs
+        return w - w.mean(axis=(1, 2, 3), keepdims=True)
+
     if pde_name == "fitzhugh_nagumo":
         # NOTE: not captured from notebook source — standard excitable IC:
         # small random perturbation of both fields near the rest state.
