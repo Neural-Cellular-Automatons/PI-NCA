@@ -113,3 +113,21 @@ Running, append-only log. Newest entries at the bottom of each day. Times are th
   not an NCA win. FNO param bloat → iso-parameter ablation queued.
 - Next: Cahn-Hilliard (H2: global coupling should favour FNO), then SWE/FHN multi-channel
   (plain_nca + fno only; build multi-channel conservative NCA), PINN track, hybrids, ablations.
+
+### Update — Phase 4: Cahn-Hilliard failure, PINN, and first ablation
+- **CH benchmark:** all emulators diverge (rel-L2 14-18 vs identity floor 0.93; FNO
+  catastrophic variance; pi_nca conserves mass while least accurate). H2 NOT supported.
+  Honest negative result → docs/experimental_report.md.
+- **PINN (heat):** implemented continuous single-IVP PINN (`pinn_heat.py`), Fourier-feature
+  periodic BCs, nested-autodiff residual; validated (loss 36→0.23 in 300 it). Branch
+  `research/baseline-pinn`.
+- **Ablation 1 (output bounding, CH):** clipping emulator outputs to [-1,1] (solver's range)
+  gives **24-27× improvement** — plain_nca 12.9→0.54, pi_nca 16.5→0.60, both **below the
+  0.93 floor**. CH failure was output blow-up, architecturally fixable. **New tension:** hard
+  clip destroys pi_nca's exact conservation (3e-5→7.6). Once bounded, conservation no longer
+  the accuracy differentiator (regime-dependent). → docs/ablation_report.md (A2-A6 queued).
+- **Key cross-cutting result:** *different regimes reward different components* — conservation
+  wins on smooth local heat; bounding wins on stiff CH. No single architecture dominates.
+- Deliverables now drafted: lit review, migration (4 reports), architecture, experimental,
+  ablation, reproducibility, research log. Remaining: multi-channel NCA + SWE/FHN runs,
+  hybrids, full multi-seed PINN sweep, final paper-style summary.
