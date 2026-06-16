@@ -98,3 +98,18 @@ Running, append-only log. Newest entries at the bottom of each day. Times are th
   candidate regime where *all* learned emulators inherit teacher instability — to revisit
   when comparing architectures on stiff dynamics.
 - Gate now **36/36**. Shared infra ready → baseline architecture branches next.
+
+### Update — Phase 3: emulator harness + first multi-seed benchmark (heat)
+- Built model-agnostic emulator harness (`harness.py`, multi-seed mean±std),
+  `models/nca.py` (plain NCA), `models/fno.py` (FNO2d), `models/registry.py`, `bench.py`.
+- **Heat, 3 seeds (grid 24, train 12 / eval 48 steps, 200 ep):**
+  - fno: rel-L2 **3.52e-2 ± 3.5e-3** (best + low variance), consErr 21.3, **592,897 params**, 4.3e-3 s/step
+  - pi_nca: rel-L2 4.38e-2 ± 3.5e-2, **consErr 3.8e-4**, **4,576 params**, **8.4e-4 s/step**
+  - plain_nca: rel-L2 0.234 ± 0.28 (unstable; ≥1 seed diverged), consErr 33.3
+- **Findings:** H1 confirmed (conservation structure → 5 orders better mass error; removing it
+  destabilises the NCA). On local diffusion FNO wins accuracy+stability but at 130× params /
+  5× slower inference and no conservation; PI-NCA is the efficiency/conservation winner,
+  accuracy-competitive but higher seed variance (needs pool/longer training). Honest split,
+  not an NCA win. FNO param bloat → iso-parameter ablation queued.
+- Next: Cahn-Hilliard (H2: global coupling should favour FNO), then SWE/FHN multi-channel
+  (plain_nca + fno only; build multi-channel conservative NCA), PINN track, hybrids, ablations.

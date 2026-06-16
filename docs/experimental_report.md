@@ -28,9 +28,29 @@ C=1 only) · `fno` (global spectral). PINN/DeepONet tracked separately (differen
 
 ## Results
 
-### Heat
-<!-- BENCH:heat -->
-_(generated below from results/bench_heat.md)_
+### Heat  (grid=24, train_steps=12, eval_steps=48, epochs=200, seeds=3)
+
+| arch | rel_l2 | mse | psnr | conservation_err | bc_residual | grad_energy | params | train_wall_s | infer_s/step |
+|---|---|---|---|---|---|---|---|---|---|
+| plain_nca | 2.34e-1±2.8e-1 | 3.55e-1±5.9e-1 | 29.5±10 | 3.33e+1±1.7e1 | 4.59e-1±3.4e-1 | **2.90e-1±1.2e-1** | 6 784 | 78.6±0.2 | 1.12e-3±4e-4 |
+| pi_nca | 4.38e-2±3.5e-2 | 8.96e-3±1.3e-2 | 41.4±6.4 | **3.80e-4±1.5e-4** | 2.45e-1±2.6e-2 | 2.17e-1±2.1e-2 | **4 576** | **70.1±0.6** | **8.44e-4±1.5e-4** |
+| fno | **3.52e-2±3.5e-3** | **3.76e-3±7.9e-4** | **41.5±1.6** | 2.13e+1±2.7 | **2.33e-1±6e-3** | 2.23e-1±1.9e-2 | 592 897 | 101.3±0.7 | 4.32e-3±3e-4 |
+
+**Analysis (heat, local diffusion).** A real, non-trivial split — *not* a clean NCA win:
+- **Accuracy:** `fno` is best on rel-L2 (3.5e-2) and, crucially, **lowest variance** (±3.5e-3
+  across seeds — very stable). `pi_nca` is statistically close (4.4e-2) but **high variance**
+  (±3.5e-2). `plain_nca` is far worse and wildly unstable (0.23 ± 0.28 — at least one seed
+  diverged), confirming **H1/H3: removing conservation destabilises the local NCA.**
+- **Conservation (H1 confirmed):** `pi_nca` mass error **3.8e-4** vs `fno` 21.3 and `plain_nca`
+  33.3 — five orders of magnitude better, by construction.
+- **Efficiency:** `pi_nca` reaches near-FNO accuracy with **130× fewer parameters** (4.6k vs
+  5.9×10⁵), **fastest inference** (8.4e-4 vs 4.3e-3 s/step), and fastest training.
+- **Takeaway:** on purely local diffusion, FNO buys top accuracy + seed-stability at a large
+  parameter/compute cost and zero conservation; the conservative PI-NCA is the
+  efficiency/conservation winner and competitive on accuracy but needs variance reduction
+  (longer training / pool sampling). The unconstrained NCA is not viable here.
+- **Note on FNO size:** at width=24/modes=8/depth=4 the spectral weights dominate (5.9×10⁵
+  params). A fair iso-parameter comparison is queued as an ablation (`research/ablation-studies`).
 
 ### (further PDEs appended as runs complete)
 
