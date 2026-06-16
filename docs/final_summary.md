@@ -64,6 +64,16 @@ stiff-CH accuracy (there, bounding is what matters). The regime selects the comp
    floor with 2.4e-4 conservation — accuracy of clipping *and* conservation of the flux form).
 7. **Stacking fixes compounds on stiff PDEs:** bounding (A1) + matched train/eval horizon (A3)
    takes CH to **0.511** with conservation **6.8e-5** — both fixes contribute independently.
+8. **The conservation prior helps iff the PDE is conservative** (multi-channel test): on
+   shallow-water (periodic mass+momentum conserved) the conservative `mc_flux_nca` ties FNO
+   accuracy (0.031 vs 0.026) at **54× fewer params** with 4-orders-better conservation; on
+   FitzHugh-Nagumo (source-term reaction, non-conservative) the *same* prior is the **worst**
+   model (0.99) and the unconstrained NCA wins (0.154). Inductive bias must match PDE structure.
+9. **FNO's accuracy is largely parameter count, not just spectral mixing** (ablation A2): at
+   NCA-budget params FNO degrades 3.4× (0.035→0.119), losing to the multi-scale NCA (0.0183 at
+   ~1% of FNO's params). Local multi-scale priors are markedly more parameter-efficient.
+10. **CAX gives no single-CPU rollout speedup** (same `nnx.scan`/`jit` as our `lax.scan`); its
+   value is its CA zoo + multi-device scaling. Not integrated into the hot path (`docs/cax_evaluation.md`).
 
 ## Conclusions
 For PDE-governed systems, "NCA vs PINN vs operator" is the wrong framing — the right one is

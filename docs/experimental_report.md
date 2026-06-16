@@ -147,7 +147,55 @@ best-or-near-best in *both* regimes: `bounds=None` → **wins heat (0.0183)**; `
 competitive + most-stable on CH (0.633±0.002, conservation 3.6e-4). It is the practical default;
 `bounded_cons_nca` is marginally more accurate on stiff fields if variance is acceptable.
 
-### (multi-channel SWE/FHN and horizon-curriculum ablation: queued)
+## Multi-channel PDEs — does the conservation prior help or hurt? (2 seeds)
+
+The multi-channel conservative NCA (`mc_flux_nca`) conserves *each* field's mass by
+construction. Whether that helps depends on whether the PDE is actually conservative.
+
+### Shallow-Water (h, hu, hv) — periodic conservation law (grid 24, eval 36)
+| arch | rel_l2 | conservation_err | params |
+|---|---|---|---|
+| plain_nca | 3.99e-2±2.8e-3 | 4.81 | 7 744 |
+| fno | **2.59e-2±1.5e-3** | 0.77 | 592 995 |
+| mc_flux_nca | 3.11e-2±5.8e-3 | **1.60e-4** | **10 992** |
+
+**SWE — conservation HELPS.** `mc_flux_nca` is within 20% of FNO's accuracy (0.031 vs 0.026)
+at **54× fewer params**, with conservation 4 orders better (1.6e-4 vs 0.77). On a periodic
+domain SWE conserves mass *and* momentum, so the per-channel flux prior is correct → near-best
+accuracy, tiny, and exactly conserving. (FNO edges accuracy but at 593k params.)
+
+### FitzHugh–Nagumo (u, v) — non-conservative reaction system (grid 24, eval 48)
+| arch | rel_l2 | conservation_err | params |
+|---|---|---|---|
+| plain_nca | **1.54e-1±9.9e-3** | 118.1 | 7 264 |
+| fno | 4.52e-1±2.0e-2 | 75.2 | 592 946 |
+| mc_flux_nca | 9.93e-1±7.8e-3 | **1.10e-6** | 10 464 |
+
+**FHN — conservation HURTS.** `mc_flux_nca` is the **worst** (0.99 ≈ useless) while conserving
+perfectly (1.1e-6): it faithfully conserves total u,v, but FHN has reaction *source terms* that
+change those totals, so the conservation prior is structurally wrong. The **unconstrained
+`plain_nca` wins (0.154)**, 3× better than FNO. → The conservation inductive bias is only an
+asset when the PDE is conservative; on source-driven dynamics it is a liability.
+
+## Ablation A2 — iso-parameter FNO on heat (3 seeds)
+Is FNO's heat accuracy from spectral global mixing, or from sheer parameter count?
+
+| arch | rel_l2 | params |
+|---|---|---|
+| fno (full) | 0.0352 | 592 897 |
+| **fno_small (iso-param)** | **0.119** | **8 433** |
+| multiscale_flux_nca | 0.0183 | 5 520 |
+| pi_nca | 0.0438 | 4 576 |
+
+**A2 finding.** Shrinking FNO to the NCA parameter budget degrades it **3.4×** (0.035→0.119),
+making it *worse* than both NCA-budget models. So FNO's heat advantage was substantially
+**parameter count**, not spectral mixing per se — and the multi-scale conservative NCA beats
+both full and iso-param FNO at ~1% of the parameters. Local multi-scale priors are genuinely
+parameter-efficient; FNO trades parameters for accuracy.
+
+## Operator/continuous baselines (separate paradigm)
+PINN (`pinn_heat.py`) and DeepONet (`deeponet_heat.py`) — multi-seed sweeps appended below.
+<!-- SWEEP:pinn_deeponet -->
 
 ## Reading guide / hypotheses under test
 - **H1 (conservation).** `pi_nca` should show conservation error orders of magnitude

@@ -148,3 +148,20 @@ Three finding-motivated hybrids (`models/hybrids.py`), benchmarked vs baselines:
 - **Refined conclusion:** hybrids composing the right inductive biases beat EVERY pure baseline
   in their regime. The flux-divergence conservation structure is the key reusable component.
 - Remaining: unified-model table, multi-channel SWE/FHN, full PINN sweep, A2-A6, DeepONet, CAX.
+
+### Update — Phase 6: multi-channel SWE/FHN, A2, DeepONet, CAX
+- **Multi-channel conservative NCA (`mc_flux_nca`):** SWE rel-L2 0.031 / consErr 1.6e-4 at 11k
+  params (near FNO 0.026 @593k) — conservation prior RIGHT for periodic SWE. FHN rel-L2 0.99
+  (WORST) / consErr 1.1e-6 — conservation prior WRONG for source-term reaction; plain_nca wins
+  (0.154). Clean: conservation helps iff PDE conservative.
+- **A2 iso-param FNO (`fno_small`, 8.4k):** heat rel-L2 0.119 vs full FNO 0.035 (3.4× worse) and
+  multiscale 0.0183 — FNO's heat edge was largely param count; local multi-scale priors are
+  far more param-efficient.
+- **DeepONet** (`deeponet_heat.py`): operator G:u0→u(.,T), branch+Fourier-trunk; validated
+  (smoke rel-L2 0.37 @200it). Full 3-seed sweep running.
+- **CAX eval** (`cax_eval.py`, `docs/cax_evaluation.md`): CAX ComplexSystem rollout = nnx.scan+jit
+  == our lax.scan; no single-CPU speedup (~2.4 vs ~1.2 ms/step, not param-matched). Not in hot
+  path; reference subclass kept. Value = CA zoo + multi-device.
+- **PINN** full 3-seed sweep running.
+- All branch refs created: baseline-pinn, ablation-studies, nca-fno-hybrid, operator-nca-hybrid,
+  final-comparison. Remaining: PINN/DeepONet sweep tables, optional A4-A6.
