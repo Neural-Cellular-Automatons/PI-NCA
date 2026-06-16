@@ -37,6 +37,35 @@ def rel_l2(pred, target, eps=1e-8):
     return float(num / den)
 
 
+def max_abs_error(pred, target):
+    """L∞ (worst-cell) error."""
+    return float(jnp.max(jnp.abs(pred - target)))
+
+
+def ssim_like(pred, target):
+    """Lightweight global SSIM-style structural similarity (1 = identical)."""
+    mp, mt = jnp.mean(pred), jnp.mean(target)
+    vp, vt = jnp.var(pred), jnp.var(target)
+    cov = jnp.mean((pred - mp) * (target - mt))
+    c1, c2 = 1e-4, 9e-4
+    return float(((2 * mp * mt + c1) * (2 * cov + c2)) /
+                 ((mp ** 2 + mt ** 2 + c1) * (vp + vt + c2)))
+
+
+def highfreq_error_frac(pred, target):
+    """Fraction of the squared error energy living in the upper half of the 2-D
+    spatial spectrum — exposes whether a model misses fine scales (e.g. FNO's
+    spectral truncation, NCA over-smoothing)."""
+    e = (pred - target)[..., 0] if pred.ndim == 4 else (pred - target)
+    ef = jnp.fft.fft2(e, axes=(-2, -1))
+    p = jnp.abs(ef) ** 2
+    N = e.shape[-1]
+    coords = jnp.fft.fftfreq(N)
+    hi = (jnp.abs(coords)[:, None] > 0.25) | (jnp.abs(coords)[None, :] > 0.25)
+    tot = jnp.sum(p) + 1e-12
+    return float(jnp.sum(p * hi) / tot)
+
+
 def psnr(pred, target, data_range=None):
     """Peak signal-to-noise ratio (dB). data_range defaults to target span."""
     if data_range is None:

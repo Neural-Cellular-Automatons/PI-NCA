@@ -19,9 +19,13 @@ from .models import registry
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "results")
 
-# Metrics where lower is better (for marking winners).
-LOWER_BETTER = {"mse", "rel_l2", "rmse", "conservation_err", "bc_residual",
-                "final_train_loss", "train_wall_s", "infer_s_per_step"}
+# Winner direction.
+HIGHER_BETTER = {"psnr", "ssim", "throughput_cells_per_s"}
+NEUTRAL = {"grad_energy"}  # not clearly better high or low → not bolded
+LOWER_BETTER = {"mse", "rel_l2", "rmse", "mae", "max_abs_err", "highfreq_err_frac",
+                "rel_l2_t_q1", "rel_l2_t_half", "rel_l2_t_q3", "rel_l2_t_final",
+                "error_growth_ratio", "conservation_err", "bc_residual",
+                "final_train_loss", "train_wall_s", "infer_s_per_step", "params"}
 
 
 def run_pde(pde: str, cfg: EmuConfig, seeds, arch_names=None):
@@ -39,33 +43,55 @@ def run_pde(pde: str, cfg: EmuConfig, seeds, arch_names=None):
     return out
 
 
+# Ordered, grouped metric rows for the detailed transposed table.
+METRIC_ROWS = [
+    ("rel_l2", "rel-L2 ↓"), ("mse", "MSE ↓"), ("rmse", "RMSE ↓"), ("mae", "MAE ↓"),
+    ("max_abs_err", "L∞ ↓"), ("psnr", "PSNR(dB) ↑"), ("ssim", "SSIM ↑"),
+    ("highfreq_err_frac", "hi-freq err frac ↓"),
+    ("rel_l2_t_q1", "rel-L2 @T/4 ↓"), ("rel_l2_t_half", "rel-L2 @T/2 ↓"),
+    ("rel_l2_t_q3", "rel-L2 @3T/4 ↓"), ("rel_l2_t_final", "rel-L2 @T ↓"),
+    ("error_growth_ratio", "err-growth T/(T/4) ↓"),
+    ("conservation_err", "mass-cons err ↓"), ("bc_residual", "periodic-BC res ↓"),
+    ("grad_energy", "grad-energy"),
+    ("params", "params ↓"), ("train_wall_s", "train wall(s) ↓"),
+    ("infer_s_per_step", "infer s/step ↓"), ("throughput_cells_per_s", "throughput cells/s ↑"),
+]
+
+
+def _fmt(key, mean, std):
+    if key == "params":
+        return f"{int(mean)}"
+    if key in ("psnr", "ssim", "error_growth_ratio", "train_wall_s"):
+        return f"{mean:.3g}±{std:.2g}"
+    if key == "throughput_cells_per_s":
+        return f"{mean:.2e}"
+    return f"{mean:.3e}±{std:.1e}"
+
+
 def to_markdown(pde, results, cfg):
-    cols = ["rel_l2", "mse", "psnr", "conservation_err", "bc_residual",
-            "grad_energy", "params", "train_wall_s", "infer_s_per_step"]
-    lines = [f"### {pde}  (grid={cfg.grid_size}, train_steps={cfg.rollout_steps}, "
-             f"eval_steps={cfg.eval_steps}, epochs={cfg.epochs}, seeds={results and list(results.values())[0]['rel_l2']['n']})",
-             "", "| arch | " + " | ".join(cols) + " |",
-             "|" + "---|" * (len(cols) + 1)]
-    # find winners per column
-    best = {}
-    for c in cols:
-        vals = {m: results[m][c]["mean"] for m in results if c in results[m]}
-        if not vals:
+    archs = list(results)
+    n = results[archs[0]]["rel_l2"]["n"] if archs else 0
+    head = (f"### {pde}  (grid={cfg.grid_size}, train_steps={cfg.rollout_steps}, "
+            f"eval_steps={cfg.eval_steps}, epochs={cfg.epochs}, seeds={n}, "
+            f"clip={cfg.output_clip})")
+    lines = [head, "", "| metric | " + " | ".join(archs) + " |",
+             "|" + "---|" * (len(archs) + 1)]
+    for key, label in METRIC_ROWS:
+        present = [m for m in archs if key in results[m]]
+        if not present:
             continue
-        best[c] = (min if c in LOWER_BETTER else max)(vals, key=vals.get)
-    for m, md in results.items():
+        vals = {m: results[m][key]["mean"] for m in present}
+        if key in NEUTRAL:
+            winner = None
+        else:
+            winner = (max if key in HIGHER_BETTER else min)(vals, key=vals.get)
         cells = []
-        for c in cols:
-            if c not in md:
+        for m in archs:
+            if key not in results[m]:
                 cells.append("—"); continue
-            mean, std = md[c]["mean"], md[c]["std"]
-            s = f"{mean:.3e}±{std:.1e}" if abs(mean) < 100 or c in ("params",) else f"{mean:.2f}±{std:.1f}"
-            if c == "params":
-                s = f"{int(mean)}"
-            if best.get(c) == m:
-                s = f"**{s}**"
-            cells.append(s)
-        lines.append(f"| {m} | " + " | ".join(cells) + " |")
+            s = _fmt(key, results[m][key]["mean"], results[m][key]["std"])
+            cells.append(f"**{s}**" if m == winner else s)
+        lines.append(f"| {label} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
 
@@ -92,12 +118,16 @@ def main():
 
     suffix = f"_{args.tag}" if args.tag else ""
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.json"), "w") as f:
+    with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.json"), "w", encoding="utf-8") as f:
         json.dump({"config": asdict(cfg), "seeds": list(seeds), "results": results}, f, indent=2)
     md = to_markdown(args.pde, results, cfg)
-    with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.md"), "w") as f:
+    md_path = os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
         f.write(md)
-    print("\n" + md)
+    try:
+        print("\n" + md)
+    except UnicodeEncodeError:
+        print(f"\n[detailed table written to {md_path}]")
 
 
 if __name__ == "__main__":

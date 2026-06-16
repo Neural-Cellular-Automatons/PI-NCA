@@ -53,6 +53,16 @@ def _emu_rollout(model, params, x0, steps, clip=None):
     return xf
 
 
+def _emu_traj(model, params, x0, steps, clip=None):
+    def body(x, _):
+        x = model.apply(params, x)
+        if clip is not None:
+            x = jnp.clip(x, clip[0], clip[1])
+        return x, x
+    _, traj = jax.lax.scan(body, x0, xs=None, length=steps)
+    return traj  # (steps, B, H, W, C)
+
+
 def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):
     """Train one emulator. model_ctor() -> Flax module with __call__(state)->state."""
     spec = cfg.spec()
@@ -91,26 +101,56 @@ def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):
 
 
 def evaluate_emulator(model, params, cfg: EmuConfig):
-    """Long-horizon eval vs the teacher → metric dict (single seed)."""
+    """Long-horizon eval vs the teacher → rich metric dict (single seed).
+
+    Captures the full trajectory so we can report the error-GROWTH profile
+    (rel-L2 at T/4, T/2, 3T/4, T) and a stability ratio, alongside the pointwise
+    (MSE/RMSE/MAE/L∞/PSNR/SSIM), spectral (high-freq error fraction), physics
+    (conservation, BC, gradient-energy) and cost (params, latency, throughput) axes.
+    """
     spec = cfg.spec()
     key = jax.random.PRNGKey(cfg.seed + 10_000)
     x0 = ic.make_state(key, cfg.pde, cfg.n_eval, cfg.grid_size)
-    target = pdes.rollout(spec, x0, cfg.eval_steps)
-    pred = _emu_rollout(model, params, x0, cfg.eval_steps, cfg.output_clip)
+    K = cfg.eval_steps
+    tgt_traj = pdes.rollout_trajectory(spec, x0, K)            # (K,B,H,W,C)
+    pred_traj = _emu_traj(model, params, x0, K, cfg.output_clip)
+    pred, target = pred_traj[-1], tgt_traj[-1]
+
+    qs = {"t_q1": max(1, K // 4) - 1, "t_half": max(1, K // 2) - 1,
+          "t_q3": max(1, 3 * K // 4) - 1, "t_final": K - 1}
+    rel_profile = {f"rel_l2_{k}": metrics.rel_l2(pred_traj[i], tgt_traj[i])
+                   for k, i in qs.items()}
+    growth = rel_profile["rel_l2_t_final"] / (rel_profile["rel_l2_t_q1"] + 1e-8)
 
     one_step = jax.jit(lambda x: model.apply(params, x))
-    return {
+    infer = metrics.time_callable(one_step, x0)
+    cells = cfg.n_eval * cfg.grid_size * cfg.grid_size
+
+    out = {
+        # pointwise accuracy
         "mse": metrics.mse(pred, target),
-        "rel_l2": metrics.rel_l2(pred, target),
         "rmse": metrics.rmse(pred, target),
+        "mae": metrics.mae(pred, target),
+        "rel_l2": metrics.rel_l2(pred, target),
+        "max_abs_err": metrics.max_abs_error(pred, target),
         "psnr": metrics.psnr(pred, target),
+        "ssim": metrics.ssim_like(pred, target),
+        # spectral
+        "highfreq_err_frac": metrics.highfreq_error_frac(pred, target),
+        # stability / error growth
+        "error_growth_ratio": float(growth),
+        # physics
         "conservation_err": metrics.conservation_error(pred, x0),
         "bc_residual": metrics.periodic_bc_residual(pred),
         "grad_energy": metrics.gradient_energy(pred),
+        # cost
         "params": metrics.param_count(params),
-        "infer_s_per_step": metrics.time_callable(one_step, x0),
+        "infer_s_per_step": infer,
+        "throughput_cells_per_s": float(cells / (infer + 1e-12)),
         "train_wall_s": None,  # filled by run_multiseed
     }
+    out.update(rel_profile)
+    return out
 
 
 def run_multiseed(model_ctor, cfg: EmuConfig, seeds=(0, 1, 2)):
