@@ -54,3 +54,29 @@ Running, append-only log. Newest entries at the bottom of each day. Times are th
 - **Gate satisfied → architecture work on the heat branch is now unblocked.**
 - Next: migrate the three notebook branches' equations (heterogeneous heat, Gray–Scott,
   SWE/FHN/Cahn–Hilliard) into `equations/`, then fork baseline branches.
+
+### Update — Phase 2 (8-PDE suite migration) + a correctness bug found & fixed
+- **Bug found (honest record):** the Phase-1 `heat.laplacian_periodic` differenced the
+  *last two axes* (`-1,-2`). That is correct for NCHW (what the unit test fed) but WRONG
+  for the NHWC `(B,H,W,1)` arrays the training pipeline actually uses — there axis `-1` is
+  the size-1 channel, so the teacher rollout during training was a **degenerate 1-D
+  Laplacian**. The unit test passed only because it used NCHW; the convention mismatch hid
+  the defect. This is exactly the failure mode correctness gates exist to catch — mine had
+  a convention gap with the real code path.
+- **Fix:** introduced `equations/operators.py` (NHWC, spatial axes (1,2): `laplacian`,
+  `grad_x`, `grad_y`); `heat.py` now aliases the NHWC laplacian. Standardised the whole
+  codebase on NHWC. Added a **2-D isotropy regression test** (Laplacian of a radially
+  symmetric bump must be x↔y symmetric and concave at the peak) that fails on the old
+  degenerate operator. Re-ran heat training: converges correctly on the true isotropic
+  teacher (loss 2.72e-1→1.47e-2, 18.5×; absolute loss higher than before precisely because
+  2-D diffusion is the harder, correct target).
+- **8-PDE suite migrated** (`equations/pdes.py`): heat, wave, advection-diffusion,
+  Allen-Cahn, Gray-Scott, shallow-water (RK4), Cahn-Hilliard, FitzHugh-Nagumo — each a pure
+  NHWC `step(state, params)` with a `PDESpec` registry (channels, params, conserves_mass)
+  and `lax.scan` rollouts. Full bodies/params extracted verbatim from the notebook
+  (no assumptions; Wave u-update and SWE RK4 re-extracted in full to avoid guessing).
+- **Correctness gate now 25/25** (`tests/`): every PDE's single step AND 10-step rollout
+  matches a verbatim PyTorch reference (atol 1e-5 step / 1e-4 rollout); isotropy test;
+  NHWC-corrected heat tests; NCA weight-port; conservation; training smoke.
+- Next: fork baseline branches from `research/jax-migration` (PINN, NCA, PI-NCA, FNO);
+  build shared IC generators + metrics; then hybrids and ablations.

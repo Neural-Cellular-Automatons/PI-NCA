@@ -12,27 +12,17 @@ JAX port: a circular-padded convolution with a *symmetric* fixed kernel is
 `jnp.roll` (no conv op, fully fused under XLA, trivially `vmap`/`scan`-able).
 Equivalence to the PyTorch conv is asserted in tests/test_migration_correctness.py.
 
-State convention: arrays are (..., H, W) — the Laplacian acts on the last two
-axes, so leading axes (batch, channels) broadcast for free.
+State convention: arrays are NHWC, (B, H, W, C); the Laplacian acts on spatial
+axes (1, 2) via `operators.laplacian`. (The channel axis is last and is never
+differenced — see operators.py.)
 """
 from __future__ import annotations
 
 import jax
-import jax.numpy as jnp
 
+from .operators import laplacian as laplacian_periodic  # NHWC, spatial axes (1,2)
 
-def laplacian_periodic(u: jax.Array) -> jax.Array:
-    """Periodic 5-point Laplacian on the last two axes.
-
-    Identical to a circular-padded conv2d with kernel [[0,1,0],[1,-4,1],[0,1,0]].
-    """
-    return (
-        jnp.roll(u, 1, axis=-1)
-        + jnp.roll(u, -1, axis=-1)
-        + jnp.roll(u, 1, axis=-2)
-        + jnp.roll(u, -1, axis=-2)
-        - 4.0 * u
-    )
+__all__ = ["laplacian_periodic", "heat_step", "rollout", "rollout_trajectory"]
 
 
 def heat_step(u: jax.Array, alpha_dt: float) -> jax.Array:

@@ -71,28 +71,49 @@ class RefDeepFluxNCA(nn.Module):
 # --------------------------------------------------------------------------- #
 # Solver equivalence
 # --------------------------------------------------------------------------- #
+def _nchw_to_nhwc(a):
+    return np.transpose(a, (0, 2, 3, 1))
+
+
 @pytest.mark.parametrize("H,W", [(16, 16), (16, 24)])
 def test_laplacian_matches_torch_circular_conv(H, W):
+    # NHWC convention: JAX laplacian acts on spatial axes (1,2). Compare to the
+    # PyTorch circular-conv reference (NCHW) by transposing.
     rng = np.random.default_rng(0)
-    u = rng.standard_normal((2, 1, H, W)).astype(np.float32)
+    u_nchw = rng.standard_normal((2, 1, H, W)).astype(np.float32)
     ref = RefHeatSolver(0.5, 0.1)
-    t_lap = ref.laplace(torch.from_numpy(u)).detach().numpy()
-    j_lap = np.asarray(heat.laplacian_periodic(jnp.asarray(u)))
+    t_lap = _nchw_to_nhwc(ref.laplace(torch.from_numpy(u_nchw)).detach().numpy())
+    j_lap = np.asarray(heat.laplacian_periodic(jnp.asarray(_nchw_to_nhwc(u_nchw))))
     np.testing.assert_allclose(j_lap, t_lap, atol=ATOL, rtol=RTOL)
+
+
+def test_laplacian_is_2d_isotropic():
+    """Regression for the NHWC-axis bug: a radially symmetric bump must have a
+    Laplacian symmetric under x<->y transpose. A degenerate 1-D Laplacian
+    (rolling the channel axis) would fail this."""
+    n = 21
+    yy, xx = np.meshgrid(np.arange(n), np.arange(n), indexing="ij")
+    cx = cy = n // 2
+    bump = np.exp(-(((xx - cx) ** 2 + (yy - cy) ** 2) / 8.0)).astype(np.float32)
+    u = jnp.asarray(bump[None, :, :, None])  # NHWC
+    lap = np.asarray(heat.laplacian_periodic(u))[0, :, :, 0]
+    np.testing.assert_allclose(lap, lap.T, atol=1e-5)         # x<->y symmetry
+    assert lap[cy, cx] < 0                                    # concave at the peak
 
 
 def test_heat_step_and_rollout_match_torch():
     rng = np.random.default_rng(1)
-    u = rng.standard_normal((3, 1, 16, 16)).astype(np.float32)
+    u_nchw = rng.standard_normal((3, 1, 16, 16)).astype(np.float32)
+    u = jnp.asarray(_nchw_to_nhwc(u_nchw))
     ref = RefHeatSolver(0.5, 0.1)
     alpha_dt = 0.5 * 0.1
     # single step
-    t1 = ref.step(torch.from_numpy(u)).detach().numpy()
-    j1 = np.asarray(heat.heat_step(jnp.asarray(u), alpha_dt))
+    t1 = _nchw_to_nhwc(ref.step(torch.from_numpy(u_nchw)).detach().numpy())
+    j1 = np.asarray(heat.heat_step(u, alpha_dt))
     np.testing.assert_allclose(j1, t1, atol=ATOL, rtol=RTOL)
     # 25-step rollout (lax.scan vs python loop)
-    tK = ref.k_steps(torch.from_numpy(u), 25).detach().numpy()
-    jK = np.asarray(heat.rollout(jnp.asarray(u), alpha_dt, 25))
+    tK = _nchw_to_nhwc(ref.k_steps(torch.from_numpy(u_nchw), 25).detach().numpy())
+    jK = np.asarray(heat.rollout(u, alpha_dt, 25))
     np.testing.assert_allclose(jK, tK, atol=1e-4, rtol=1e-3)
 
 
