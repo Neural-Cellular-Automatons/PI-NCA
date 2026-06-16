@@ -80,3 +80,21 @@ Running, append-only log. Newest entries at the bottom of each day. Times are th
   NHWC-corrected heat tests; NCA weight-port; conservation; training smoke.
 - Next: fork baseline branches from `research/jax-migration` (PINN, NCA, PI-NCA, FNO);
   build shared IC generators + metrics; then hybrids and ablations.
+
+### Update — Shared evaluation infrastructure + a stability finding
+- **`ic.py`** — vectorised JAX initial-condition generators for all 8 PDEs, ported from
+  the notebook `make_state`/`make_gaussian_blobs` (gray_scott seed-boxes vectorised at
+  fixed count; FHN IC flagged as standard since its source wasn't captured).
+- **`metrics.py`** — full mandated metric set: MSE/RMSE/MAE, relative-L2, PSNR,
+  one-step residual, mass-conservation error, periodic-BC residual, gradient-energy
+  (stability proxy), parameter count, wall-clock timer, and multi-seed `Agg`/`aggregate`
+  (mean ± std — so we never report single runs).
+- **Finding (honest record): Gray-Scott `dt=2.0` is numerically unstable.** The verbatim
+  notebook param exceeds the explicit-Euler diffusion stability limit
+  `dt ≤ dx²/(4·Du) = 1.25`; on sharp box ICs the solver diverges by ~step 12
+  (verified: max|u| 1→9.3→inf). Kept the faithful `dt=2.0` in `REGISTRY` (migration
+  fidelity) but added `pdes.STABLE["gray_scott"]` (dt=1.0) and `override_params(...)` for
+  experiments. Locked in via `test_gray_scott_dt2_is_unstable_finding`. This is a
+  candidate regime where *all* learned emulators inherit teacher instability — to revisit
+  when comparing architectures on stiff dynamics.
+- Gate now **36/36**. Shared infra ready → baseline architecture branches next.

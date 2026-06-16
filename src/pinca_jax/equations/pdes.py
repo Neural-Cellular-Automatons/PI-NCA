@@ -107,6 +107,27 @@ REGISTRY: dict[str, PDESpec] = {
 }
 
 
+def override_params(name: str, **overrides) -> PDESpec:
+    """Return a copy of a registry spec with some params replaced.
+
+    Used to obtain numerically stable variants where the verbatim notebook
+    parameters violate an explicit-scheme stability limit. Example:
+    Gray-Scott ships with dt=2.0 (faithful to the notebook) but that exceeds the
+    diffusion stability bound dt <= dx^2/(4*Du) = 1.25 and diverges on sharp ICs;
+    `override_params("gray_scott", dt=1.0)` gives a stable teacher for experiments.
+    """
+    base = REGISTRY[name]
+    new_params = {**base.params, **overrides}
+    return PDESpec(base.name, base.channels, base.step, new_params, base.conserves_mass)
+
+
+# Numerically stable teacher configs for experiments (documented deviations from
+# the verbatim notebook params; see research log "Phase 2 / Gray-Scott stability").
+STABLE = {
+    "gray_scott": override_params("gray_scott", dt=1.0),
+}
+
+
 def rollout(spec: PDESpec, s0: jax.Array, n_steps: int) -> jax.Array:
     """Roll a registry solver forward `n_steps` (final state) via lax.scan."""
     def body(s, _):
