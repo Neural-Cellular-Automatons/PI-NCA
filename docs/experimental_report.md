@@ -177,6 +177,38 @@ change those totals, so the conservation prior is structurally wrong. The **unco
 `plain_nca` wins (0.154)**, 3× better than FNO. → The conservation inductive bias is only an
 asset when the PDE is conservative; on source-driven dynamics it is a liability.
 
+## Navier–Stokes (2-D vorticity) — the locality limit (2 seeds, grid 24, eval 48)
+Incompressible NS has a **global** Poisson coupling (∇²ψ=−ω): the velocity at every point
+depends on the whole vorticity field. This is the regime where local NCAs are predicted to fail.
+
+| arch | rel_l2 | conservation_err | params |
+|---|---|---|---|
+| **fno** | **0.145±0.029** | 1.93 | 592 897 |
+| multiscale_flux_nca | 0.284±0.030 | **1.00e-4** | 5 520 |
+| plain_nca | 0.528±0.050 | 7.28 | 6 784 |
+| pi_nca | 0.676±0.17 | 2.05e-5 | 4 576 |
+
+**NS result — FNO wins decisively; the locality hypothesis is confirmed.** With a global
+Poisson coupling, FNO's spectral global mixing (0.145) beats the best NCA by ~2×. Among NCAs,
+the **multi-scale** one is best (0.284) — its dilated perception widens the receptive field and
+partially captures the non-local coupling — while the single-stencil `plain_nca` (0.528) and the
+conservative `pi_nca` (0.676) lag badly. This is the **complement of the heat result**: locality
++ multi-scale wins purely local diffusion; global spectral wins globally-coupled flow. The PDE's
+*information-propagation structure* selects the architecture.
+
+## Nagumo (bistable reaction–diffusion) — conservation hurts again (2 seeds)
+| arch | rel_l2 | params |
+|---|---|---|
+| **fno** | **0.118±0.009** | 592 897 |
+| plain_nca | 0.119±0.006 | 6 784 |
+| pi_nca | 0.379±0.001 | 4 576 |
+| multiscale_flux_nca | 0.379±0.001 | 5 520 |
+
+**Nagumo — non-conservative ⇒ conservation prior hurts** (consistent with FHN). The bistable
+source term `u(1−u)(u−a)` changes total mass, so the conserving models (`pi_nca`, and `multiscale`
+with `conserve=True`) are pinned at 0.379 while the unconstrained `plain_nca` and `fno` reach
+~0.118. Same lesson, third PDE: impose conservation only when the PDE is conservative.
+
 ## Ablation A2 — iso-parameter FNO on heat (3 seeds)
 Is FNO's heat accuracy from spectral global mixing, or from sheer parameter count?
 

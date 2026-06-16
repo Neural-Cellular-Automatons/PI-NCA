@@ -74,6 +74,15 @@ stiff-CH accuracy (there, bounding is what matters). The regime selects the comp
    ~1% of FNO's params). Local multi-scale priors are markedly more parameter-efficient.
 10. **CAX gives no single-CPU rollout speedup** (same `nnx.scan`/`jit` as our `lax.scan`); its
    value is its CA zoo + multi-device scaling. Not integrated into the hot path (`docs/cax_evaluation.md`).
+11. **Global coupling is the NCA's hard limit — FNO wins Navier–Stokes** (incompressible
+   vorticity, global Poisson): FNO 0.145 vs best NCA 0.284 (multi-scale) and 0.53/0.68 for
+   plain/conservative NCAs. The complement of heat: locality+multi-scale wins purely-local
+   diffusion; global spectral wins globally-coupled flow. The PDE's information-propagation
+   structure picks the architecture.
+12. **Nagumo re-confirms the conservation rule** (3rd PDE): on the non-conservative bistable RD,
+   conserving models stall at 0.379 while unconstrained `plain_nca`/`fno` reach 0.118.
+13. **Hybrid NCA is ~200× more parameter-efficient than FNO** on heat (rel-L2×params 101 vs
+   20,875): more accurate at 107× fewer parameters and ~6× cheaper inference (`docs/efficiency_comparison.md`).
 
 ## Conclusions
 For PDE-governed systems, "NCA vs PINN vs operator" is the wrong framing — the right one is
