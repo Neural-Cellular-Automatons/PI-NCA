@@ -29,3 +29,20 @@ single-run models lag: Cahn–Hilliard (stiff; the 64-step viz horizon exceeds t
 comfort zone), Gray–Scott/Nagumo (the conserving default fights the non-conservative reaction),
 and Navier–Stokes (global coupling — even FNO accumulates visible error over 64 steps). These
 match the quantitative regime map in `docs/master_results.md`.
+
+## 3-D gallery (mid-depth z-slice over time)
+A 3-D volume can't be a flat GIF, so each 3-D phenomenon is shown as the **mid-depth slice**
+(z = D/2) of the analytic vs. model fields plus the error map, over time (`viz3d.py`,
+regime-appropriate winner per PDE). Animated 3-D GIFs:
+`results/gifs/<pde>_3d_{analytic,model,error}.gif` (local). Committed montages:
+
+| 3-D phenomenon | model shown | montage |
+|---|---|---|
+| Heat | FluxNCA3D (PI-NCA) | ![heat3d](figures/heat_3d_comparison.png) |
+| Advection–diffusion | FNO3D | ![adv3d](figures/adv_diff_3d_comparison.png) |
+| Allen–Cahn | FNO3D | ![ac3d](figures/allen_cahn_3d_comparison.png) |
+| Nagumo | NCA3D | ![nag3d](figures/nagumo_3d_comparison.png) |
+| Gray–Scott | NCA3D | ![gs3d](figures/gray_scott_3d_comparison.png) |
+| FitzHugh–Nagumo | FNO3D | ![fhn3d](figures/fitzhugh_nagumo_3d_comparison.png) |
+
+These mirror the 2-D gallery and the dimension-independent regime map (`docs/master_results.md §5b`).
