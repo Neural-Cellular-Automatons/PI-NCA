@@ -92,9 +92,16 @@ stiff-CH accuracy (there, bounding is what matters). The regime selects the comp
    monotonically on heat, but on Navier–Stokes only *dilated multi-scale* helps — a plain 5×5
    stencil destabilises (1.49 vs 3×3's 0.58). Multi-scale dilation is the robust reach mechanism.
 
-**Coverage:** 10 emulator phenomena (heat, advection–diffusion, Allen–Cahn, wave, shallow-water,
-Nagumo, FitzHugh–Nagumo, Navier–Stokes, Cahn–Hilliard, Gray–Scott) with 20-metric multi-seed
-tables; ablations A1–A6; PINN + DeepONet + Darcy operator baselines; CAX eval; GIFs/error-maps.
+16. **The regime map is dimension-independent (3-D).** Re-running 6 PDEs in full 3-D (NDHWC, 16³)
+   reproduces every 2-D conclusion: local diffusion → conservative NCA wins (heat: pi_nca 0.047
+   at ~3k vs FNO's 747k params); sharp-interface (Allen–Cahn 0.012) and non-conservative
+   (FitzHugh–Nagumo 0.163) → FNO; the conservation prior **hurts** non-conservative Nagumo
+   (conserving NCAs 0.198 vs plain 0.041); NCAs conserve mass to 1e-3–1e-6 vs plain/FNO drift.
+   The architecture-vs-PDE-structure thesis holds in 2-D and 3-D alike.
+
+**Coverage:** 10 emulator phenomena in 2-D + 6 in 3-D with 20-metric tables; ablations A1–A6;
+PINN + DeepONet + Darcy operator baselines; CAX eval; GIFs/error-maps; architecture diagrams;
+the "start from a better point" protocol (single seed 42 + He-init + warmup + pre-seeding).
 
 ## Conclusions
 For PDE-governed systems, "NCA vs PINN vs operator" is the wrong framing — the right one is
