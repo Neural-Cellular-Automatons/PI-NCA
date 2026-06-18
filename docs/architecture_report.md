@@ -55,7 +55,11 @@ via autodiff derivatives; **single IVP per training run**, mesh-free.
 **Weaknesses.** Spectral bias (high-freq hard), loss-balancing pathologies, causality for long T, no cross-IC reuse.
 **Literature.** Raissi et al. `arXiv:1711.10561`; pathologies/fixes `arXiv:2510.06684`, `arXiv:2302.14227`.
 
-## E. Hybrids (planned)
+> **Data-flow diagrams** for every hybrid (DeepFluxNCA, MultiScale, BoundedCons, SpectralFlux,
+> MultiChannel) + the shared training pipeline are in
+> [docs/architecture_diagrams.md](architecture_diagrams.md) (Mermaid, renders on GitHub).
+
+## E. Hybrids (implemented — see diagrams)
 FNO-latent + NCA refinement; multi-scale/dilated NCA; operator-coupled conservative NCA;
 differentiable-physics-in-the-loop NCA (lit review §7). Hypothesis: combine FNO global
 mixing with NCA local conservation. **To verify**, not assumed.
