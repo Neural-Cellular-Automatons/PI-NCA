@@ -62,8 +62,11 @@ def run_phenomena(pdes_list, seeds, epochs, grid):
     for pde in pdes_list:
         archs = PHENOMENA[pde]
         eval_steps = 48
+        # Cahn-Hilliard coarsens rapidly from fresh ICs; pre-seeding on developed states
+        # mismatches eval and regresses the bounded models to the floor → preseed off.
+        preseed = 0 if pde == "cahn_hilliard" else PRESEED
         cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=12, eval_steps=eval_steps,
-                        epochs=epochs, warmup_epochs=WARMUP, preseed_steps=PRESEED)
+                        epochs=epochs, warmup_epochs=WARMUP, preseed_steps=preseed)
         print(f"[bench_all] {pde}: {archs}")
         results = {}
         for a in archs:
