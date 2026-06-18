@@ -6,22 +6,28 @@ ablations in `docs/ablation_report.md`. **Bold** = best in column. rel-L2 lower 
 
 > **Full 20-metric detailed tables** (MSE, RMSE, MAE, rel-L2, L∞, PSNR, SSIM, high-freq error
 > fraction, error-growth profile T/4→T, conservation, BC residual, grad-energy, params, train
-> wall, inference latency, throughput) for every phenomenon live in
-> `results/bench_<pde>_full.md`. This file is the summary index.
+> wall, inference latency, throughput) for every phenomenon live in `results/bench_<pde>_full.md`.
+>
+> **Protocol:** single fixed seed (42) + He-init + zero-init heads + LR warmup + pre-seeding —
+> the originals' "start from a better point" recipe (`docs/initialization_and_protocol.md`). This
+> improved most PDEs over the prior multi-seed numbers (heat spectral 0.016→**0.0064**, SWE
+> mc_flux→**0.016**, NS fno 0.145→**0.098**, wave 0.108→**0.052**) but *hurt* Cahn–Hilliard
+> (pre-seeding mismatches its fresh-IC coarsening) ⇒ CH uses `preseed_steps=0`. **Orderings
+> are stable**; only exact numbers shift.
 
-## 0. Regime map (the headline — 10 phenomena, rel-L2, 2–3 seeds)
+## 0. Regime map (the headline — 10 phenomena, rel-L2, single seed 42 + better start)
 | PDE | character | winner | rel-L2 | runner-up | why |
 |---|---|---|---|---|---|
-| Heat | smooth, local | **spectral_flux_nca** | 0.0158 | multiscale 0.021 | local multi-scale + spectral |
-| Advection–diffusion | linear transport | **fno** | 0.0074 | pi_nca 0.0147 | smooth global; conservation 2nd |
-| Allen–Cahn | non-cons. phase sep. | **fno** | 0.0079 | NCAs ~0.063 | sharp interfaces (fine scales) |
-| Wave | 2nd-order hyperbolic | **fno ≈ mc_flux** | 0.108 | all ~0.11 | tie; all comparable |
-| Shallow-water | conservative, multi-field | **fno** | 0.048 | mc_flux 0.059 @54× fewer params | global; cons. NCA close |
-| Nagumo | non-cons. bistable | **fno / plain_nca** | 0.118 | — | conservation prior hurts |
-| FitzHugh–Nagumo | non-cons. reaction | **plain_nca** | 0.154 | fno 0.45 | conservation prior hurts badly |
-| Navier–Stokes | global Poisson coupling | **fno** | 0.145 | multiscale 0.284 | global spectral; locality fails |
-| Cahn–Hilliard | stiff 4th-order, bounded | **bounded_cons_nca** | 0.603→0.511 (A3) | bounded_multiscale 0.674 | bounding + conservation |
-| Gray–Scott | reaction–diffusion patterns | **mc_flux_nca** | 0.671 | fno 1.07 | hard; conservation helps relatively |
+| Heat | smooth, local | **spectral_flux_nca** | 0.0064 | fno 0.021, multiscale 0.027 | local + spectral |
+| Advection–diffusion | linear transport | **fno** | 0.0066 | pi_nca 0.012 | smooth global; conservation 2nd |
+| Allen–Cahn | non-cons. phase sep. | **fno** | 0.0068 | NCAs ~0.049 | sharp interfaces (fine scales) |
+| Wave | 2nd-order hyperbolic | **plain_nca** | 0.052 | all ~0.05–0.057 | tie; all comparable |
+| Shallow-water | conservative, multi-field | **mc_flux_nca** | 0.016 | fno 0.024 | per-field conservation correct |
+| Nagumo | non-cons. bistable | **plain_nca** | 0.073 | fno 0.081 | conservation prior hurts |
+| FitzHugh–Nagumo | non-cons. reaction | **plain_nca** | 0.125 | fno 0.199 | conservation prior hurts badly |
+| Navier–Stokes | global Poisson coupling | **fno** | 0.098 | multiscale 0.285 | global spectral; locality fails |
+| Cahn–Hilliard | stiff 4th-order, bounded | **bounded_cons_nca** | 0.725 (preseed=0) | bounded_multiscale 0.790 | bounding + conservation; plain/fno diverge |
+| Gray–Scott | reaction–diffusion patterns | **fno ≈ mc_flux** | 0.674 | mc_flux 0.692 | hard; both poor |
 
 **Thesis:** no universal winner. The PDE's structure — conservation, boundedness, and
 information-propagation range — selects the architecture. Local/multi-scale conservative NCAs
