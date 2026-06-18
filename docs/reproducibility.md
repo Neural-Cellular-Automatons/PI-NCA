@@ -30,6 +30,14 @@ Available PDEs: `heat, wave, adv_diff, allen_cahn, gray_scott, shallow_water,
 cahn_hilliard, fitzhugh_nagumo`. Multi-channel PDEs run the channel-applicable
 architectures only (the scalar flux PI-NCA is C=1).
 
+## 3b. Reproduce the 3-D benchmarks
+```bash
+python -m pytest tests/test_pde3d_correctness.py -q   # 3-D correctness gate (11 tests)
+python -m pinca_jax.bench3d --grid 16 --epochs 120    # detailed 3-D tables -> results/bench3d_*.md
+```
+3-D uses NDHWC `(B,D,H,W,C)`, reduced scale 16³, single seed 42. The 3-D modules mirror the
+2-D ones (`*3d.py` / `*_3d`); same configs scale to larger grids on GPU.
+
 ## 4. Reproduce the PINN baseline
 ```bash
 python -m pinca_jax.pinn_heat        # 2-D periodic heat IVP, rel-L2 vs solver at t=T
