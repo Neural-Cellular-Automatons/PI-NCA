@@ -27,6 +27,10 @@ import jax
 
 from ..physics import divergence_flux_update, multichannel_divergence_update
 
+# He/kaiming-normal init for ReLU layers (matches the originals' nn.init.kaiming_normal_,
+# a better starting point than Flax's default lecun_normal for ReLU nets).
+_HE = nn.initializers.he_normal()
+
 
 class DeepFluxNCA(nn.Module):
     """Conservative flux-form NCA. Input/output state: (B, H, W, 1)."""
@@ -38,11 +42,11 @@ class DeepFluxNCA(nn.Module):
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
         # Perception: learnable 3x3 circular conv (NCA "perceive" stencil).
-        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", name="perceive")(x)
+        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x)
         # Pointwise processing MLP (1x1 convs == per-cell MLP).
         h = nn.relu(p)
-        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
-        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), name="proc2")(h))
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
         # Flux head, zero-initialised -> NCA starts as identity (no-op update).
         flux = nn.Conv(
             self.flux_features, (1, 1), use_bias=False,
@@ -66,10 +70,10 @@ class MultiChannelFluxNCA(nn.Module):
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
-        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", name="perceive")(x)
+        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x)
         h = nn.relu(p)
-        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
-        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), name="proc2")(h))
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
         flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         return multichannel_divergence_update(x, flux)

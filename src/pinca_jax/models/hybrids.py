@@ -27,6 +27,8 @@ import jax.numpy as jnp
 from ..physics import divergence_flux_update, conserve_energy, total_mass
 from .fno import SpectralConv2d
 
+_HE = nn.initializers.he_normal()  # better start for ReLU convs (matches originals)
+
 
 class BoundedConsFluxNCA(nn.Module):
     """Flux-divergence NCA + (clip → mass re-projection): bounded AND mass-conserving."""
@@ -37,10 +39,10 @@ class BoundedConsFluxNCA(nn.Module):
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
         tgt = total_mass(x)  # conserve this step's total mass
-        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", name="perceive")(x)
+        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x)
         h = nn.relu(p)
-        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
-        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), name="proc2")(h))
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
         flux = nn.Conv(2, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         x = divergence_flux_update(x, flux)        # conserves mass
@@ -68,8 +70,8 @@ class SpectralFluxNCA(nn.Module):
     def __call__(self, x: jax.Array) -> jax.Array:
         tgt = total_mass(x)
         # local conservative stream → flux divergence (mass-conserving)
-        h = nn.relu(nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", name="perceive")(x))
-        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x))
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
         flux = nn.Conv(2, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         x_local = divergence_flux_update(x, flux)
@@ -106,11 +108,11 @@ class MultiScaleFluxNCA(nn.Module):
         tgt = total_mass(x)
         percepts = [
             nn.Conv(self.features, (3, 3), padding="CIRCULAR",
-                    kernel_dilation=(d, d), name=f"perceive_d{d}")(x)
+                    kernel_dilation=(d, d), kernel_init=_HE, name=f"perceive_d{d}")(x)
             for d in self.dilations
         ]
         h = nn.relu(jnp.concatenate(percepts, axis=-1))
-        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
         flux = nn.Conv(2, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         out = divergence_flux_update(x, flux)

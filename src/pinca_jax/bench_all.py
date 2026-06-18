@@ -50,12 +50,20 @@ def _write(tag, pde, results, cfg, seeds):
     print(f"  wrote results/bench_{pde}_{tag}.md")
 
 
+# "Start from a better point" protocol (single fixed seed + warmup + pre-seeded
+# developed states), ported from the original implementations. preseed_steps is the
+# number of solver steps used to pre-evolve training ICs into developed patterns.
+WARMUP = 30
+PRESEED = 10
+
+
 def run_phenomena(pdes_list, seeds, epochs, grid):
     os.makedirs(RES, exist_ok=True)
     for pde in pdes_list:
         archs = PHENOMENA[pde]
         eval_steps = 48
-        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=12, eval_steps=eval_steps, epochs=epochs)
+        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=12, eval_steps=eval_steps,
+                        epochs=epochs, warmup_epochs=WARMUP, preseed_steps=PRESEED)
         print(f"[bench_all] {pde}: {archs}")
         results = {}
         for a in archs:
@@ -95,11 +103,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--group", default="all",
                     choices=["all", "local", "multichannel", "special", "ablation"])
-    ap.add_argument("--seeds", type=int, default=2)
+    ap.add_argument("--seeds", type=int, default=1,
+                    help="1 = single fixed seed 42 (default, matches originals); >1 = variance study")
     ap.add_argument("--epochs", type=int, default=150)
     ap.add_argument("--grid", type=int, default=24)
     args = ap.parse_args()
-    seeds = tuple(range(args.seeds))
+    seeds = (42,) if args.seeds <= 1 else tuple(range(args.seeds))
     if args.group in ("all", "local"):
         run_phenomena(GROUPS["local"], seeds, args.epochs, args.grid)
     if args.group in ("all", "multichannel"):

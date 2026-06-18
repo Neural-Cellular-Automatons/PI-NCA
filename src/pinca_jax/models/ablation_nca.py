@@ -9,6 +9,8 @@ import jax.numpy as jnp
 
 from ..physics import divergence_flux_update, conserve_energy, total_mass
 
+_HE = nn.initializers.he_normal()
+
 
 class AblationNCA(nn.Module):
     out_channels: int = 1
@@ -24,12 +26,12 @@ class AblationNCA(nn.Module):
         tgt = total_mass(x)
         percepts = [
             nn.Conv(self.perceive_features, (self.kernel, self.kernel), padding="CIRCULAR",
-                    kernel_dilation=(d, d), name=f"perceive_d{d}")(x)
+                    kernel_dilation=(d, d), kernel_init=_HE, name=f"perceive_d{d}")(x)
             for d in self.dilations
         ]
         h = nn.relu(jnp.concatenate(percepts, axis=-1) if len(percepts) > 1 else percepts[0])
-        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
-        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), name="proc2")(h))
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
         if self.head == "flux":
             flux = nn.Conv(2, (1, 1), use_bias=False,
                            kernel_init=nn.initializers.zeros, name="flux_head")(h)

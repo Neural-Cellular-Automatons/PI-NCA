@@ -14,6 +14,8 @@ from __future__ import annotations
 import flax.linen as nn
 import jax
 
+_HE = nn.initializers.he_normal()  # better start for ReLU convs (matches originals)
+
 
 class NCA(nn.Module):
     out_channels: int = 1
@@ -22,10 +24,10 @@ class NCA(nn.Module):
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
-        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", name="perceive")(x)
+        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x)
         h = nn.relu(p)
-        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), name="proc1")(h))
-        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), name="proc2")(h))
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
         delta = nn.Conv(self.out_channels, (1, 1), use_bias=False,
                         kernel_init=nn.initializers.zeros, name="update")(h)
         return x + delta  # residual update; zero-init -> starts as identity

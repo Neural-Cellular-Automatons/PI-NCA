@@ -98,7 +98,7 @@ def to_markdown(pde, results, cfg):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pde", default="heat")
-    ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument("--seeds", type=int, default=1)  # 1 = single fixed seed 42 (matches originals)
     ap.add_argument("--epochs", type=int, default=200)
     ap.add_argument("--grid", type=int, default=24)
     ap.add_argument("--rollout", type=int, default=12)
@@ -110,8 +110,9 @@ def main():
 
     clip = tuple(float(v) for v in args.clip.split(",")) if args.clip else None
     cfg = EmuConfig(pde=args.pde, grid_size=args.grid, rollout_steps=args.rollout,
-                    eval_steps=args.eval, epochs=args.epochs, output_clip=clip)
-    seeds = tuple(range(args.seeds))
+                    eval_steps=args.eval, epochs=args.epochs, output_clip=clip,
+                    warmup_epochs=30, preseed_steps=10)  # "better start" protocol
+    seeds = (42,) if args.seeds <= 1 else tuple(range(args.seeds))
     arch_names = args.archs.split(",") if args.archs else None
     print(f"Benchmark {args.pde}: archs={arch_names or 'all'}, seeds={seeds}, clip={clip}")
     results = run_pde(args.pde, cfg, seeds, arch_names)

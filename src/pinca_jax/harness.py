@@ -34,9 +34,14 @@ class EmuConfig:
     epochs: int = 300
     lr: float = 1e-3
     weight_decay: float = 1e-5
-    seed: int = 0
+    seed: int = 42                    # single fixed seed (matches original implementations)
     n_eval: int = 8
     output_clip: tuple | None = None  # (lo,hi): clip each emulator step (bounded ablation)
+    # "start from a better point" knobs (ported from the original training recipe):
+    warmup_epochs: int = 0            # LR warmup length
+    warmup_lr: float = 2e-4           # LR at step 0 of warmup
+    preseed_steps: int = 0            # pre-evolve training ICs by the solver this many steps
+                                      # (so the model trains on DEVELOPED states, not just early ones)
 
     def spec(self):
         # use the numerically stable teacher config where one exists (e.g. gray_scott)
@@ -72,12 +77,22 @@ def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):
     dummy = ic.make_state(ik, cfg.pde, 1, cfg.grid_size)
     params = model.init(ik, dummy)
 
-    opt = optax.adamw(cfg.lr, weight_decay=cfg.weight_decay)
+    # LR warmup then constant (matches the originals' warmup_epochs/warmup_lr).
+    if cfg.warmup_epochs > 0:
+        schedule = optax.join_schedules(
+            [optax.linear_schedule(cfg.warmup_lr, cfg.lr, cfg.warmup_epochs),
+             optax.constant_schedule(cfg.lr)],
+            [cfg.warmup_epochs])
+    else:
+        schedule = cfg.lr
+    opt = optax.adamw(schedule, weight_decay=cfg.weight_decay)
     opt_state = opt.init(params)
 
     @jax.jit
     def step(params, opt_state, k):
         x0 = ic.make_state(k, cfg.pde, cfg.batch, cfg.grid_size)
+        if cfg.preseed_steps > 0:                  # start from a DEVELOPED state
+            x0 = pdes.rollout(spec, x0, cfg.preseed_steps)
         target = pdes.rollout(spec, x0, cfg.rollout_steps)
 
         def loss_fn(p):
@@ -153,8 +168,13 @@ def evaluate_emulator(model, params, cfg: EmuConfig):
     return out
 
 
-def run_multiseed(model_ctor, cfg: EmuConfig, seeds=(0, 1, 2)):
-    """Train+eval across seeds → (per-seed list, aggregated mean±std dict)."""
+def run_multiseed(model_ctor, cfg: EmuConfig, seeds=(42,)):
+    """Train+eval across seeds → (per-seed list, aggregated dict).
+
+    Default is a SINGLE fixed seed (42), matching the original implementations'
+    deterministic protocol. Pass multiple seeds only for an explicit variance study;
+    headline results are single-run from a good (He-init + zero-head + warm-up) start.
+    """
     runs = []
     for s in seeds:
         c = EmuConfig(**{**cfg.__dict__, "seed": s})
