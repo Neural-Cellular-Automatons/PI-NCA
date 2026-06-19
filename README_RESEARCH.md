@@ -30,6 +30,10 @@ operator); PINN + DeepONet (continuous/operator, heat).
 **Protocol:** single fixed seed (42) + He-init + zero-init heads + LR warmup + pre-seeding —
 the originals' "start from a better point" recipe (`docs/initialization_and_protocol.md`).
 **Architecture diagrams:** `docs/architecture_diagrams.md`.
+**Research paper (detailed, LaTeX in .txt):** `docs/research_paper.txt` — "No Universal Winner:
+When Physics-Informed Neural Cellular Automata Beat (and Lose to) PINNs and Neural Operators on
+PDEs" (14 sections, 8 tables, 39 references; rename to `.tex` to compile).
+**True-3D volume renders:** `docs/figures/<pde>_3d_volume.png` (`viz3d_volume.py`).
 
 ## Branch map (research trail)
 ```

@@ -30,19 +30,23 @@ comfort zone), Gray–Scott/Nagumo (the conserving default fights the non-conser
 and Navier–Stokes (global coupling — even FNO accumulates visible error over 64 steps). These
 match the quantitative regime map in `docs/master_results.md`.
 
-## 3-D gallery (mid-depth z-slice over time)
-A 3-D volume can't be a flat GIF, so each 3-D phenomenon is shown as the **mid-depth slice**
-(z = D/2) of the analytic vs. model fields plus the error map, over time (`viz3d.py`,
-regime-appropriate winner per PDE). Animated 3-D GIFs:
-`results/gifs/<pde>_3d_{analytic,model,error}.gif` (local). Committed montages:
+## 3-D gallery — true volume renders (`viz3d_volume.py`)
+These are **genuine 3-D renderings** (matplotlib `Axes3D`): each volume is drawn as a
+perspective cube with a depth-shaded volumetric point cloud, so the 3-D structure is visible
+(not a flat slice). Rows = analytic / model / |error|, columns = timesteps. Rotating + evolving
+animated GIFs: `results/gifs/<pde>_3d_volume.gif` (local). Committed montages:
 
-| 3-D phenomenon | model shown | montage |
+| 3-D phenomenon | model shown | volume montage |
 |---|---|---|
-| Heat | FluxNCA3D (PI-NCA) | ![heat3d](figures/heat_3d_comparison.png) |
-| Advection–diffusion | FNO3D | ![adv3d](figures/adv_diff_3d_comparison.png) |
-| Allen–Cahn | FNO3D | ![ac3d](figures/allen_cahn_3d_comparison.png) |
-| Nagumo | NCA3D | ![nag3d](figures/nagumo_3d_comparison.png) |
-| Gray–Scott | NCA3D | ![gs3d](figures/gray_scott_3d_comparison.png) |
-| FitzHugh–Nagumo | FNO3D | ![fhn3d](figures/fitzhugh_nagumo_3d_comparison.png) |
+| Heat | FluxNCA3D (PI-NCA) | ![heat3dv](figures/heat_3d_volume.png) |
+| Advection–diffusion | FNO3D | ![adv3dv](figures/adv_diff_3d_volume.png) |
+| Allen–Cahn | FNO3D | ![ac3dv](figures/allen_cahn_3d_volume.png) |
+| Nagumo | NCA3D | ![nag3dv](figures/nagumo_3d_volume.png) |
+| Gray–Scott | NCA3D | ![gs3dv](figures/gray_scott_3d_volume.png) |
+| FitzHugh–Nagumo | FNO3D | ![fhn3dv](figures/fitzhugh_nagumo_3d_volume.png) |
 
-These mirror the 2-D gallery and the dimension-independent regime map (`docs/master_results.md §5b`).
+### Complementary cross-sections (mid-depth z-slice, `viz3d.py`)
+The `*_3d_comparison.png` montages show the mid-depth slice (z = D/2) over time as a quantitative
+cross-section to read the error field cell-by-cell — a 2-D view *into* the 3-D volume, paired with
+the volume renders above. Both mirror the dimension-independent regime map
+(`docs/master_results.md §5b`).
