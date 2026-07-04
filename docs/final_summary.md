@@ -99,6 +99,12 @@ stiff-CH accuracy (there, bounding is what matters). The regime selects the comp
    (conserving NCAs 0.198 vs plain 0.041); NCAs conserve mass to 1e-3–1e-6 vs plain/FNO drift.
    The architecture-vs-PDE-structure thesis holds in 2-D and 3-D alike.
 
+17. **Resolution transfer is regime-dependent (train@G, eval@G′).** On heat the conv-NCAs
+   transfer coarse→fine (train16→eval48 = 0.029) while the FNO attains low error only near its
+   training resolution (train16→eval48 = 0.504) — no resolution invariance in the autoregressive
+   local-diffusion setting. On Navier–Stokes the FNO *is* resolution-invariant (~0.18–0.24 across
+   all grids) while the NCA diverges when trained at 48². Allen–Cahn: both robust.
+
 **Coverage:** 10 emulator phenomena in 2-D + 6 in 3-D with 20-metric tables; ablations A1–A6;
 PINN + DeepONet + Darcy operator baselines; CAX eval; GIFs/error-maps; architecture diagrams;
 the "start from a better point" protocol (single seed 42 + He-init + warmup + pre-seeding).
