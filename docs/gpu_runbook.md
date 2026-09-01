@@ -99,9 +99,14 @@ Expected: `0.10.1 gpu [CudaDevice(id=0)]`. If it prints `cpu`, the CUDA wheel di
 install — read the pip error; do not proceed.
 </details>
 
-**Python version:** the pins need **>= 3.12**; 3.13 is fine and is what `setup_gpu.sh`
-prefers. Verified against PyPI: jax 0.10.1 `>=3.12`, cax 0.3.3 `>=3.11`, torch 2.12.0 ships
-cp313 wheels, flax/optax are pure Python.
+**Python version:** the pins need **>= 3.12**; **3.12, 3.13 and 3.14 all work**, and
+`setup_gpu.sh` prefers the newest it finds. Verified against PyPI: jax 0.10.1 `>=3.12`,
+cax 0.3.3 `>=3.11`, and `jaxlib` / `jax-cuda12-plugin` / `torch` 2.12.0 all publish cp312,
+cp313 and cp314 manylinux x86_64 wheels. flax/optax are pure Python.
+
+Incidentally the wheel index is where the Windows limitation becomes concrete: `jaxlib`
+publishes a `win_amd64` wheel, but `jax-cuda12-plugin` publishes **manylinux only**. There is
+no Windows CUDA backend to install.
 
 Ubuntu ships `python3` without the `venv` module. `setup_gpu.sh` detects that and installs
 `python3.<N>-venv` for you (it will ask for your sudo password). To do it yourself first:

@@ -20,7 +20,7 @@ cd "$(dirname "$0")"
 
 # --- 1. find an interpreter the pins support (jax 0.10.1 needs >= 3.12) ------
 PY=""
-for c in python3.13 python3.12 python3.14 python3; do
+for c in python3.14 python3.13 python3.12 python3; do
   command -v "$c" >/dev/null 2>&1 || continue
   if "$c" -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3,12) else 1)' 2>/dev/null; then
     PY="$c"; break
@@ -28,7 +28,7 @@ for c in python3.13 python3.12 python3.14 python3; do
 done
 if [ -z "$PY" ]; then
   echo "No Python >= 3.12 found (jax 0.10.1 requires it). On Ubuntu:"
-  echo "  sudo apt update && sudo apt install -y python3.13 python3.13-venv python3-pip"
+  echo "  sudo apt update && sudo apt install -y python3 python3-venv python3-pip"
   exit 1
 fi
 echo "==> interpreter: $PY ($($PY --version))"
