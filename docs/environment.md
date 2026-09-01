@@ -31,6 +31,19 @@ python -m pip install pillow                   # for cax image utilities
 On a machine with admin / long-paths enabled (or Linux/macOS), plain
 `pip install -r requirements-jax.txt` works without the `--no-deps` dance.
 
+## GPU host (final benchmark run)
+- Target: single **NVIDIA RTX 4090** (24 GB), Linux, headless.
+- Install `requirements-gpu.txt` instead of `requirements-jax.txt` — the only difference is
+  `jax[cuda12]==0.10.1` in place of `jax[cpu]==0.10.1`. The CUDA/cuDNN runtime ships inside the
+  wheel; only an NVIDIA driver new enough for CUDA 12 is required (>= 525), no system toolkit.
+- `pip install -e .` (pyproject, src layout) so `python -m pinca_jax.<driver>` resolves from any
+  working directory. `PYTHONPATH=src` is the no-install fallback.
+- `run_gpu.sh` sets `XLA_PYTHON_CLIENT_PREALLOCATE=false` so XLA does not grab ~90% of VRAM up
+  front, and `--xla_gpu_deterministic_ops=true` for repeatable reductions.
+- Scale knobs used for the full run (2-D): `--grid 64 --batch 64 --epochs 2000 --seeds 3`;
+  3-D: `--grid 32 --epochs 800 --batch 16`. Identical code path to the CPU presets.
+- Step-by-step: `docs/gpu_runbook.md`.
+
 ## Reproducibility policy
 - **PRNG:** every experiment takes an explicit integer `seed`; JAX `jax.random.PRNGKey(seed)` is
   threaded functionally (no global RNG state). Multiple seeds → mean ± std (never single-run).

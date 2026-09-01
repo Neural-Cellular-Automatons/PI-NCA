@@ -1,0 +1,21 @@
+# GPU (CUDA 12) stack for the final benchmark run — NVIDIA RTX 4090, Linux.
+# Mirrors requirements-jax.txt; the ONLY difference is the jax wheel.
+#   pip install -r requirements-gpu.txt
+#   python -c "import jax; print(jax.devices())"   # -> [CudaDevice(id=0)]
+
+jax[cuda12]==0.10.1
+optax==0.2.8
+flax==0.12.7
+cax==0.3.3
+pillow
+
+# reference implementation (migration-correctness comparison only; CPU wheel is fine)
+torch==2.12.0
+
+# data / viz / io
+numpy
+matplotlib
+imageio
+
+# dev
+pytest

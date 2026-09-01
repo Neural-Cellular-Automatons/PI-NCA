@@ -54,16 +54,37 @@ Heat / heterogeneous heat · Gray–Scott · Shallow-Water · FitzHugh–Nagumo 
 See `docs/literature_review.md §0` for formulations and per-branch provenance.
 
 ## Compute scope
-CPU-only host this session ⇒ **reduced-scale** configs (small grids/steps/seeds) for an
-end-to-end, reproducible methodology demonstration. Configs are written to re-run unchanged on
-GPU (only numeric fields change). `pmap`/sharding are implemented but no-ops on one CPU.
-See `docs/environment.md`.
+The published tables were produced on a **CPU-only host** ⇒ reduced-scale configs (small
+grids/steps/seeds) for an end-to-end, reproducible methodology demonstration. Configs re-run
+unchanged on GPU — only numeric fields change. `pmap`/sharding are implemented but no-ops on
+one device. See `docs/environment.md`.
 
-## Quickstart
+## Quickstart (CPU)
 ```bash
 python -m pip install -r requirements-jax.txt   # see environment.md for Windows no-admin notes
-python -m pytest tests/                          # migration correctness gate (added in Phase 1)
+python -m pip install -e .                      # src layout -> `python -m pinca_jax.*` works
+python -m pytest tests/                          # migration correctness gate
 ```
+
+## Quickstart (GPU — full benchmark run)
+Headless, terminal-only; full instructions in **`docs/gpu_runbook.md`**.
+```bash
+python -m pip install -r requirements-gpu.txt   # jax[cuda12]; only the jax wheel differs
+python -m pip install -e .
+python -c "import jax; print(jax.default_backend(), jax.devices())"   # expect: gpu [CudaDevice(id=0)]
+bash run_gpu.sh smoke                            # ~2 min wiring check
+bash run_gpu.sh                                  # full run: gate -> 2D -> 3D -> res-study -> figures -> plots
+```
+Every driver prints its backend and stamps `{jax, backend, devices, peak_mem_mb}` into
+`results/*.json` under `"device"`, so a GPU run is self-identifying after the fact.
+
+## Benchmark plots
+```bash
+python -m pinca_jax.plots        # reads results/*.json only — no training, seconds
+```
+Writes `docs/figures/bench/`: accuracy / PSNR / conservation / train-time / throughput bars,
+error-growth profiles, accuracy-vs-params Pareto, the regime map, the 3-D suite, ablations
+A4/A5, and resolution-transfer heatmaps.
 
 ## Metrics (every architecture, multi-seed mean ± std)
 L2 error · relative error · residual loss · BC satisfaction · generalization · stability ·

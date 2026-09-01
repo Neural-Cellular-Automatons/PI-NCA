@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import asdict
 
-from . import metrics, bench
+from . import metrics, bench, env
 from .harness3d import Emu3DConfig, train, evaluate
 from .equations import pdes3d
 import pinca_jax.models3d as M
@@ -57,19 +57,22 @@ def main():
     ap.add_argument("--pdes", default=",".join(PHENOMENA))
     ap.add_argument("--grid", type=int, default=16)
     ap.add_argument("--epochs", type=int, default=120)
+    ap.add_argument("--batch", type=int, default=8, help="training batch (raise on GPU)")
     args = ap.parse_args()
+    env.banner("bench3d")
     os.makedirs(RES, exist_ok=True)
     for pde in args.pdes.split(","):
-        cfg = Emu3DConfig(pde=pde, grid_size=args.grid, epochs=args.epochs)
+        cfg = Emu3DConfig(pde=pde, grid_size=args.grid, epochs=args.epochs, batch=args.batch)
         print(f"[bench3d] {pde} (grid {args.grid}^3)")
         results = run_pde(pde, cfg, PHENOMENA[pde])
         with open(os.path.join(RES, f"bench3d_{pde}.json"), "w", encoding="utf-8") as f:
-            json.dump({"config": asdict(cfg), "results": results}, f, indent=2)
+            json.dump({"config": asdict(cfg), "results": results,
+                       "device": env.provenance("bench3d")}, f, indent=2)
         # reuse the 2-D detailed-table renderer (skips absent metrics gracefully)
         with open(os.path.join(RES, f"bench3d_{pde}.md"), "w", encoding="utf-8") as f:
             f.write(bench.to_markdown(f"{pde} (3D, {args.grid}^3)", results, cfg))
         print(f"  wrote results/bench3d_{pde}.md")
-    print("[bench3d] done.")
+    print(f"[bench3d] done. peak device mem {env.peak_mem_mb():.0f} MB")
 
 
 if __name__ == "__main__":

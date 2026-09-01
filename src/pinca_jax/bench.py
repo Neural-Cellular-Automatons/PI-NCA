@@ -16,6 +16,7 @@ from dataclasses import asdict
 from .harness import EmuConfig, run_multiseed
 from .equations import pdes
 from .models import registry
+from . import env
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "results")
 
@@ -106,11 +107,14 @@ def main():
     ap.add_argument("--archs", default=None, help="comma-separated arch names (default: all applicable)")
     ap.add_argument("--tag", default=None, help="output filename suffix")
     ap.add_argument("--clip", default=None, help="lo,hi to clip each step (bounded ablation)")
+    ap.add_argument("--batch", type=int, default=16, help="training batch (raise on GPU)")
     args = ap.parse_args()
 
+    env.banner("bench")
     clip = tuple(float(v) for v in args.clip.split(",")) if args.clip else None
     cfg = EmuConfig(pde=args.pde, grid_size=args.grid, rollout_steps=args.rollout,
                     eval_steps=args.eval, epochs=args.epochs, output_clip=clip,
+                    batch=args.batch,
                     warmup_epochs=30, preseed_steps=10)  # "better start" protocol
     seeds = (42,) if args.seeds <= 1 else tuple(range(args.seeds))
     arch_names = args.archs.split(",") if args.archs else None
@@ -120,7 +124,8 @@ def main():
     suffix = f"_{args.tag}" if args.tag else ""
     os.makedirs(RESULTS_DIR, exist_ok=True)
     with open(os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.json"), "w", encoding="utf-8") as f:
-        json.dump({"config": asdict(cfg), "seeds": list(seeds), "results": results}, f, indent=2)
+        json.dump({"config": asdict(cfg), "seeds": list(seeds), "results": results,
+                   "device": env.provenance("bench")}, f, indent=2)
     md = to_markdown(args.pde, results, cfg)
     md_path = os.path.join(RESULTS_DIR, f"bench_{args.pde}{suffix}.md")
     with open(md_path, "w", encoding="utf-8") as f:

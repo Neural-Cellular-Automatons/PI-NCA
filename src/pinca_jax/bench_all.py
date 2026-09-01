@@ -13,7 +13,7 @@ from dataclasses import asdict
 from .harness import EmuConfig, run_multiseed
 from .equations import pdes
 from .models import registry
-from . import bench
+from . import bench, env
 
 RES = bench.RESULTS_DIR
 
@@ -44,7 +44,8 @@ GROUPS = {
 
 def _write(tag, pde, results, cfg, seeds):
     with open(os.path.join(RES, f"bench_{pde}_{tag}.json"), "w", encoding="utf-8") as f:
-        json.dump({"config": asdict(cfg), "seeds": list(seeds), "results": results}, f, indent=2)
+        json.dump({"config": asdict(cfg), "seeds": list(seeds), "results": results,
+                   "device": env.provenance("bench_all")}, f, indent=2)
     with open(os.path.join(RES, f"bench_{pde}_{tag}.md"), "w", encoding="utf-8") as f:
         f.write(bench.to_markdown(pde, results, cfg))
     print(f"  wrote results/bench_{pde}_{tag}.md")
@@ -57,16 +58,17 @@ WARMUP = 30
 PRESEED = 10
 
 
-def run_phenomena(pdes_list, seeds, epochs, grid):
+def run_phenomena(pdes_list, seeds, epochs, grid, batch=16, rollout=12, eval_steps_arg=48):
     os.makedirs(RES, exist_ok=True)
     for pde in pdes_list:
         archs = PHENOMENA[pde]
-        eval_steps = 48
+        eval_steps = eval_steps_arg
         # Cahn-Hilliard coarsens rapidly from fresh ICs; pre-seeding on developed states
         # mismatches eval and regresses the bounded models to the floor → preseed off.
         preseed = 0 if pde == "cahn_hilliard" else PRESEED
-        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=12, eval_steps=eval_steps,
-                        epochs=epochs, warmup_epochs=WARMUP, preseed_steps=preseed)
+        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=rollout,
+                        eval_steps=eval_steps, epochs=epochs, batch=batch,
+                        warmup_epochs=WARMUP, preseed_steps=preseed)
         print(f"[bench_all] {pde}: {archs}")
         results = {}
         for a in archs:
@@ -78,11 +80,12 @@ def run_phenomena(pdes_list, seeds, epochs, grid):
         _write("full", pde, results, cfg, seeds)
 
 
-def run_ablations(seeds, epochs, grid):
+def run_ablations(seeds, epochs, grid, batch=16, rollout=12, eval_steps=48):
     os.makedirs(RES, exist_ok=True)
     # A4: conservation on/off at matched width — conservative heat vs non-conservative nagumo
     for pde in ["heat", "nagumo"]:
-        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=12, eval_steps=48, epochs=epochs)
+        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=rollout,
+                        eval_steps=eval_steps, epochs=epochs, batch=batch)
         results = {}
         for a in ["abl_flux", "abl_residual"]:
             ctor = registry.REGISTRY[a].make(1)
@@ -92,7 +95,8 @@ def run_ablations(seeds, epochs, grid):
         _write("A4", pde, results, cfg, seeds)
     # A5: perception size — heat (local) and navier_stokes (global)
     for pde in ["heat", "navier_stokes"]:
-        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=12, eval_steps=48, epochs=epochs)
+        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=rollout,
+                        eval_steps=eval_steps, epochs=epochs, batch=batch)
         results = {}
         for a in ["abl_k3", "abl_k5", "abl_multiscale"]:
             ctor = registry.REGISTRY[a].make(1)
@@ -110,17 +114,24 @@ def main():
                     help="1 = single fixed seed 42 (default, matches originals); >1 = variance study")
     ap.add_argument("--epochs", type=int, default=150)
     ap.add_argument("--grid", type=int, default=24)
+    ap.add_argument("--batch", type=int, default=16, help="training batch (raise on GPU)")
+    ap.add_argument("--rollout", type=int, default=12, help="training BPTT horizon")
+    ap.add_argument("--eval", type=int, default=48, help="evaluation rollout horizon")
     args = ap.parse_args()
+    env.banner("bench_all")
     seeds = (42,) if args.seeds <= 1 else tuple(range(args.seeds))
     if args.group in ("all", "local"):
-        run_phenomena(GROUPS["local"], seeds, args.epochs, args.grid)
+        run_phenomena(GROUPS["local"], seeds, args.epochs, args.grid, args.batch,
+                      args.rollout, args.eval)
     if args.group in ("all", "multichannel"):
-        run_phenomena(GROUPS["multichannel"], seeds, args.epochs, args.grid)
+        run_phenomena(GROUPS["multichannel"], seeds, args.epochs, args.grid, args.batch,
+                      args.rollout, args.eval)
     if args.group in ("all", "special"):
-        run_phenomena(GROUPS["special"], seeds, args.epochs, args.grid)
+        run_phenomena(GROUPS["special"], seeds, args.epochs, args.grid, args.batch,
+                      args.rollout, args.eval)
     if args.group in ("all", "ablation"):
-        run_ablations(seeds, args.epochs, args.grid)
-    print("[bench_all] done.")
+        run_ablations(seeds, args.epochs, args.grid, args.batch, args.rollout, args.eval)
+    print(f"[bench_all] done. peak device mem {env.peak_mem_mb():.0f} MB")
 
 
 if __name__ == "__main__":
