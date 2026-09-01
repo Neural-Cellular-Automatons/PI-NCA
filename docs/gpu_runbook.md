@@ -5,6 +5,50 @@ All output lands in `results/` (tables + JSON) and `docs/figures/bench/` (plots)
 
 ---
 
+## Windows hosts: use WSL2, not cmd.exe
+
+JAX has **no native-Windows GPU support**. Per the official install matrix
+(docs.jax.dev/en/latest/installation.html):
+
+| Platform | NVIDIA GPU |
+|---|---|
+| Linux, x86_64 | yes |
+| Linux, aarch64 | yes |
+| Windows, x86_64 | **no** |
+| Windows WSL2, x86_64 | experimental (works in practice, CUDA 12 + recent driver) |
+
+Install `jax[cuda12]` in native Windows and you get the CPU backend no matter what card is
+in the box. So on a Windows 4090 machine, run the benchmark inside WSL2.
+
+One-time setup, from an **Administrator** cmd.exe:
+
+```bat
+wsl --install -d Ubuntu
+```
+
+Reboot when it asks, then set the Ubuntu username/password it prompts for. The Windows NVIDIA
+driver already provides GPU passthrough — do **not** install an NVIDIA driver inside WSL.
+
+Every session after that, from ordinary cmd.exe:
+
+```bat
+wsl
+```
+
+You are now in Linux. Your Windows drives are mounted under `/mnt/c`, so:
+
+```bash
+cd /mnt/c/Users/<you>/PI-NCA
+nvidia-smi          # must list the 4090; if not, update the Windows driver
+```
+
+Then follow §1 onward exactly as written. Clone into the WSL filesystem
+(`~/PI-NCA`) rather than `/mnt/c` if you care about I/O speed — `/mnt/c` is slow.
+
+`run_gpu.bat` exists for running the suite from cmd.exe, but it can only ever
+produce **CPU** numbers, and it says so before it starts. Use it for
+`python -m pinca_jax.plots` and for reduced-scale sanity checks, not the final run.
+
 ## 0. Prerequisites on the GPU box
 
 ```bash
@@ -153,6 +197,8 @@ Copy them off the box with `scp -r user@box:PI-NCA/docs/figures/bench ./`.
 | GPU sits at ~0% util | grid too small — kernels finish faster than they launch | raise `--grid`/`--batch`; small grids are launch-bound, not a bug |
 | `CUDA_ERROR_NO_DEVICE` inside tmux | stale session predates the driver | start a fresh tmux session |
 | run dies on SSH disconnect | no tmux/nohup | see §4 |
+| Windows: backend is `cpu` however you install | native Windows has no JAX GPU wheels | run inside WSL2 — see the Windows section above |
+| `nvidia-smi` empty inside WSL2 | Windows driver too old, or a driver was installed *inside* WSL | update the Windows NVIDIA driver; never install one in WSL |
 
 Timings from the run land in the tables as `train wall(s)` and `infer s/step`, and the
 device stamp (`jax` version, backend, device list, peak VRAM) is written into every
