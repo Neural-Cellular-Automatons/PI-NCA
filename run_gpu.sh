@@ -24,16 +24,18 @@ fi
 case "$MODE" in
   smoke)
     SEEDS=1; EPOCHS=60;   GRID=24; BATCH=16; GRID3D=16; EPOCHS3D=40; RES_EPOCHS=40
-    VIZ_GRID=24; VIZ_EPOCHS=60;   VIZ3D_GRID=16; VIZ3D_EPOCHS=40; DO_FIGURES=1 ;;
+    VIZ_GRID=24; VIZ_EPOCHS=60;   VIZ3D_GRID=16; VIZ3D_EPOCHS=40; DO_FIGURES=1
+    MAX_MB=8 ;;
   bench)
     SEEDS=3; EPOCHS=2000; GRID=64; BATCH=64; GRID3D=32; EPOCHS3D=800; RES_EPOCHS=600
-    DO_FIGURES=0 ;;
+    DO_FIGURES=0; MAX_MB=64 ;;
   full)
     SEEDS=3; EPOCHS=2000; GRID=64; BATCH=64; GRID3D=32; EPOCHS3D=800; RES_EPOCHS=600
     # Figures are pictures, not measurements — they do not need benchmark-grade
     # training, and viz3d_volume renders every voxel through matplotlib on the CPU,
     # so 32^3 there costs far more wall-clock than it adds to the page.
-    VIZ_GRID=48; VIZ_EPOCHS=400; VIZ3D_GRID=16; VIZ3D_EPOCHS=200; DO_FIGURES=1 ;;
+    VIZ_GRID=48; VIZ_EPOCHS=400; VIZ3D_GRID=16; VIZ3D_EPOCHS=200; DO_FIGURES=1
+    MAX_MB=64 ;;
   *)
     echo "usage: bash run_gpu.sh [full|bench|smoke]"; exit 2 ;;
 esac
@@ -79,17 +81,30 @@ soft python -m pinca_jax.deeponet_heat
 soft python -m pinca_jax.darcy
 
 if [ "$DO_FIGURES" = "1" ]; then
-  echo "=== 7. field figures (analytic vs model vs error, grid=$VIZ_GRID epochs=$VIZ_EPOCHS) ==="
+  # 7a. Train ONCE per phenomenon and archive the raw trajectories. Everything after
+  # this renders from those files — including anything you write later, on any
+  # machine, with no GPU. viz3d and viz3d_volume previously each retrained the same
+  # model separately, so this also halves the 3-D figure cost.
+  echo "=== 7a. capture trajectories -> results/traj/*.npz ==="
+  soft python -m pinca_jax.capture --dims both \
+       --grid "$VIZ_GRID" --epochs "$VIZ_EPOCHS" \
+       --grid3d "$VIZ3D_GRID" --epochs3d "$VIZ3D_EPOCHS" --max-mb "$MAX_MB"
+
+  echo "=== 7b. field figures (rendered from the capture files, no training) ==="
   for pde in heat allen_cahn nagumo adv_diff gray_scott shallow_water \
              fitzhugh_nagumo wave cahn_hilliard navier_stokes; do
-    soft python -m pinca_jax.viz --pde "$pde" --grid "$VIZ_GRID" --epochs "$VIZ_EPOCHS"
+    f="results/traj/${pde}_2d.npz"
+    # NB: `[ -f x ] && cmd` would abort the script under `set -e` when x is missing.
+    if [ -f "$f" ]; then soft python -m pinca_jax.viz --npz "$f"; fi
   done
   for pde in heat adv_diff allen_cahn nagumo gray_scott fitzhugh_nagumo; do
-    soft python -m pinca_jax.viz3d --pde "$pde" --grid "$VIZ3D_GRID" --epochs "$VIZ3D_EPOCHS"
-    soft python -m pinca_jax.viz3d_volume --pde "$pde" --grid "$VIZ3D_GRID" --epochs "$VIZ3D_EPOCHS"
+    f="results/traj/${pde}_3d.npz"
+    [ -f "$f" ] || continue
+    soft python -m pinca_jax.viz3d --npz "$f"
+    soft python -m pinca_jax.viz3d_volume --npz "$f"
   done
 else
-  echo "=== 7. field figures SKIPPED (mode=$MODE) ==="
+  echo "=== 7. field figures SKIPPED (mode=$MODE) — run capture+viz later if wanted ==="
 fi
 
 echo "=== 8. benchmark plots (final) ==="
@@ -102,4 +117,7 @@ else
   echo "done, but ${#FAILED[@]} non-fatal step(s) failed:"
   printf '  %s\n' "${FAILED[@]}"
 fi
-echo "tables -> results/*.md   figures -> docs/figures/bench/*.png"
+echo "tables    -> results/*.md"
+echo "plots     -> docs/figures/bench/*.png"
+echo "raw data  -> results/traj/*.npz   (rebuild any figure later, no GPU:"
+echo "             python -m pinca_jax.viz3d_volume --npz results/traj/heat_3d.npz )"

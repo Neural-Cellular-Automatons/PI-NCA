@@ -87,13 +87,17 @@ python -m pinca_jax.darcy
 if "%DO_FIGURES%"=="0" (
   echo === 7. field figures SKIPPED ^(mode=%MODE%^) ===
 ) else (
-  echo === 7. field figures ===
+  REM Train ONCE per phenomenon, archive raw trajectories, then render from those
+  REM files. Forward slashes on purpose: cmd accepts them and they survive editing.
+  echo === 7a. capture trajectories -^> results/traj/*.npz ===
+  python -m pinca_jax.capture --dims both --grid %VIZ_GRID% --epochs %VIZ_EPOCHS% --grid3d %VIZ3D_GRID% --epochs3d %VIZ3D_EPOCHS% --max-mb 64
+  echo === 7b. field figures ^(from the capture files, no training^) ===
   for %%p in (heat allen_cahn nagumo adv_diff gray_scott shallow_water fitzhugh_nagumo wave cahn_hilliard navier_stokes) do (
-    python -m pinca_jax.viz --pde %%p --grid %VIZ_GRID% --epochs %VIZ_EPOCHS%
+    if exist "results/traj/%%p_2d.npz" python -m pinca_jax.viz --npz "results/traj/%%p_2d.npz"
   )
   for %%p in (heat adv_diff allen_cahn nagumo gray_scott fitzhugh_nagumo) do (
-    python -m pinca_jax.viz3d --pde %%p --grid %VIZ3D_GRID% --epochs %VIZ3D_EPOCHS%
-    python -m pinca_jax.viz3d_volume --pde %%p --grid %VIZ3D_GRID% --epochs %VIZ3D_EPOCHS%
+    if exist "results/traj/%%p_3d.npz" python -m pinca_jax.viz3d --npz "results/traj/%%p_3d.npz"
+    if exist "results/traj/%%p_3d.npz" python -m pinca_jax.viz3d_volume --npz "results/traj/%%p_3d.npz"
   )
 )
 
@@ -101,5 +105,9 @@ echo === 8. benchmark plots (final) ===
 python -m pinca_jax.plots
 
 echo.
-echo done. tables -^> results\*.md   figures -^> docs\figures\bench\*.png
+echo done.
+echo   tables   -^> results/*.md
+echo   plots    -^> docs/figures/bench/*.png
+echo   raw data -^> results/traj/*.npz   ^(rebuild any figure later, no GPU:^)
+echo      python -m pinca_jax.viz3d_volume --npz results/traj/heat_3d.npz
 endlocal

@@ -87,6 +87,18 @@ Writes `docs/figures/bench/`: accuracy / PSNR / conservation / train-time / thro
 error-growth profiles, accuracy-vs-params Pareto, the regime map, the 3-D suite, ablations
 A4/A5, and resolution-transfer heatmaps.
 
+## Field figures — capture once, render forever
+`pinca_jax.capture` trains one model per phenomenon and archives the raw solver/model
+trajectories to `results/traj/*.npz` (2-D `(T+1,H,W)`, 3-D full volumes `(T+1,D,H,W)`).
+Every montage, GIF and rotating 3-D render is then produced *from those files* — no
+training, no GPU, plain numpy — so figures can be rebuilt or restyled later on any machine:
+```bash
+python -m pinca_jax.capture --dims both
+python -m pinca_jax.viz3d_volume --npz results/traj/heat_3d.npz
+```
+`--max-mb` (default 64/phenomenon) strides the time axis to bound file size. See
+`docs/gpu_runbook.md` §4b.
+
 ## Metrics (every architecture, multi-seed mean ± std)
 L2 error · relative error · residual loss · BC satisfaction · generalization · stability ·
 wall-clock train time · inference speed · memory · parameter count · FLOPs.

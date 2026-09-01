@@ -59,38 +59,50 @@ def _model_step_fn(model, params, clip):
     return lambda x: model.apply(params, x)
 
 
-def _capture_volumes(step_fn, x0, steps, key_idxs):
-    """Roll out `steps` and return the (D,H,W) channel-0 volume at the requested indices."""
-    outs = [x0]
-    x = x0
+def _volume_traj(step_fn, x0, steps):
+    """Roll out `steps` and return the channel-0 volumes as (T+1, D, H, W)."""
+    outs, x = [x0], x0
     for _ in range(steps):
         x = step_fn(x)
         outs.append(x)
-    return {i: np.asarray(outs[i][0, :, :, :, 0]) for i in key_idxs}
+    return np.stack([np.asarray(o[0, :, :, :, 0]) for o in outs]).astype(np.float32)
 
 
-def render_volume(pde, grid=16, epochs=80, eval_steps=24, seed=42):
-    spec = pdes3d.REGISTRY[pde]
-    C = spec.channels
-    ctor_fn, clip = DEFAULT[pde]
-    cfg = Emu3DConfig(pde=pde, grid_size=grid, rollout_steps=8, eval_steps=eval_steps,
-                      epochs=epochs, seed=seed, output_clip=clip)
-    arch = type(ctor_fn(C)).__name__
-    print(f"[viz3d_volume] {pde}: training {arch} ({epochs} ep, {grid}^3)...")
-    tr = train(lambda: ctor_fn(C), cfg)
-    model, params = tr["model"], tr["params"]
+def render_volume(pde, grid=16, epochs=80, eval_steps=24, seed=42, npz=None):
+    """Volumetric montage (t = 0, T/2, T) + a rotating GIF for one 3-D phenomenon.
 
-    key = jax.random.PRNGKey(seed + 777)
-    x0 = ic3d.make_state(key, pde, 1, grid)
+    `npz` = a trajectory file written by `pinca_jax.capture`; the volumes are loaded
+    and nothing is retrained. This is the cheap path — the rendering here is
+    matplotlib 3-D scatter over every retained voxel and is CPU-bound, so keeping
+    training out of it matters.
+    """
+    if npz is not None:
+        d = np.load(npz)
+        sol_traj, mdl_traj = d["solver"], d["model"]        # (T+1, D, H, W)
+        pde = str(d["pde"]) if "pde" in d else pde
+        arch = str(d["arch"]) if "arch" in d else "?"
+        print(f"[viz3d_volume] {pde} / {arch}: from {npz} {sol_traj.shape}, no training")
+    else:
+        spec = pdes3d.REGISTRY[pde]
+        C = spec.channels
+        ctor_fn, clip = DEFAULT[pde]
+        cfg = Emu3DConfig(pde=pde, grid_size=grid, rollout_steps=8, eval_steps=eval_steps,
+                          epochs=epochs, seed=seed, output_clip=clip)
+        arch = type(ctor_fn(C)).__name__
+        print(f"[viz3d_volume] {pde}: training {arch} ({epochs} ep, {grid}^3)...")
+        tr = train(lambda: ctor_fn(C), cfg)
+        model, params = tr["model"], tr["params"]
 
-    solver_step = lambda x: spec.step(x, spec.params)
-    model_step = _model_step_fn(model, params, clip)
+        key = jax.random.PRNGKey(seed + 777)
+        x0 = ic3d.make_state(key, pde, 1, grid)
+        sol_traj = _volume_traj(lambda x: spec.step(x, spec.params), x0, eval_steps)
+        mdl_traj = _volume_traj(_model_step_fn(model, params, clip), x0, eval_steps)
 
-    # timesteps t = 0, T/2, T
-    T = eval_steps
+    # timesteps t = 0, T/2, T (indices into whatever frames the file actually holds)
+    T = sol_traj.shape[0] - 1
     tcols = [0, T // 2, T]
-    sol_vols = _capture_volumes(solver_step, x0, T, tcols)
-    mdl_vols = _capture_volumes(model_step, x0, T, tcols)
+    sol_vols = {t: sol_traj[t] for t in tcols}
+    mdl_vols = {t: mdl_traj[t] for t in tcols}
 
     # shared field scale from the analytic volumes; separate error scale (99th pct)
     all_sol = np.concatenate([sol_vols[t].ravel() for t in tcols])
@@ -103,7 +115,7 @@ def render_volume(pde, grid=16, epochs=80, eval_steps=24, seed=42):
 
     png_path = _save_montage(pde, arch, tcols, sol_vols, mdl_vols, err_vols,
                              vmin, vmax, emax)
-    gif_path = _save_rotating_gif(pde, model_step, x0, vmin, vmax)
+    gif_path = _save_rotating_gif(pde, mdl_traj, vmin, vmax)
 
     print(f"[viz3d_volume] {pde}: montage -> {png_path}")
     print(f"[viz3d_volume] {pde}: gif     -> {gif_path}")
@@ -135,16 +147,20 @@ def _save_montage(pde, arch, tcols, sol_vols, mdl_vols, err_vols, vmin, vmax, em
     return os.path.relpath(path, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-def _save_rotating_gif(pde, model_step, x0, vmin, vmax, n_frames=16):
-    """Rotating + evolving GIF: advance the sim and rotate azimuth each frame."""
+def _save_rotating_gif(pde, mdl_traj, vmin, vmax, n_frames=16):
+    """Rotating + evolving GIF: walk the captured volumes and rotate azimuth each frame.
+
+    Takes the already-computed (T+1,D,H,W) trajectory rather than a step function, so
+    the GIF costs no extra simulation and works identically from a capture file.
+    """
     import imageio.v2 as imageio
 
     frames = []
-    x = x0
+    # spread the available frames over the animation rather than assuming >= n_frames
+    idxs = np.linspace(1, mdl_traj.shape[0] - 1, num=min(n_frames, mdl_traj.shape[0] - 1))
     fig = plt.figure(figsize=(4, 4))
-    for f in range(n_frames):
-        x = model_step(x)
-        vol = np.asarray(x[0, :, :, :, 0])
+    for f, i in enumerate(idxs.astype(int)):
+        vol = mdl_traj[i]
         ax = fig.add_subplot(111, projection='3d')
         draw_volume(ax, vol, "inferno", vmin, vmax)
         ax.view_init(elev=22, azim=20 + 4 * f)
@@ -164,8 +180,10 @@ def main():
     ap.add_argument("--pde", default="heat")
     ap.add_argument("--grid", type=int, default=16)
     ap.add_argument("--epochs", type=int, default=80)
+    ap.add_argument("--npz", default=None,
+                    help="render from a pinca_jax.capture trajectory file (no training)")
     args = ap.parse_args()
-    render_volume(args.pde, grid=args.grid, epochs=args.epochs)
+    render_volume(args.pde, grid=args.grid, epochs=args.epochs, npz=args.npz)
 
 
 if __name__ == "__main__":

@@ -158,9 +158,10 @@ bash run_gpu.sh bench      # benchmarks + plots only, no field figures — much 
 bash run_gpu.sh            # the real thing (benchmarks + figures)
 ```
 
-**Prefer `bench` if you only need the numbers and the benchmark plots.** The field-figure
-stage retrains a model per phenomenon purely to draw pictures, and `viz3d_volume` renders
-every voxel through matplotlib on the CPU — it can cost more wall-clock than the benchmarks.
+`bench` skips only the field figures (the montages, GIFs and 3-D volume renders); it still
+produces every table and all 14 benchmark plots. The full run adds the figure stage, which
+trains one model per phenomenon and then renders — see "Capture once, render forever" below
+for why that stage no longer costs what it used to, and how to redo it later without a GPU.
 
 The benchmark stages are fatal on error; the baselines and figure stages are **not**. A
 figure failure is recorded and the run continues, so a completed benchmark is never thrown
@@ -201,7 +202,8 @@ Watch the GPU from a second shell: `watch -n2 nvidia-smi`.
 | 4 | `pinca_jax.res_study` | `results/bench_resolution_<pde>.{md,json}` | fatal |
 | 5 | `pinca_jax.plots` | `docs/figures/bench/*.png` | continue |
 | 6 | `pinn_heat`, `deeponet_heat`, `darcy` | console + `results/` | continue |
-| 7 | `viz`, `viz3d`, `viz3d_volume` (skipped in `bench` mode) | `docs/figures/*.png`, `results/gifs/*.gif` | continue |
+| 7a | `pinca_jax.capture` (skipped in `bench` mode) | `results/traj/<pde>_{2d,3d}.npz` | continue |
+| 7b | `viz`, `viz3d`, `viz3d_volume` — all `--npz`, no training | `docs/figures/*.png`, `results/gifs/*.gif` | continue |
 | 8 | `pinca_jax.plots` | `docs/figures/bench/*.png` | continue |
 
 ### Full-scale vs smoke settings
@@ -218,6 +220,45 @@ Watch the GPU from a second shell: `watch -n2 nvidia-smi`.
 
 Only numeric fields change — the code path is identical, which is the whole point of
 `docs/reproducibility.md` §6.
+
+## 4b. Capture once, render forever
+
+Training a model is the expensive part of a figure; drawing is not. `pinca_jax.capture`
+trains **once** per phenomenon, rolls the solver and the model forward from one held-out
+initial condition, and archives the raw arrays:
+
+```
+results/traj/<pde>_2d.npz    solver, model : (T+1, H, W)      channel 0
+results/traj/<pde>_3d.npz    solver, model : (T+1, D, H, W)   channel 0, full volumes
+```
+
+Every figure is then rendered *from those files*, with no training and no GPU:
+
+```bash
+python -m pinca_jax.viz          --npz results/traj/heat_2d.npz
+python -m pinca_jax.viz3d        --npz results/traj/heat_3d.npz
+python -m pinca_jax.viz3d_volume --npz results/traj/heat_3d.npz
+```
+
+Two things this buys you:
+
+1. **The 3-D figure stage costs half what it did.** `viz3d` and `viz3d_volume` used to each
+   retrain the same model for the same phenomenon. Now they share one capture.
+2. **You can rebuild or restyle anything later, anywhere.** Copy `results/traj/` to a laptop
+   and every montage, GIF, rotating volume, or new plot you write is reproducible from plain
+   numpy — no jax, no CUDA, no rerun. `np.load(path)["model"]` is the whole interface.
+
+Capture on its own, e.g. after a `bench` run:
+
+```bash
+python -m pinca_jax.capture --dims both --grid 48 --epochs 400 --grid3d 16 --epochs3d 200
+python -m pinca_jax.capture --dims 3d --pdes heat,gray_scott --grid3d 24 --epochs3d 400
+```
+
+**Size is bounded on purpose.** `--max-mb` (default 64 per phenomenon) strides frames out of
+the time axis if a trajectory would exceed it, so a bigger grid costs resolution in time
+rather than an unbounded file. For reference, 16³ × 33 frames × 2 arrays ≈ 1 MB; 32³ × 33 ≈
+9 MB. `results/**/*.npz` is gitignored, so captures stay local — copy them off deliberately.
 
 ## 5. Running pieces by hand
 
@@ -273,7 +314,9 @@ Copy them off the box with `scp -r user@box:PI-NCA/docs/figures/bench ./`.
 | GPU sits at ~0% util | grid too small — kernels finish faster than they launch | raise `--grid`/`--batch`; small grids are launch-bound, not a bug |
 | `CUDA_ERROR_NO_DEVICE` inside tmux | stale session predates the driver | start a fresh tmux session |
 | run dies on SSH disconnect | no tmux/nohup | see §4 |
-| stage 7 crawls for hours | matplotlib 3-D voxel rendering is CPU-bound | use `bash run_gpu.sh bench`, then draw figures separately |
+| stage 7 crawls for hours | matplotlib 3-D voxel rendering is CPU-bound | use `bash run_gpu.sh bench`, then capture + render separately (§4b) |
+| want a figure changed after the run | — | edit the renderer and re-run it with `--npz`; never retrain |
+| capture files too big | long rollouts at a large grid | lower `--max-mb`, or `--eval3d` |
 | Windows: backend is `cpu` however you install | native Windows has no JAX GPU wheels | run inside WSL2 — see the Windows section above |
 | `nvidia-smi` empty inside WSL2 | Windows driver too old, or a driver was installed *inside* WSL | update the Windows NVIDIA driver; never install one in WSL |
 

@@ -40,38 +40,54 @@ def _frames(traj_ch):  # (T,H,W) → list of (H,W)
 
 
 def render(pde, arch=None, grid=32, epochs=150, eval_steps=64, every=4, seed=0,
-           clip=None):
-    arch = arch or DEFAULT_ARCH.get(pde, "multiscale_flux_nca")
-    spec = pdes.STABLE.get(pde, pdes.REGISTRY[pde])
-    C = pdes.REGISTRY[pde].channels
-    # CH winner needs bounds; harness clip matches the solver range
-    if pde in ("cahn_hilliard", "allen_cahn") and clip is None:
-        clip = (-1.0, 1.0)
-    cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=min(16, eval_steps),
-                    eval_steps=eval_steps, epochs=epochs, seed=seed, output_clip=clip)
-    ctor = registry.REGISTRY[arch].make(C)
-    print(f"[viz] {pde} / {arch}: training ({epochs} ep, grid {grid})...")
-    tr = train_emulator(ctor, cfg)
-    model, params = tr["model"], tr["params"]
+           clip=None, npz=None):
+    """Draw the analytic/model/error montage + GIFs for one phenomenon.
 
-    key = jax.random.PRNGKey(seed + 777)
-    x0 = ic.make_state(key, pde, 1, grid)
+    `npz` = a file written by `pinca_jax.capture`: the trajectories are loaded and
+    NOTHING is retrained. That is the cheap path, and the one to use when you want
+    to redraw or restyle figures later on a machine with no GPU.
+    """
+    if npz is not None:
+        d = np.load(npz)
+        solver_traj = jnp.asarray(d["solver"])
+        model_traj = jnp.asarray(d["model"])
+        pde = str(d["pde"]) if "pde" in d else pde
+        arch = str(d["arch"]) if "arch" in d else (arch or "?")
+        eval_steps = solver_traj.shape[0] - 1
+        print(f"[viz] {pde} / {arch}: from {npz} ({solver_traj.shape}, no training)")
+        err_traj = jnp.abs(solver_traj - model_traj)
+    else:
+        arch = arch or DEFAULT_ARCH.get(pde, "multiscale_flux_nca")
+        spec = pdes.STABLE.get(pde, pdes.REGISTRY[pde])
+        C = pdes.REGISTRY[pde].channels
+        # CH winner needs bounds; harness clip matches the solver range
+        if pde in ("cahn_hilliard", "allen_cahn") and clip is None:
+            clip = (-1.0, 1.0)
+        cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=min(16, eval_steps),
+                        eval_steps=eval_steps, epochs=epochs, seed=seed, output_clip=clip)
+        ctor = registry.REGISTRY[arch].make(C)
+        print(f"[viz] {pde} / {arch}: training ({epochs} ep, grid {grid})...")
+        tr = train_emulator(ctor, cfg)
+        model, params = tr["model"], tr["params"]
 
-    # capture trajectories (channel 0)
-    def traj(rollout_fn):
-        outs = [x0]
-        x = x0
-        for _ in range(eval_steps):
-            x = rollout_fn(x)
-            outs.append(x)
-        return jnp.concatenate([o[0:1, ..., 0] for o in outs], axis=0)  # (T+1,H,W)
+        key = jax.random.PRNGKey(seed + 777)
+        x0 = ic.make_state(key, pde, 1, grid)
 
-    solver_traj = traj(lambda x: spec.step(x, spec.params))
-    def model_step(x):
-        y = model.apply(params, x)
-        return jnp.clip(y, clip[0], clip[1]) if clip else y
-    model_traj = traj(model_step)
-    err_traj = jnp.abs(solver_traj - model_traj)
+        # capture trajectories (channel 0)
+        def traj(rollout_fn):
+            outs = [x0]
+            x = x0
+            for _ in range(eval_steps):
+                x = rollout_fn(x)
+                outs.append(x)
+            return jnp.concatenate([o[0:1, ..., 0] for o in outs], axis=0)  # (T+1,H,W)
+
+        solver_traj = traj(lambda x: spec.step(x, spec.params))
+        def model_step(x):
+            y = model.apply(params, x)
+            return jnp.clip(y, clip[0], clip[1]) if clip else y
+        model_traj = traj(model_step)
+        err_traj = jnp.abs(solver_traj - model_traj)
 
     vmin = float(jnp.min(solver_traj)); vmax = float(jnp.max(solver_traj))
     emax = float(jnp.quantile(err_traj, 0.99)) + 1e-6
@@ -140,8 +156,11 @@ def main():
     ap.add_argument("--grid", type=int, default=32)
     ap.add_argument("--epochs", type=int, default=150)
     ap.add_argument("--eval", type=int, default=64)
+    ap.add_argument("--npz", default=None,
+                    help="render from a pinca_jax.capture trajectory file (no training)")
     args = ap.parse_args()
-    render(args.pde, args.arch, grid=args.grid, epochs=args.epochs, eval_steps=args.eval)
+    render(args.pde, args.arch, grid=args.grid, epochs=args.epochs,
+           eval_steps=args.eval, npz=args.npz)
 
 
 if __name__ == "__main__":
