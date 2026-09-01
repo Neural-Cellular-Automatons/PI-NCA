@@ -37,7 +37,7 @@ PDEs" (14 sections, 8 tables, 39 references; rename to `.tex` to compile).
 
 ## Branch map (research trail)
 ```
-main / claude/*            original PyTorch (PI NCA_v1.py)
+main                       original PyTorch (PI NCA_v1.py)
 research/jax-migration     foundation: lit review, JAX core (src/pinca_jax/), migration + correctness
   ├─ research/baseline-pinn
   ├─ research/baseline-nca
@@ -59,30 +59,58 @@ grids/steps/seeds) for an end-to-end, reproducible methodology demonstration. Co
 unchanged on GPU — only numeric fields change. `pmap`/sharding are implemented but no-ops on
 one device. See `docs/environment.md`.
 
-## Quickstart (CPU)
+## Quickstart
+
+**Python 3.12, 3.13 or 3.14.** GPU requires Linux or WSL2 — JAX publishes no
+native-Windows CUDA wheels.
+
 ```bash
-python -m pip install -r requirements-jax.txt   # see environment.md for Windows no-admin notes
-python -m pip install -e .                      # src layout -> `python -m pinca_jax.*` works
-python -m pytest tests/                          # migration correctness gate
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # reference impl only
+pip install -r requirements-gpu.txt      # or requirements-jax.txt for CPU
+pip install -e .                         # src layout -> `python -m pinca_jax.*` resolves
+python -m pytest tests/ -q               # correctness gate
 ```
 
-## Quickstart (GPU — full benchmark run)
-Headless, terminal-only; full instructions in **`docs/gpu_runbook.md`**.
-Needs Python >= 3.12 (3.13 preferred). Windows hosts must run inside WSL2 — JAX publishes no
-native-Windows GPU wheels.
-```bash
-bash setup_gpu.sh                                # builds .venv, installs jax[cuda12], verifies the GPU
-source .venv/bin/activate
-bash run_gpu.sh smoke                            # ~2 min wiring check
-bash run_gpu.sh                                  # full run: gate -> 2D -> 3D -> res-study -> figures -> plots
-```
-Every driver prints its backend and stamps `{jax, backend, devices, peak_mem_mb}` into
-`results/*.json` under `"device"`, so a GPU run is self-identifying after the fact.
+## The benchmark run — one command
 
-## Benchmark plots
+```bash
+bash run_gpu.sh
+```
+
+Gate, uniform 2-D matrix, ablations, uniform 3-D matrix, resolution study, baselines,
+trajectory capture, field figures, plots, and the regenerated report. Presets:
+`--profile smoke` (~2 min wiring check) and `--profile bench` (measurements only).
+
+It is **resumable** (results checkpoint after every model, so a crash costs one model,
+not a night — just run it again), **OOM-tolerant** (a model that runs out of device
+memory is retried at half the batch, then recorded as failed while the sweep
+continues), and **GPU-only** (the drivers refuse to run on the CPU backend rather than
+silently producing numbers that cannot be compared to a GPU run).
+
+Full detail, including WSL2 setup and troubleshooting: **`docs/gpu_runbook.md`**.
+
+## Uniform benchmark matrix
+
+Every architecture runs on every phenomenon — the same competitor list in every table.
+The flux-form models used to hardcode a 2-channel flux head, so they only applied to
+single-channel fields; multi-field phenomena were measured with three models while
+scalar ones got five. All models are now generic in the channel count (one flux pair per
+field, per-channel divergence, per-field mass projection), and the bounded variants take
+each PDE's measured physical range instead of a hardcoded [-1,1].
+
+At C = 1 the numerics are unchanged, so prior results still stand —
+`tests/test_uniform_matrix.py` asserts it and the PyTorch migration gate still passes.
+
+## Benchmark plots and the report
 ```bash
 python -m pinca_jax.plots        # reads results/*.json only — no training, seconds
+python -m pinca_jax.report       # regenerates the report's tables from those results
+python -m pinca_jax.md2pdf docs/PI-NCA_Architectures_and_Results.md
 ```
+The report's results tables are **generated from the JSON**, so the document cannot
+quote a smaller or older set of architectures than the benchmarks actually produced.
 Writes `docs/figures/bench/`: accuracy / PSNR / conservation / train-time / throughput bars,
 error-growth profiles, accuracy-vs-params Pareto, the regime map, the 3-D suite, ablations
 A4/A5, and resolution-transfer heatmaps.

@@ -12,8 +12,8 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from .physics3d import (divergence_flux_update, multichannel_divergence_update,
-                        conserve_energy, total_mass)
+from .physics3d import (multichannel_divergence_update,
+                        conserve_energy_per_channel, total_mass_per_channel)
 
 _HE = nn.initializers.he_normal()
 _Z, _Y, _X = 1, 2, 3
@@ -34,15 +34,28 @@ class NCA3D(nn.Module):
 
 
 class FluxNCA3D(nn.Module):
+    """Conservative 3-D flux NCA, generic in C. Identical numerics at C == 1.
+
+    With `bounds` set it also clips and re-projects per-field mass, giving the 3-D
+    counterpart of BoundedConsFluxNCA (bounded AND conserving) with no extra class.
+    """
+    out_channels: int = 1
     perceive_features: int = 32
     hidden_features: int = 64
+    bounds: tuple | None = None
 
     @nn.compact
     def __call__(self, x):
+        tgt = total_mass_per_channel(x)
         h = nn.relu(nn.Conv(self.perceive_features, (3, 3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x))
         h = nn.relu(nn.Conv(self.hidden_features, (1, 1, 1), kernel_init=_HE, name="proc1")(h))
-        flux = nn.Conv(3, (1, 1, 1), use_bias=False, kernel_init=nn.initializers.zeros, name="flux")(h)
-        return divergence_flux_update(x, flux)
+        flux = nn.Conv(3 * self.out_channels, (1, 1, 1), use_bias=False,
+                       kernel_init=nn.initializers.zeros, name="flux")(h)
+        out = multichannel_divergence_update(x, flux)
+        if self.bounds is not None:
+            out = jnp.clip(out, self.bounds[0], self.bounds[1])
+            out = conserve_energy_per_channel(out, tgt)
+        return out
 
 
 class MultiChannelFluxNCA3D(nn.Module):
@@ -69,17 +82,18 @@ class MultiScaleFluxNCA3D(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        tgt = total_mass(x)
+        tgt = total_mass_per_channel(x)
         percepts = [nn.Conv(self.features, (3, 3, 3), padding="CIRCULAR", kernel_dilation=(d, d, d),
                             kernel_init=_HE, name=f"perceive_d{d}")(x) for d in self.dilations]
         h = nn.relu(jnp.concatenate(percepts, axis=-1))
         h = nn.relu(nn.Conv(self.hidden_features, (1, 1, 1), kernel_init=_HE, name="proc1")(h))
-        flux = nn.Conv(3, (1, 1, 1), use_bias=False, kernel_init=nn.initializers.zeros, name="flux")(h)
-        out = divergence_flux_update(x, flux)
+        flux = nn.Conv(3 * self.out_channels, (1, 1, 1), use_bias=False,
+                       kernel_init=nn.initializers.zeros, name="flux")(h)
+        out = multichannel_divergence_update(x, flux)
         if self.bounds is not None:
             out = jnp.clip(out, self.bounds[0], self.bounds[1])
         if self.conserve:
-            out = conserve_energy(out, tgt)
+            out = conserve_energy_per_channel(out, tgt)
         return out
 
 

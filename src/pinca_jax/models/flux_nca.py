@@ -25,7 +25,7 @@ from __future__ import annotations
 import flax.linen as nn
 import jax
 
-from ..physics import divergence_flux_update, multichannel_divergence_update
+from ..physics import multichannel_divergence_update
 
 # He/kaiming-normal init for ReLU layers (matches the originals' nn.init.kaiming_normal_,
 # a better starting point than Flax's default lecun_normal for ReLU nets).
@@ -33,11 +33,21 @@ _HE = nn.initializers.he_normal()
 
 
 class DeepFluxNCA(nn.Module):
-    """Conservative flux-form NCA. Input/output state: (B, H, W, 1)."""
+    """Conservative flux-form NCA. State: (B, H, W, C), any C.
 
+    Emits one (f_x, f_y) pair per channel and applies a per-channel discrete
+    divergence, so EVERY field's total is conserved separately.
+
+    At C == 1 this is numerically identical to the original scalar implementation:
+    the head is still 2 channels with the same zero init, and
+    `multichannel_divergence_update` reduces exactly to `divergence_flux_update`
+    (same slices, same roll axes). The migration-correctness test against the
+    PyTorch reference therefore still holds - see tests/test_uniform_matrix.py.
+    """
+
+    out_channels: int = 1
     perceive_features: int = 32
     hidden_features: int = 64
-    flux_features: int = 2  # (f_x, f_y)
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -49,11 +59,11 @@ class DeepFluxNCA(nn.Module):
         h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
         # Flux head, zero-initialised -> NCA starts as identity (no-op update).
         flux = nn.Conv(
-            self.flux_features, (1, 1), use_bias=False,
+            2 * self.out_channels, (1, 1), use_bias=False,
             kernel_init=nn.initializers.zeros, name="flux_head",
         )(h)
-        # Conservative discrete-divergence update.
-        return divergence_flux_update(x, flux)
+        # Conservative discrete-divergence update (per channel).
+        return multichannel_divergence_update(x, flux)
 
 
 class MultiChannelFluxNCA(nn.Module):

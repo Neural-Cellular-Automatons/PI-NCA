@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .harness import EmuConfig, train_emulator, _emu_rollout
+from .harness import EmuConfig, train_emulator, _emu_rollout, field_bounds
 from .equations import pdes
 from .models import registry
 from . import ic
@@ -65,7 +65,7 @@ def render(pde, arch=None, grid=32, epochs=150, eval_steps=64, every=4, seed=0,
             clip = (-1.0, 1.0)
         cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=min(16, eval_steps),
                         eval_steps=eval_steps, epochs=epochs, seed=seed, output_clip=clip)
-        ctor = registry.REGISTRY[arch].make(C)
+        ctor = registry.REGISTRY[arch].make(C, bounds=field_bounds(pde, grid))
         print(f"[viz] {pde} / {arch}: training ({epochs} ep, grid {grid})...")
         tr = train_emulator(ctor, cfg)
         model, params = tr["model"], tr["params"]

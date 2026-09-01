@@ -7,7 +7,8 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from ..physics import divergence_flux_update, conserve_energy, total_mass
+from ..physics import (multichannel_divergence_update,
+                       conserve_energy_per_channel, total_mass_per_channel)
 
 _HE = nn.initializers.he_normal()
 
@@ -23,7 +24,7 @@ class AblationNCA(nn.Module):
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
-        tgt = total_mass(x)
+        tgt = total_mass_per_channel(x)
         percepts = [
             nn.Conv(self.perceive_features, (self.kernel, self.kernel), padding="CIRCULAR",
                     kernel_dilation=(d, d), kernel_init=_HE, name=f"perceive_d{d}")(x)
@@ -33,13 +34,13 @@ class AblationNCA(nn.Module):
         h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
         h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
         if self.head == "flux":
-            flux = nn.Conv(2, (1, 1), use_bias=False,
+            flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
                            kernel_init=nn.initializers.zeros, name="flux_head")(h)
-            out = divergence_flux_update(x, flux)
+            out = multichannel_divergence_update(x, flux)
         else:  # residual
             delta = nn.Conv(self.out_channels, (1, 1), use_bias=False,
                             kernel_init=nn.initializers.zeros, name="upd")(h)
             out = x + delta
         if self.conserve_proj:
-            out = conserve_energy(out, tgt)
+            out = conserve_energy_per_channel(out, tgt)
         return out

@@ -138,3 +138,98 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --------------------------------------------------------------------------- #
+# Durability helpers for long unattended GPU runs.
+#
+# A benchmark matrix is many independent cells (pde x architecture). One cell
+# hitting an out-of-memory error, or producing NaNs, must not destroy the hours of
+# work already done -- so cells are retried at a smaller batch, then recorded as
+# failed, and every completed cell is written to disk immediately.
+# --------------------------------------------------------------------------- #
+import time as _time
+
+
+def is_oom(exc: BaseException) -> bool:
+    """True if `exc` looks like a device out-of-memory error.
+
+    JAX surfaces these as XlaRuntimeError with RESOURCE_EXHAUSTED in the message;
+    the exact class has moved between releases, so match on the text.
+    """
+    text = f"{type(exc).__name__} {exc}".lower()
+    # XLA words this several ways depending on which allocator failed and which
+    # release you are on; match them all, case-insensitively.
+    needles = ("resource_exhausted", "resource exhausted", "out of memory",
+               "oom when allocating", "failed to allocate", "alloc failed",
+               "cuda_error_out_of_memory")
+    return any(n in text for n in needles)
+
+
+def free_device_memory():
+    """Drop JAX's compilation and buffer caches between cells.
+
+    Long matrix runs accumulate one compiled executable per (shape, model). Clearing
+    between cells keeps peak memory a function of the largest single model rather
+    than the whole sweep.
+    """
+    try:
+        import jax
+        jax.clear_caches()
+    except Exception:
+        pass
+
+
+def run_with_oom_backoff(fn, batch, min_batch=2, label=""):
+    """Call `fn(batch)`, halving the batch on OOM until it fits or hits `min_batch`.
+
+    Returns (result, batch_used). Raises the last error if even `min_batch` OOMs, or
+    immediately for any error that is not an OOM -- a NaN or a shape bug should not be
+    silently retried at a smaller batch.
+    """
+    b = int(batch)
+    while True:
+        try:
+            return fn(b), b
+        except Exception as exc:                      # noqa: BLE001 - re-raised below
+            if not is_oom(exc):
+                raise
+            free_device_memory()
+            if b <= min_batch:
+                print(f"    [oom] {label}: still out of memory at batch {b}; giving up")
+                raise
+            b = max(min_batch, b // 2)
+            print(f"    [oom] {label}: retrying at batch {b}")
+
+
+def load_results(path):
+    """Existing results for resume, or an empty dict."""
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f).get("results", {})
+    except (json.JSONDecodeError, OSError):
+        print(f"  [warn] {os.path.basename(path)} unreadable; starting that file over")
+        return {}
+
+
+def save_results(path, payload):
+    """Write atomically: a crash mid-write must not corrupt a resumable file."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    os.replace(tmp, path)
+
+
+class CellTimer:
+    """Wall-clock for one matrix cell."""
+
+    def __enter__(self):
+        self.t0 = _time.time()
+        return self
+
+    def __exit__(self, *exc):
+        self.seconds = _time.time() - self.t0
+        return False

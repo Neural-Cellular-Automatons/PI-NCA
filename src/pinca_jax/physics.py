@@ -62,3 +62,25 @@ def multichannel_divergence_update(x: jax.Array, flux: jax.Array) -> jax.Array:
     fx, fy = f[..., 0], f[..., 1]  # (B,H,W,C)
     dx = (jnp.roll(fx, 1, axis=2) - fx) + (jnp.roll(fy, 1, axis=1) - fy)
     return x + dx
+
+
+def total_mass_per_channel(u: jax.Array) -> jax.Array:
+    """Sum over spatial axes only, per channel, keepdims -> (B,1,1,C).
+
+    `total_mass` lumps all channels into one number, which is correct for a scalar
+    field but wrong for a multi-field state: projecting against it would let one
+    field's deficit be paid out of another's. Multi-channel models must conserve
+    each field separately.  Identical to `total_mass` when C == 1.
+    """
+    return u.sum(axis=(1, 2), keepdims=True)
+
+
+def conserve_energy_per_channel(u: jax.Array, target_sum: jax.Array) -> jax.Array:
+    """Project each channel of `u` so that channel's total equals `target_sum`.
+
+    `target_sum` is (B,1,1,C) from `total_mass_per_channel`. Identical to
+    `conserve_energy` when C == 1.
+    """
+    n_cells = u.shape[1] * u.shape[2]
+    diff = (target_sum - total_mass_per_channel(u)) / n_cells
+    return u + diff

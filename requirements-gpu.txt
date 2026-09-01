@@ -1,21 +1,37 @@
-# GPU (CUDA 12) stack for the final benchmark run — NVIDIA RTX 4090, Linux.
-# Mirrors requirements-jax.txt; the ONLY difference is the jax wheel.
+# GPU (CUDA 12) stack for the benchmark run — NVIDIA RTX 4090, Linux or WSL2.
+#
 #   pip install -r requirements-gpu.txt
-#   python -c "import jax; print(jax.devices())"   # -> [CudaDevice(id=0)]
+#   pip install -e .
+#   python -c "import jax; print(jax.default_backend(), jax.devices())"   # -> gpu [CudaDevice(id=0)]
+#
+# Python: 3.12, 3.13 and 3.14 all work. jax/jaxlib/jax-cuda12-plugin publish
+# cp312/cp313/cp314 manylinux x86_64 wheels; the CUDA runtime ships inside the wheel,
+# so only an NVIDIA driver new enough for CUDA 12 (>= 525) is needed, no system toolkit.
+#
+# Native Windows CANNOT use the GPU: jaxlib has a win_amd64 wheel but
+# jax-cuda12-plugin is manylinux-only. Use WSL2. See docs/gpu_runbook.md.
+#
+# Versions below were verified together by the full test suite (120 tests).
 
-jax[cuda12]==0.10.1
+jax[cuda12]==0.11.1
+flax==0.12.9
 optax==0.2.8
-flax==0.12.7
-cax==0.3.3
+cax==0.4.3
 pillow
 
-# reference implementation (migration-correctness comparison only; CPU wheel is fine)
-torch==2.12.0
+# Reference implementation for the migration-correctness gate only — never used in
+# the benchmarks themselves, so the CPU build is the right one and saves ~3 GB of
+# CUDA libraries that would duplicate what the jax wheel already ships:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.12,<3
 
 # data / viz / io
 numpy
 matplotlib
 imageio
+
+# report generation (Markdown -> PDF; no pandoc or LaTeX required)
+reportlab
 
 # dev
 pytest

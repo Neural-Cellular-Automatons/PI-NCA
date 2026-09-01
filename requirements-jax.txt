@@ -1,21 +1,32 @@
-# JAX scientific-ML stack for the PI-NCA research migration.
-# CPU host this session; on GPU use the matching jax[cuda12] wheel instead of jax[cpu].
-# NOTE: on Windows without admin, see docs/environment.md for the --no-deps workaround
-#       (orbax test paths exceed MAX_PATH). On Linux/macOS this file installs cleanly.
+# CPU stack. Use this for the correctness gate, plotting, and reduced-scale checks.
+# It CANNOT produce comparable benchmark numbers — the drivers refuse to run a
+# benchmark on the CPU backend unless you pass --allow-cpu. For the real run use
+# requirements-gpu.txt (the only difference is the jax wheel).
+#
+# Python 3.12 / 3.13 / 3.14. Verified together by the full test suite (120 tests).
+#
+# NOTE on Windows without admin rights: pip fails extracting orbax-checkpoint because
+# its nested test paths exceed the 260-char MAX_PATH limit. Workaround:
+#   pip install "jax[cpu]==0.11.1" optax==0.2.8 msgpack tensorstore rich PyYAML typing_extensions treescope toolz
+#   pip install --no-deps flax==0.12.9 cax==0.4.3
+# On Linux/macOS (and WSL2) this file installs cleanly as-is.
 
-jax[cpu]==0.10.1
+jax[cpu]==0.11.1
+flax==0.12.9
 optax==0.2.8
-flax==0.12.7
-cax==0.3.3
+cax==0.4.3
 pillow
 
-# reference implementation (original, for migration-correctness comparison)
-torch==2.12.0
+# reference implementation (migration-correctness gate only)
+torch>=2.12,<3
 
 # data / viz / io
 numpy
 matplotlib
 imageio
+
+# report generation
+reportlab
 
 # dev
 pytest

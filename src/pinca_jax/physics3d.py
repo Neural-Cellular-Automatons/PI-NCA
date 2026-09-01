@@ -28,3 +28,15 @@ def multichannel_divergence_update(x, flux):
     fx, fy, fz = f[..., 0], f[..., 1], f[..., 2]
     dx = (jnp.roll(fx, 1, 3) - fx) + (jnp.roll(fy, 1, 2) - fy) + (jnp.roll(fz, 1, 1) - fz)
     return x + dx
+
+
+def total_mass_per_channel(u):
+    """Sum over spatial axes only, per channel -> (B,1,1,1,C). 3-D analogue of
+    physics.total_mass_per_channel; identical to total_mass when C == 1."""
+    return u.sum(axis=(1, 2, 3), keepdims=True)
+
+
+def conserve_energy_per_channel(u, target_sum):
+    """Project each channel so its own total equals target_sum (B,1,1,1,C)."""
+    n_cells = u.shape[1] * u.shape[2] * u.shape[3]
+    return u + (target_sum - total_mass_per_channel(u)) / n_cells

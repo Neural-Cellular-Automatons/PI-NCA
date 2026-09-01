@@ -24,30 +24,40 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from ..physics import divergence_flux_update, conserve_energy, total_mass
+from ..physics import (multichannel_divergence_update, conserve_energy_per_channel,
+                       total_mass_per_channel)
 from .fno import SpectralConv2d
 
 _HE = nn.initializers.he_normal()  # better start for ReLU convs (matches originals)
 
+# Every hybrid below is generic in the channel count C. At C == 1 the numerics are
+# unchanged from the original scalar versions: the flux head is still 2 channels,
+# `multichannel_divergence_update` reduces to `divergence_flux_update`, and the
+# per-channel mass projection reduces to the global one. For C > 1 each field gets
+# its own flux pair and its own mass target, which is the physically correct
+# generalisation - projecting against a single lumped total would let one field's
+# deficit be paid out of another's.
+
 
 class BoundedConsFluxNCA(nn.Module):
-    """Flux-divergence NCA + (clip → mass re-projection): bounded AND mass-conserving."""
+    """Flux-divergence NCA + (clip -> mass re-projection): bounded AND mass-conserving."""
+    out_channels: int = 1
     bounds: tuple = (-1.0, 1.0)
     perceive_features: int = 32
     hidden_features: int = 64
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
-        tgt = total_mass(x)  # conserve this step's total mass
+        tgt = total_mass_per_channel(x)  # conserve this step's per-field mass
         p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x)
         h = nn.relu(p)
         h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
         h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
-        flux = nn.Conv(2, (1, 1), use_bias=False,
+        flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
-        x = divergence_flux_update(x, flux)        # conserves mass
+        x = multichannel_divergence_update(x, flux)      # conserves mass
         x = jnp.clip(x, self.bounds[0], self.bounds[1])  # bounds (breaks conservation)
-        x = conserve_energy(x, tgt)                # restores exact total mass
+        x = conserve_energy_per_channel(x, tgt)          # restores exact per-field mass
         return x
 
 
@@ -68,13 +78,13 @@ class SpectralFluxNCA(nn.Module):
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
-        tgt = total_mass(x)
-        # local conservative stream → flux divergence (mass-conserving)
+        tgt = total_mass_per_channel(x)
+        # local conservative stream -> flux divergence (mass-conserving)
         h = nn.relu(nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE, name="perceive")(x))
         h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
-        flux = nn.Conv(2, (1, 1), use_bias=False,
+        flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
-        x_local = divergence_flux_update(x, flux)
+        x_local = multichannel_divergence_update(x, flux)
         # global spectral stream
         v = nn.Conv(self.width, (1, 1), name="lift")(x)
         for d in range(self.spectral_depth):
@@ -85,7 +95,7 @@ class SpectralFluxNCA(nn.Module):
                     kernel_init=nn.initializers.zeros)(v)
         out = x_local + g
         if self.conserve:
-            out = conserve_energy(out, tgt)
+            out = conserve_energy_per_channel(out, tgt)
         return out
 
 
@@ -105,7 +115,7 @@ class MultiScaleFluxNCA(nn.Module):
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
-        tgt = total_mass(x)
+        tgt = total_mass_per_channel(x)
         percepts = [
             nn.Conv(self.features, (3, 3), padding="CIRCULAR",
                     kernel_dilation=(d, d), kernel_init=_HE, name=f"perceive_d{d}")(x)
@@ -113,11 +123,11 @@ class MultiScaleFluxNCA(nn.Module):
         ]
         h = nn.relu(jnp.concatenate(percepts, axis=-1))
         h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
-        flux = nn.Conv(2, (1, 1), use_bias=False,
+        flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
-        out = divergence_flux_update(x, flux)
+        out = multichannel_divergence_update(x, flux)
         if self.bounds is not None:
             out = jnp.clip(out, self.bounds[0], self.bounds[1])
         if self.conserve:
-            out = conserve_energy(out, tgt)  # restores exact mass (post-clip too)
+            out = conserve_energy_per_channel(out, tgt)  # exact per-field mass, post-clip
         return out

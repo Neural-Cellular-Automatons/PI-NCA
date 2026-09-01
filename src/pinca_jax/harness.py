@@ -13,6 +13,7 @@ single run). Reduced-scale CPU configs; identical code runs full-scale on GPU.
 """
 from __future__ import annotations
 
+import functools
 import time
 from dataclasses import dataclass, field
 
@@ -46,6 +47,27 @@ class EmuConfig:
     def spec(self):
         # use the numerically stable teacher config where one exists (e.g. gray_scott)
         return pdes.STABLE.get(self.pde, pdes.REGISTRY[self.pde])
+
+
+@functools.lru_cache(maxsize=None)
+def field_bounds(pde: str, grid: int, seed: int = 0, steps: int = 64, margin: float = 0.05):
+    """The teacher's actual physical range for this PDE, as (lo, hi).
+
+    Bounded models used to hardcode [-1,1], which is right for Cahn-Hilliard and
+    Allen-Cahn but destroys a field like heat whose amplitudes run 5-10. Measuring the
+    range from the solver makes bounding a general technique, so the bounded variants
+    can be benchmarked on every phenomenon instead of only the two they were tuned for.
+
+    Cached: it costs one short solver rollout per (pde, grid).
+    """
+    spec = pdes.STABLE.get(pde, pdes.REGISTRY[pde])
+    x0 = ic.make_state(jax.random.PRNGKey(seed), pde, 8, grid)
+    traj = pdes.rollout_trajectory(spec, x0, steps)
+    lo, hi = float(jnp.min(traj)), float(jnp.max(traj))
+    if not (jnp.isfinite(jnp.array([lo, hi])).all()):
+        return None                      # teacher itself blew up; leave the model unbounded
+    pad = margin * (hi - lo) + 1e-6
+    return (lo - pad, hi + pad)
 
 
 def _emu_rollout(model, params, x0, steps, clip=None):

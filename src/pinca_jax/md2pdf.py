@@ -76,10 +76,21 @@ def inline(text: str) -> str:
     out = html.escape(text, quote=False)
     out = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", out)                    # images handled apart
     out = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", out)              # links -> label
-    out = re.sub(r"`([^`]+)`",
-                 r'<font face="Courier" size="8">\1</font>', out)
+    # Stash code spans before the bold/italic passes and restore them afterwards.
+    # Otherwise a literal asterisk inside backticks - `bench_resolution_*.png` - is
+    # read as italic markup and yields interleaved tags ReportLab refuses to parse.
+    spans = []
+
+    def _stash(m):
+        spans.append(m.group(1))
+        return f"\x00{len(spans) - 1}\x00"
+
+    out = re.sub(r"`([^`]+)`", _stash, out)
     out = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", out)
     out = re.sub(r"(?<![\*\w])\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", out)
+    for i, code in enumerate(spans):
+        out = out.replace(f"\x00{i}\x00",
+                          f'<font face="Courier" size="8">{code}</font>')
     return out
 
 

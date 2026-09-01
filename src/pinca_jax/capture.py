@@ -32,7 +32,7 @@ import numpy as np
 
 from . import ic, ic3d, env
 from .equations import pdes, pdes3d
-from .harness import EmuConfig, train_emulator
+from .harness import EmuConfig, train_emulator, field_bounds
 from .harness3d import Emu3DConfig, train as train3d
 from .models import registry
 from .viz import DEFAULT_ARCH
@@ -84,7 +84,7 @@ def capture_2d(pde, grid, epochs, eval_steps, seed, max_mb):
     cfg = EmuConfig(pde=pde, grid_size=grid, rollout_steps=min(16, eval_steps),
                     eval_steps=eval_steps, epochs=epochs, seed=seed, output_clip=clip)
     print(f"[capture] {pde} 2-D / {arch}: training ({epochs} ep, grid {grid})...")
-    tr = train_emulator(registry.REGISTRY[arch].make(C), cfg)
+    tr = train_emulator(registry.REGISTRY[arch].make(C, bounds=field_bounds(pde, grid)), cfg)
     model, params = tr["model"], tr["params"]
 
     x0 = ic.make_state(jax.random.PRNGKey(seed + 777), pde, 1, grid)

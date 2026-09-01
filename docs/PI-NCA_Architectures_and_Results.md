@@ -116,13 +116,15 @@ a difference in results can be attributed to one component.
 
 | Name in code | What it is | Params (heat) |
 |---|---|---|
-| `plain_nca` | NCA, residual head, no constraint | 6 784 |
-| `pi_nca` | NCA, flux head — conserves mass | 4 576 |
-| `multiscale_flux_nca` | PI-NCA + dilated multi-scale perception | 5 520 |
-| `bounded_cons_nca` | PI-NCA + clip + mass re-projection | 4 576 |
-| `spectral_flux_nca` | PI-NCA + a global spectral stream | 134 225 |
-| `mc_flux_nca` | PI-NCA for multi-field states | 10 992 |
-| `fno` | Fourier Neural Operator (not an NCA) | 592 897 |
+| `plain_nca` | local residual NCA, no conservation | 6 784 |
+| `pi_nca` | conservative flux-divergence NCA (per-field flux) | 4 576 |
+| `fno` | global spectral operator (~5.9e5 params) | 592 897 |
+| `fno_small` | iso-parameter FNO (~NCA budget) — A2 ablation: spectral mixing vs param count | — |
+| `mc_flux_nca` | multi-channel per-field conservative flux NCA (SWE/FHN/GS) | — |
+| `bounded_cons_nca` | flux NCA + clip + mass re-projection (bounded AND conserving) | — |
+| `spectral_flux_nca` | local conservative flux + global FNO spectral correction | 134 225 |
+| `multiscale_flux_nca` | dilated multi-scale perception + conservative flux | 5 520 |
+| `bounded_multiscale_nca` | UNIFIED: multi-scale perception + bounded + mass-conserving (stiff bounded fields) | — |
 
 ---
 
@@ -191,15 +193,15 @@ now reaches ±4 cells per step instead of ±1, without an FFT and without many m
 
 *Figure C — `docs/figures/arch/arch_multiscale_flux_nca.png`*
 
-**Result.** Best 2-D heat model in the multi-seed run: **rel-L2 0.0183** at 5 520 parameters,
-beating the FNO's 0.0352 at 592 897 parameters. That is **1.9× better accuracy with 107×
-fewer parameters.**
+**Why it should help.** Diffusive problems need information to travel; a one-cell-per-step
+model needs as many steps as the grid is wide. Dilation buys reach for almost no parameters,
+which is the cheapest place to spend them.
 
-Ablation A5 shows *how* you widen the reach matters. On Navier–Stokes a plain 5×5 stencil
-actually *destabilises* the model (1.486, worse than 3×3), while dilated multi-scale is best
-(0.388). Reach helps; reach the wrong way hurts.
+Ablation A5 (§6.3) isolates this, and shows that *how* you widen matters: on the globally
+coupled Navier–Stokes a plain 5×5 stencil actually destabilises the model, while dilated
+multi-scale does not. Reach helps; reach the wrong way hurts.
 
-**Best at:** heat (2-D). Best NCA on Navier–Stokes, though the FNO still wins there.
+Measured results: §6.2 and §5.
 
 ---
 
@@ -223,10 +225,15 @@ Then re-project the total mass back to the recorded value. Bounded *and* conserv
 
 *Figure D — `docs/figures/arch/arch_bounded_cons_nca.png`*
 
-**Result.** The Cahn–Hilliard winner: **rel-L2 0.603** with conservation error **2.4e-4** —
-both properties at once, where clipping alone gave you only one.
+**Why it should help.** It is the only model in the study that has both properties at once.
+Everything else is bounded *or* conserving.
 
-**Best at:** Cahn–Hilliard, and any stiff bounded field.
+The bounds are not hardcoded: each model is given the PDE's **measured physical range**,
+taken from a short solver rollout. Clipping to a fixed [-1, 1] is right for Cahn–Hilliard but
+would destroy heat, whose amplitudes run 5–10 — which is exactly why this model used to be
+benchmarked on one phenomenon instead of all ten.
+
+Measured results: §6.2 and §5.
 
 ---
 
@@ -244,16 +251,14 @@ The two are added, and the sum is optionally mass-projected.
 
 *Figure E — `docs/figures/arch/arch_spectral_flux_nca.png`*
 
-**Result — mixed, and worth being honest about.** Under the single-seed better-start
-protocol it is the **best heat model in the study (rel-L2 0.0064)**. But in the 3-seed run
-it scored 0.0199 ± 0.014 — a standard deviation almost as large as the mean, against
-MultiScale's 0.0183 ± 0.0016. It can be the best, but it is **unstable across seeds**, and
-it costs 134 225 parameters — 24× MultiScale — for that.
+**What to watch for.** This is the most ambitious hybrid and the most expensive: the
+spectral stream dominates its parameter count, putting it two orders of magnitude above the
+other NCAs. Two questions decide whether that is worth it, and §5 answers both from the
+measurements: does it beat the far cheaper dilated perception, and is it *stable across
+seeds*? A model whose standard deviation approaches its mean has not really won anything.
 
-On Cahn–Hilliard it diverges completely (24.4), because it has no bounding mechanism.
-
-**Verdict:** the hybrid hypothesis is only partly confirmed. Adding global mixing helps on
-heat, but cheaper dilated perception gets most of the same benefit far more reliably.
+It has no bounding mechanism, so it is expected to struggle wherever the field is stiff and
+bounded.
 
 ---
 
@@ -267,13 +272,10 @@ per field, so **each field's total is conserved independently.**
 
 *Figure F — `docs/figures/arch/arch_mc_flux_nca.png`*
 
-**Result — the sharpest illustration of the whole thesis.** On shallow-water, where per-field
-conservation is physically correct, it conserves to **1.6e-4** and is competitive on accuracy
-(0.0311 vs FNO's 0.0259) with 54× fewer parameters.
-
-On FitzHugh–Nagumo it conserves beautifully (**1.1e-6**) and is **useless** (rel-L2 0.993 —
-worse than doing nothing). FHN has source terms; its quantities are *not* conserved. The
-model enforces a law the physics does not obey.
+**The sharpest illustration of the whole thesis.** Compare its two columns in §6.2:
+shallow-water, where per-field conservation is physically correct, against FitzHugh–Nagumo,
+which has source terms and conserves nothing. On the second it conserves mass beautifully and
+predicts badly — it is enforcing a law the physics does not obey.
 
 **Conserving the wrong thing perfectly is worse than not conserving at all.**
 
@@ -303,11 +305,9 @@ fraction is **0.004** versus the NCAs' 0.44–0.89.
 **Weaknesses.** 592 897 parameters — roughly 100× the conservative NCAs. No conservation at
 all (heat mass drift: 21.3). Assumes a periodic regular grid.
 
-Ablation A2 tested whether the FNO's advantage was architecture or just size: shrinking it
-to NCA budget (8 433 parameters) degraded it **3.4×**, from 0.035 to 0.119, losing to models
-at the same budget. **A meaningful part of the FNO's edge is parameter count.**
-
-**Best at:** Navier–Stokes, Allen–Cahn, advection–diffusion, Nagumo.
+`fno_small` is in the matrix for exactly one reason: to separate architecture from budget.
+It is the same operator shrunk to roughly NCA parameter count, so the gap between `fno` and
+`fno_small` measures how much of the FNO's advantage is simply *size*. See §6.2.
 
 ---
 
@@ -333,214 +333,307 @@ to the solution — so unlike a PINN it generalises across initial conditions.
 
 ## 5. Hybrid results
 
-The three hybrids, measured on the problems they were designed for. Multi-seed
-(3 seeds, mean ± std), grid 24, train 12 steps / evaluate 48 steps.
-
-### 5.1 Heat — do the hybrids beat the baselines?
-
-Source: `results/bench_heat_hybrid.md`
-
-| Model | rel-L2 ↓ | MSE ↓ | PSNR (dB) ↑ | Conservation err ↓ | Params ↓ | Infer s/step ↓ |
-|---|---|---|---|---|---|---|
-| **multiscale_flux_nca** | **0.0183 ± 0.0016** | **1.03e-3** | 47.1 | 1.4e-3 | 5 520 | 7.5e-4 |
-| spectral_flux_nca | 0.0199 ± 0.014 | 1.61e-3 | **47.6** | 1.5e-3 | 134 225 | 1.4e-3 |
-| fno | 0.0352 ± 0.0035 | 3.76e-3 | 41.5 | 21.3 | 592 897 | 3.1e-3 |
-| pi_nca | 0.0438 ± 0.035 | 8.96e-3 | 41.4 | **3.8e-4** | **4 576** | **5.7e-4** |
-
-**Reading it.** Both hybrids beat both baselines. MultiScale wins on accuracy, stability
-across seeds, parameters and speed simultaneously — it is the clear recommendation.
-SpectralFlux gets a marginally better PSNR but with a huge variance and 24× the parameters.
-Plain PI-NCA remains the conservation champion by 4×, and is the cheapest and fastest model.
-
-### 5.2 Cahn–Hilliard — does the bounded-conserving hybrid work?
-
-Source: `results/bench_cahn_hilliard_hybrid.md`. The identity baseline ("predict no change")
-scores 0.93; anything above that is worse than useless.
-
-| Model | rel-L2 ↓ | PSNR (dB) ↑ | Conservation err ↓ | Params | Verdict |
+| PDE | `multiscale_flux_nca` | `bounded_cons_nca` | `bounded_multiscale_nca` | `spectral_flux_nca` | Best baseline |
 |---|---|---|---|---|---|
-| **bounded_cons_nca** | **0.603 ± 0.012** | **12.1** | 2.4e-4 | 4 576 | beats the identity floor |
-| spectral_flux_nca | 24.4 ± 20.0 | -15.5 | 6.6e-4 | 134 225 | diverges |
-| multiscale_flux_nca | 23.8 ± 8.0 | -19.4 | **4.0e-5** | 5 520 | diverges |
+| Heat | 0.027 | — | — | **0.006** | fno 0.021 |
+| Advection-diffusion | 0.018 | — | — | — | fno 0.007 |
+| Allen-Cahn | 0.053 | — | — | — | fno 0.007 |
+| Nagumo | 0.376 | — | — | — | plain_nca 0.073 |
+| Wave | — | — | — | — | plain_nca 0.052 |
+| Cahn-Hilliard | — | **0.725** | 0.790 | — | fno 5.234 |
+| Gray-Scott | — | — | — | — | fno 0.674 |
+| Shallow-water | — | — | — | — | fno 0.024 |
+| FitzHugh-Nagumo | — | — | — | — | plain_nca 0.125 |
+| Navier-Stokes | 0.285 | — | — | — | fno 0.098 |
 
-**Reading it.** Bounding is what matters on this problem, and only one hybrid has it. The
-other two conserve mass immaculately while their solutions explode — a reminder that
-conservation is not stability. Note MultiScale's 4.0e-5 conservation error next to its
-rel-L2 of 23.8: perfectly conserved garbage.
+rel-L2, lower is better. **Bold** marks the overall winner for that phenomenon across all architectures.
 
-### 5.3 The unified model
-
-`MultiScaleFluxNCA` with `bounds=(-1,1)` set combines the heat-winning multi-scale reach with
-the CH-winning bounded-conserving update. Source: `results/bench_cahn_hilliard_unified.md`
-
-| Model | rel-L2 ↓ | MSE ↓ | Conservation err ↓ | Params | Train wall (s) |
-|---|---|---|---|---|---|
-| **bounded_cons_nca** | **0.603 ± 0.012** | **0.246** | **2.4e-4** | **4 576** | 62.9 |
-| bounded_multiscale_nca | 0.633 ± 0.002 | 0.271 | 3.6e-4 | 5 520 | **54.5** |
-
-**Reading it.** Once bounding is present, the extra multi-scale reach does **not** help on
-Cahn–Hilliard — it is 5% worse. Cahn–Hilliard is locally driven, so wider perception buys
-nothing. The unified model is more consistent across seeds (±0.002 vs ±0.012) and trains
-faster, but the simpler model is more accurate. **Combining two winning components does not
-automatically produce a better model.**
-
-### 5.4 Hybrid scorecard
-
-| Hybrid | Problem it targeted | Did it work? |
+| Hybrid | What it targets | Outcome |
 |---|---|---|
-| MultiScaleFluxNCA | NCA locality too slow | **Yes.** Best 2-D heat model, beats FNO at 1/107th the parameters. |
-| BoundedConsFluxNCA | Stability vs conservation conflict | **Yes.** Only model that gets both; the CH winner. |
-| SpectralFluxNCA | Locality, via global spectral mixing | **Partly.** Best single-seed heat score, but high variance, 24× params, and no bounding. |
+| `multiscale_flux_nca` | widen the receptive field without an FFT | does not win any phenomenon outright |
+| `bounded_cons_nca` | be bounded AND mass-conserving at once | wins Cahn-Hilliard |
+| `bounded_multiscale_nca` | combine multi-scale reach with bounding | does not win any phenomenon outright |
+| `spectral_flux_nca` | add global spectral reach to a local conservative NCA | wins Heat |
 
 ---
 
 ## 6. Comprehensive results
 
-### 6.1 The regime map — the headline
+Every table in this section is **generated from `results/*.json`** by
+`python -m pinca_jax.report`, so the document cannot quote a different set of
+architectures from the one the benchmarks actually ran. A dash means that cell has not
+been measured yet; re-run `bash run_gpu.sh` and regenerate to fill it in.
 
-Ten 2-D phenomena, single fixed seed 42 with the better-start protocol.
+*No benchmark results found yet — run `python -m pinca_jax.runner`.*
 
-| PDE | Character | Winner | rel-L2 | Runner-up | Why |
+### 6.1 The regime map — which architecture wins where
+
+| PDE | Character | Winner | rel-L2 | Runner-up | Models compared |
 |---|---|---|---|---|---|
-| Heat | smooth, local | **spectral_flux_nca** | 0.0064 | fno 0.021 | local + spectral |
-| Advection–diffusion | linear transport | **fno** | 0.0066 | pi_nca 0.012 | smooth global |
-| Allen–Cahn | non-cons. phase separation | **fno** | 0.0068 | NCAs ~0.049 | sharp interfaces |
-| Wave | 2nd-order hyperbolic | **plain_nca** | 0.052 | all ~0.05–0.057 | effectively a tie |
-| Shallow-water | conservative, multi-field | **mc_flux_nca** | 0.016 | fno 0.024 | per-field conservation is correct |
-| Nagumo | non-cons. bistable | **plain_nca** | 0.073 | fno 0.081 | conservation prior hurts |
-| FitzHugh–Nagumo | non-cons. reaction | **plain_nca** | 0.125 | fno 0.199 | conservation prior hurts badly |
-| Navier–Stokes | global coupling | **fno** | 0.098 | multiscale 0.285 | locality fails |
-| Cahn–Hilliard | stiff 4th-order, bounded | **bounded_cons_nca** | 0.725 | bounded_multiscale 0.790 | bounding + conservation |
-| Gray–Scott | reaction–diffusion patterns | **fno ≈ mc_flux** | 0.674 | mc_flux 0.692 | hard; both poor |
-
-**There is no universal winner.** The structure of the PDE picks the architecture:
-
-- **Conservative and smooth** → conservative NCAs (heat, advection–diffusion, shallow-water)
-- **Globally coupled or sharp-featured** → FNO (Navier–Stokes, Allen–Cahn)
-- **Non-conservative reaction** → unconstrained plain NCA (FHN, Nagumo)
-- **Stiff and bounded** → bounded conserving NCA (Cahn–Hilliard)
+| Heat | smooth, local, conservative | **spectral_flux_nca** | 0.006 | fno 0.021 | 5 |
+| Advection-diffusion | linear transport, conservative | **fno** | 0.007 | pi_nca 0.012 | 4 |
+| Allen-Cahn | non-conservative phase separation | **fno** | 0.007 | plain_nca 0.049 | 4 |
+| Nagumo | non-conservative bistable | **plain_nca** | 0.073 | fno 0.081 | 4 |
+| Wave | 2nd-order hyperbolic | **plain_nca** | 0.052 | mc_flux_nca 0.056 | 3 |
+| Cahn-Hilliard | stiff 4th-order, bounded | **bounded_cons_nca** | 0.725 | bounded_multiscale_nca 0.790 | 4 |
+| Gray-Scott | reaction-diffusion patterns | **fno** | 0.674 | mc_flux_nca 0.692 | 3 |
+| Shallow-water | conservative, multi-field | **mc_flux_nca** | 0.016 | fno 0.024 | 3 |
+| FitzHugh-Nagumo | non-conservative reaction | **plain_nca** | 0.125 | fno 0.199 | 3 |
+| Navier-Stokes | globally coupled | **fno** | 0.098 | multiscale_flux_nca 0.285 | 4 |
 
 *Figure: `docs/figures/bench/bench_regime_map.png`*
 
-### 6.2 Per-PDE detail (multi-seed)
+### 6.2 The full 2-D matrix
 
-**Heat** — grid 24, eval 48, 3 seeds
+Every architecture on every phenomenon, same list throughout.
 
-| Model | rel-L2 ↓ | Conservation err ↓ | Params | Infer s/step |
-|---|---|---|---|---|
-| **multiscale_flux_nca** | **0.0183 ± 0.0016** | 1.4e-3 | 5 520 | 7.5e-4 |
-| spectral_flux_nca | 0.0199 ± 0.014 | 1.5e-3 | 134 225 | 1.4e-3 |
-| fno | 0.0352 ± 0.0035 | 21.3 | 592 897 | 4.4e-3 |
-| pi_nca | 0.0438 ± 0.035 | **3.8e-4** | 4 576 | 5.7e-4 |
-| fno_small | 0.119 ± 0.014 | 80.1 | 8 433 | 7.3e-4 |
-| plain_nca | 0.234 ± 0.28 | 33.3 | 6 784 | 1.1e-3 |
+**Heat** — smooth, local, conservative, C=1, grid 24, eval 48 steps
 
-**Shallow-water** — 3 fields, grid 24, eval 36, 2 seeds
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **spectral_flux_nca** | **6.365e-03** | 55.56 | 1.728e-03 | 134 225 | 2.424e-03 |
+| fno | 2.102e-02 | 45.19 | 9.846e+00 | 592 897 | 4.667e-03 |
+| multiscale_flux_nca | 2.749e-02 | 42.85 | 1.850e-03 | 5 520 | 8.546e-04 |
+| pi_nca | 3.100e-02 | 41.81 | **3.128e-04** | **4 576** | 5.981e-04 |
+| plain_nca | 2.242e-01 | 24.63 | 3.972e+01 | 6 784 | 9.823e-04 |
 
-| Model | rel-L2 ↓ | Conservation err ↓ | Params |
-|---|---|---|---|
-| **fno** | **0.0259 ± 0.0015** | 0.77 | 592 995 |
-| mc_flux_nca | 0.0311 ± 0.0058 | **1.6e-4** | 10 992 |
-| plain_nca | 0.0399 ± 0.0028 | 4.81 | 7 744 |
+**Advection-diffusion** — linear transport, conservative, C=1, grid 24, eval 48 steps
 
-**FitzHugh–Nagumo** — 2 fields, grid 24, eval 48, 2 seeds
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **fno** | **6.575e-03** | 57.16 | 1.202e+00 | 592 897 | 1.001e-02 |
+| pi_nca | 1.231e-02 | 51.71 | **3.891e-04** | **4 576** | 6.815e-04 |
+| multiscale_flux_nca | 1.816e-02 | 48.34 | 1.595e-03 | 5 520 | 1.038e-03 |
+| plain_nca | 2.220e-02 | 46.59 | 9.508e+00 | 6 784 | 1.291e-03 |
 
-| Model | rel-L2 ↓ | Conservation err ↓ | Params |
-|---|---|---|---|
-| **plain_nca** | **0.154 ± 0.0099** | 118.1 | 7 264 |
-| fno | 0.452 ± 0.020 | 75.2 | 592 946 |
-| mc_flux_nca | 0.993 ± 0.0078 | **1.1e-6** | 10 464 |
+**Allen-Cahn** — non-conservative phase separation, C=1, grid 24, eval 48 steps
 
-**Navier–Stokes** — grid 24, eval 48, 2 seeds
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **fno** | **6.848e-03** | 49.50 | 7.072e-01 | 592 897 | 4.226e-03 |
+| plain_nca | 4.907e-02 | 32.39 | 2.547e-01 | 6 784 | 6.710e-04 |
+| pi_nca | 4.922e-02 | 32.36 | **1.431e-05** | **4 576** | 8.806e-04 |
+| multiscale_flux_nca | 5.274e-02 | 31.76 | 8.100e-05 | 5 520 | 7.864e-04 |
 
-| Model | rel-L2 ↓ | Conservation err ↓ | Params |
-|---|---|---|---|
-| **fno** | **0.145 ± 0.029** | 1.93 | 592 897 |
-| multiscale_flux_nca | 0.284 ± 0.030 | 1.0e-4 | 5 520 |
-| plain_nca | 0.528 ± 0.050 | 7.28 | 6 784 |
-| pi_nca | 0.676 ± 0.17 | 2.1e-5 | 4 576 |
+**Nagumo** — non-conservative bistable, C=1, grid 24, eval 48 steps
 
-**Nagumo** — grid 24, eval 48, 2 seeds
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **plain_nca** | **7.333e-02** | 22.44 | 1.930e+02 | 6 784 | 6.538e-04 |
+| fno | 8.068e-02 | 21.61 | 1.392e+02 | 592 897 | 5.983e-03 |
+| multiscale_flux_nca | 3.763e-01 | 8.24 | 6.828e-04 | 5 520 | 1.391e-03 |
+| pi_nca | 3.768e-01 | 8.22 | **1.106e-04** | **4 576** | 7.949e-04 |
 
-| Model | rel-L2 ↓ | Params |
-|---|---|---|
-| **fno** | **0.118 ± 0.009** | 592 897 |
-| plain_nca | 0.119 ± 0.006 | 6 784 |
-| pi_nca | 0.379 ± 0.001 | 4 576 |
-| multiscale_flux_nca | 0.379 ± 0.001 | 5 520 |
+**Wave** — 2nd-order hyperbolic, C=2, grid 24, eval 48 steps
 
-Full 20-metric tables for every phenomenon: `results/bench_<pde>_full.md`.
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **plain_nca** | **5.205e-02** | 41.53 | 5.636e+00 | **7 264** | 1.480e-03 |
+| mc_flux_nca | 5.571e-02 | 40.94 | **1.373e-04** | 10 464 | 2.564e-03 |
+| fno | 5.650e-02 | 40.81 | 5.188e-01 | 592 946 | 4.585e-03 |
+
+**Cahn-Hilliard** — stiff 4th-order, bounded, C=1, grid 24, eval 48 steps
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **bounded_cons_nca** | **7.252e-01** | 10.56 | **9.938e-05** | **4 576** | 7.128e-04 |
+| bounded_multiscale_nca | 7.902e-01 | 9.81 | 2.203e-04 | 5 520 | 7.343e-04 |
+| fno | 5.234e+00 | -6.61 | 3.349e+02 | 592 897 | 3.960e-03 |
+| plain_nca | 3.588e+01 | -23.33 | 1.808e+02 | 6 784 | 6.279e-04 |
+
+**Gray-Scott** — reaction-diffusion patterns, C=2, grid 24, eval 48 steps
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **fno** | **6.741e-01** | 10.11 | 1.729e+02 | 592 946 | 8.026e-03 |
+| mc_flux_nca | 6.916e-01 | 9.89 | **1.450e-04** | 10 464 | 1.317e-03 |
+| plain_nca | 1.762e+00 | 1.77 | 1.113e+02 | **7 264** | 1.009e-03 |
+
+**Shallow-water** — conservative, multi-field, C=3, grid 24, eval 48 steps
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **mc_flux_nca** | **1.613e-02** | 44.14 | **1.373e-04** | 10 992 | 1.456e-03 |
+| fno | 2.445e-02 | 40.53 | 2.140e+00 | 592 995 | 1.016e-02 |
+| plain_nca | 2.618e-02 | 39.93 | 9.869e+00 | **7 744** | 1.185e-03 |
+
+**FitzHugh-Nagumo** — non-conservative reaction, C=2, grid 24, eval 48 steps
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **plain_nca** | **1.247e-01** | 26.48 | 9.217e+01 | **7 264** | 2.270e-03 |
+| fno | 1.986e-01 | 22.44 | 8.621e+01 | 592 946 | 1.051e-02 |
+| mc_flux_nca | 9.986e-01 | 8.41 | **1.668e-06** | 10 464 | 1.097e-03 |
+
+**Navier-Stokes** — globally coupled, C=1, grid 24, eval 48 steps
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
+|---|---|---|---|---|---|
+| **fno** | **9.841e-02** | 39.29 | 2.404e+00 | 592 897 | 5.251e-03 |
+| multiscale_flux_nca | 2.850e-01 | 30.05 | 7.946e-05 | 5 520 | 3.342e-03 |
+| pi_nca | 5.232e-01 | 24.78 | **2.965e-05** | **4 576** | 1.823e-03 |
+| plain_nca | 5.308e-01 | 24.65 | 6.192e+00 | 6 784 | 9.574e-04 |
+
+Full 20-metric tables per phenomenon: `results/bench_<pde>_full.md`.
 
 ### 6.3 Ablations — which component actually matters
 
-| # | Question | Setup | Result |
+**A4 — conservation on/off at matched backbone width**
+
+Same backbone, same widths; only the head differs (flux vs residual). The cleanest test of whether the conservation prior helps.
+
+| PDE | variant 1 | variant 2 |
+|---|---|---|
+| Heat | **0.028** (abl_flux) | 0.173 (abl_residual) |
+| Nagumo | 0.378 (abl_flux) | **0.127** (abl_residual) |
+
+**A5 — perception / receptive-field size**
+
+Same head, same widths; only the perception differs (3x3, 5x5, dilated 1/2/4).
+
+| PDE | variant 1 | variant 2 | variant 3 |
 |---|---|---|---|
-| **A1** | Does bounding fix stiff PDEs? | CH, clip to [-1,1] | plain 12.9 → 0.54, pi_nca 16.5 → 0.60 (**24–27×**), but clipping breaks conservation (→7.6) |
-| **A2** | Is the FNO's edge architecture or size? | FNO at NCA budget (8.4k) | 0.035 → 0.119 (**3.4× worse**) — much of the edge was parameter count |
-| **A3** | Does training horizon matter? | CH, train 12/24/48 | 0.633 → 0.619 → **0.511**; conservation 3.2e-4 → 6.8e-5 |
-| **A4** | Does conservation help? | Same backbone, flux vs residual head | Heat **0.104 vs 0.353** (helps 3.4×); Nagumo **0.379 vs 0.123** (hurts 3.1×) |
-| **A5** | Does wider perception help? | 3×3 / 5×5 / dilated (1,2,4) | Heat 0.104 / 0.046 / **0.024**; NS 0.576 / 1.486 / **0.388** |
-| **A6** | Does multi-step BPTT matter? | train 1/4/12 steps | Heat 0.025 → **0.021** (16%); NS 1.562 → **0.284** (**5.5×**) |
-
-**A4 is the cleanest result in the study.** Identical backbone, identical width, only the
-head differs. Conservation helps by 3.4× on a conservative PDE and hurts by 3.1× on a
-non-conservative one. The inductive bias is not universally good — it is *correct or
-incorrect* for the physics.
-
-**A6 says the training horizon matters most where the dynamics are hardest.** On stable heat
-it barely registers; on unstable Navier–Stokes, single-step training diverges (1.562) while
-12-step training controls the rollout (0.284).
+| Heat | **0.028** (abl_k3) | 0.110 (abl_k5) | 0.037 (abl_multiscale) |
+| Navier-Stokes | 0.558 (abl_k3) | 1.370 (abl_k5) | **0.284** (abl_multiscale) |
 
 *Figures: `docs/figures/bench/bench_ablation_A4.png`, `bench_ablation_A5.png`*
 
 ### 6.4 Efficiency — what accuracy costs
 
-Cost of accuracy on heat, measured as rel-L2 × parameters (lower is better):
+Cost of accuracy on heat, as rel-L2 x parameters (lower is better). This is where the conservative NCAs' small size shows up as more than a footnote.
 
-| Model | rel-L2 × params | Relative |
-|---|---|---|
-| **multiscale_flux_nca** | **101** | 1× |
-| pi_nca | 200 | 2× |
-| fno_small | 1 003 | 9.9× |
-| fno | 20 875 | **207×** |
-
-On the problems where a conservative NCA is the right tool, it is not marginally cheaper —
-it is two orders of magnitude cheaper.
+| Model | rel-L2 | Params | rel-L2 x params | vs best |
+|---|---|---|---|---|
+| **pi_nca** | 0.031 | 4 576 | 1.419e+02 | 1x |
+| multiscale_flux_nca | 0.027 | 5 520 | 1.518e+02 | 1x |
+| spectral_flux_nca | 0.006 | 134 225 | 8.544e+02 | 6x |
+| plain_nca | 0.224 | 6 784 | 1.521e+03 | 11x |
+| fno | 0.021 | 592 897 | 1.246e+04 | 88x |
 
 *Figure: `docs/figures/bench/bench_accuracy_vs_cost.png`*
 
-### 6.5 3-D — the conclusions hold
+### 6.5 The full 3-D matrix
 
-Full 3-D pipeline at 16³, single seed 42.
+**Advection-diffusion** — 16³
 
-| PDE | Character | Winner | rel-L2 | Conservation (NCA vs plain·FNO) |
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
 |---|---|---|---|---|
-| Heat | local diffusion | **pi_nca** | 0.047 | 1.8e-3 vs 50 · 145 |
-| Advection–diffusion | smooth transport | **fno** | 0.008 | 1.4e-3 vs 28 · 4 |
-| Allen–Cahn | sharp interfaces | **fno** | 0.012 | 1.2e-4 vs 3.5 · 14 |
-| Nagumo | non-cons. bistable | **plain_nca** | 0.041 | conserving NCAs worst (0.198) |
-| FitzHugh–Nagumo | non-cons. reaction | **fno** | 0.163 | mc_flux 0.99 — conserves, useless |
-| Gray–Scott | reaction patterns | plain ≈ fno | 0.42 | mc_flux 1.09, diverges |
+| **fno** | **0.008** | 62.13 | 4.050e+00 | 747 157 |
+| pi_nca | 0.014 | 57.71 | 1.404e-03 | 3 200 |
+| multiscale_flux_nca | 0.022 | 53.89 | **1.282e-03** | 3 936 |
+| plain_nca | 0.029 | 51.38 | 2.771e+01 | 3 072 |
 
-**Every 2-D conclusion reproduces in 3-D.** Local diffusion → conservative NCA wins at ~3k
-parameters against the FNO's 747k. Non-conservative → the conservation prior hurts, again.
-The thesis is dimension-independent.
+**Allen-Cahn** — 16³
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
+|---|---|---|---|---|
+| **fno** | **0.012** | 44.82 | 1.381e+01 | 747 157 |
+| pi_nca | 0.044 | 33.43 | **1.206e-04** | 3 200 |
+| plain_nca | 0.045 | 33.32 | 3.528e+00 | 3 072 |
+| multiscale_flux_nca | 0.046 | 33.17 | 1.655e-04 | 3 936 |
+
+**FitzHugh-Nagumo** — 16³
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
+|---|---|---|---|---|
+| **fno** | **0.163** | 25.40 | 4.127e+02 | 747 182 |
+| mc_flux_nca | 0.987 | 9.75 | **3.695e-06** | 7 920 |
+| plain_nca | 1.153 | 8.40 | 6.336e+02 | 4 000 |
+
+**Gray-Scott** — 16³
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
+|---|---|---|---|---|
+| **plain_nca** | **0.418** | 16.21 | 3.616e+02 | 4 000 |
+| fno | 0.448 | 15.60 | 2.801e+02 | 747 182 |
+| mc_flux_nca | 1.087 | 7.90 | **1.221e-03** | 7 920 |
+
+**Heat** — 16³
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
+|---|---|---|---|---|
+| **pi_nca** | **0.047** | 44.15 | 1.801e-03 | 3 200 |
+| multiscale_flux_nca | 0.052 | 43.19 | **1.770e-03** | 3 936 |
+| fno | 0.056 | 42.50 | 1.452e+02 | 747 157 |
+| plain_nca | 0.111 | 36.65 | 5.041e+01 | 3 072 |
+
+**Nagumo** — 16³
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
+|---|---|---|---|---|
+| **plain_nca** | **0.041** | 28.34 | 4.643e+02 | 3 072 |
+| fno | 0.063 | 24.61 | 4.040e+02 | 747 157 |
+| pi_nca | 0.197 | 14.62 | **6.409e-04** | 3 200 |
+| multiscale_flux_nca | 0.198 | 14.61 | 1.251e-03 | 3 936 |
 
 *Figure: `docs/figures/bench/bench_accuracy_3d.png`*
 
 ### 6.6 Resolution transfer
 
-Train at one grid size, evaluate at another. Both families are size-agnostic in principle;
-in practice transfer is regime-dependent.
+**Allen-Cahn / `multiscale_flux_nca`** (rel-L2)
 
-| PDE | Finding |
-|---|---|
-| Heat | NCAs transfer coarse→fine well (16→48: 0.029) but poorly fine→coarse (48→16: 0.349). The FNO is accurate only near its training resolution (16→48: 0.504) — **not** resolution-invariant here. |
-| Allen–Cahn | Both robust. MultiScale ~0.05 flat; FNO 0.012–0.026. |
-| Navier–Stokes | FNO **genuinely resolution-invariant** (~0.18–0.24 across all pairs). The NCA fails to transfer and diverges when trained at 48² (1.25–2.39). |
+|  | eval 16² | eval 24² | eval 32² | eval 48² |
+|---|---|---|---|---|
+| train 16² | **0.054** | 0.055 | 0.056 | 0.056 |
+| train 24² | 0.051 | **0.051** | 0.052 | 0.052 |
+| train 32² | 0.049 | 0.050 | **0.051** | 0.050 |
+| train 48² | 0.051 | 0.052 | 0.053 | **0.053** |
 
-*Figures: `docs/figures/bench/bench_resolution_heat.png`, `bench_resolution_allen_cahn.png`,
-`bench_resolution_navier_stokes.png`*
+**Allen-Cahn / `fno`** (rel-L2)
+
+|  | eval 16² | eval 24² | eval 32² | eval 48² |
+|---|---|---|---|---|
+| train 16² | **0.021** | 0.023 | 0.024 | 0.026 |
+| train 24² | 0.016 | **0.012** | 0.014 | 0.016 |
+| train 32² | 0.020 | 0.012 | **0.012** | 0.013 |
+| train 48² | 0.032 | 0.020 | 0.016 | **0.015** |
+
+**Heat / `pi_nca`** (rel-L2)
+
+|  | eval 16² | eval 24² | eval 32² | eval 48² |
+|---|---|---|---|---|
+| train 16² | **0.086** | 0.053 | 0.048 | 0.045 |
+| train 24² | 0.110 | **0.034** | 0.036 | 0.039 |
+| train 32² | 0.178 | 0.053 | **0.022** | 0.021 |
+| train 48² | 0.380 | 0.122 | 0.048 | **0.017** |
+
+**Heat / `multiscale_flux_nca`** (rel-L2)
+
+|  | eval 16² | eval 24² | eval 32² | eval 48² |
+|---|---|---|---|---|
+| train 16² | **0.076** | 0.046 | 0.037 | 0.029 |
+| train 24² | 0.111 | **0.036** | 0.030 | 0.026 |
+| train 32² | 0.209 | 0.054 | **0.018** | 0.018 |
+| train 48² | 0.349 | 0.125 | 0.042 | **0.008** |
+
+**Heat / `fno`** (rel-L2)
+
+|  | eval 16² | eval 24² | eval 32² | eval 48² |
+|---|---|---|---|---|
+| train 16² | **0.070** | 0.302 | 0.398 | 0.504 |
+| train 24² | 0.335 | **0.040** | 0.159 | 0.294 |
+| train 32² | 0.542 | 0.174 | **0.017** | 0.160 |
+| train 48² | 0.782 | 0.381 | 0.164 | **0.006** |
+
+**Navier-Stokes / `multiscale_flux_nca`** (rel-L2)
+
+|  | eval 16² | eval 24² | eval 32² | eval 48² |
+|---|---|---|---|---|
+| train 16² | **0.295** | 0.519 | 0.506 | 0.639 |
+| train 24² | 0.462 | **0.344** | 0.399 | 0.590 |
+| train 32² | 0.737 | 0.651 | **0.547** | 0.666 |
+| train 48² | 2.387 | 1.919 | 1.309 | **1.252** |
+
+**Navier-Stokes / `fno`** (rel-L2)
+
+|  | eval 16² | eval 24² | eval 32² | eval 48² |
+|---|---|---|---|---|
+| train 16² | **0.211** | 0.208 | 0.233 | 0.215 |
+| train 24² | 0.189 | **0.183** | 0.223 | 0.210 |
+| train 32² | 0.214 | 0.223 | **0.237** | 0.213 |
+| train 48² | 0.202 | 0.203 | 0.218 | **0.219** |
+
+*Figures: `docs/figures/bench/bench_resolution_*.png`*
 
 ---
 

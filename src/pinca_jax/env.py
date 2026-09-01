@@ -35,3 +35,44 @@ def provenance(tag: str) -> dict:
     """Device/version stamp to embed in results JSON."""
     return {"tag": tag, "jax": jax.__version__, "backend": jax.default_backend(),
             "devices": [str(d) for d in jax.devices()], "peak_mem_mb": peak_mem_mb()}
+
+
+class NotOnGPU(RuntimeError):
+    """Raised when a benchmark would otherwise silently produce CPU numbers."""
+
+
+def require_gpu(tag: str, allow_cpu: bool = False) -> str:
+    """Print the backend and REFUSE to run a benchmark on CPU.
+
+    A sweep that silently falls back to CPU produces numbers that cannot be compared
+    with GPU numbers -- different throughput, different latency, different achievable
+    scale -- and mixing the two inside one results table is worse than having no table.
+    `allow_cpu` exists for local development only.
+    """
+    backend = banner(tag)
+    if backend == "gpu" or allow_cpu:
+        if backend != "gpu":
+            print(f"[{tag}] proceeding on {backend} because --allow-cpu was passed; "
+                  f"these numbers are NOT comparable to a GPU run.")
+        return backend
+    raise NotOnGPU(
+        f"[{tag}] refusing to benchmark on the '{backend}' backend.\n"
+        f"  Install the CUDA build:  pip install -r requirements-gpu.txt\n"
+        f"  Then check:              python -c \"import jax; print(jax.devices())\"\n"
+        f"  Expected:                [CudaDevice(id=0)]\n"
+        f"  Native Windows cannot reach the GPU at all - use WSL2.\n"
+        f"  To measure on CPU anyway (not comparable), pass --allow-cpu."
+    )
+
+
+def configure_memory():
+    """Set the XLA memory knobs a long sweep needs, if the caller has not.
+
+    Preallocation grabs most of VRAM up front, which makes every later allocation
+    failure look like a hard OOM and leaves no headroom for nvidia-smi or a second
+    process. Setting these here means the Python entry points behave correctly even
+    when they are not launched through the shell wrapper.
+    """
+    import os
+    os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+    os.environ.setdefault("XLA_PYTHON_CLIENT_ALLOCATOR", "platform")

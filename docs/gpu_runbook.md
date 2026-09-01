@@ -1,24 +1,41 @@
-# GPU Runbook — final benchmark run on an RTX 4090 (headless, no IDE)
+# GPU Runbook — the benchmark run on an RTX 4090 (headless, no IDE)
 
-Everything here is terminal-only. Nothing needs a display, a notebook, or an editor.
-All output lands in `results/` (tables + JSON) and `docs/figures/bench/` (plots).
+Terminal only. Nothing here needs a display, a notebook, or an editor. Output lands in
+`results/` (tables + JSON), `docs/figures/` (plots and figures), and
+`docs/PI-NCA_Architectures_and_Results.pdf` (the report, regenerated from the results).
+
+---
+
+## The one command
+
+```bash
+bash run_gpu.sh
+```
+
+That is the whole run: correctness gate → uniform 2-D matrix → ablations → uniform 3-D
+matrix → resolution study → baselines → trajectory capture → field figures → plots →
+report. It is resumable, tolerates a model running out of memory, and refuses to
+produce CPU numbers.
+
+Everything below is context for when something goes wrong.
 
 ---
 
 ## Windows hosts: use WSL2, not cmd.exe
 
-JAX has **no native-Windows GPU support**. Per the official install matrix
-(docs.jax.dev/en/latest/installation.html):
+JAX has **no native-Windows GPU support**. Per the official install matrix:
 
 | Platform | NVIDIA GPU |
 |---|---|
 | Linux, x86_64 | yes |
 | Linux, aarch64 | yes |
 | Windows, x86_64 | **no** |
-| Windows WSL2, x86_64 | experimental (works in practice, CUDA 12 + recent driver) |
+| Windows WSL2, x86_64 | experimental (works in practice with CUDA 12 + a recent driver) |
 
-Install `jax[cuda12]` in native Windows and you get the CPU backend no matter what card is
-in the box. So on a Windows 4090 machine, run the benchmark inside WSL2.
+The wheel index makes it concrete: `jaxlib` publishes a `win_amd64` wheel, but
+`jax-cuda12-plugin` is **manylinux only**. There is no Windows CUDA backend to install,
+so `pip install jax[cuda12]` under Windows silently leaves you on CPU whatever card is
+in the box.
 
 One-time setup, from an **Administrator** cmd.exe:
 
@@ -26,29 +43,25 @@ One-time setup, from an **Administrator** cmd.exe:
 wsl --install -d Ubuntu
 ```
 
-Reboot when it asks, then set the Ubuntu username/password it prompts for. The Windows NVIDIA
-driver already provides GPU passthrough — do **not** install an NVIDIA driver inside WSL.
+Reboot if asked, then set the Ubuntu username/password. The Windows NVIDIA driver
+already provides GPU passthrough — do **not** install an NVIDIA driver inside WSL.
 
-Every session after that, from ordinary cmd.exe:
+Every session after that, from ordinary cmd.exe or PowerShell:
 
 ```bat
 wsl
 ```
 
-You are now in Linux. Your Windows drives are mounted under `/mnt/c`, so:
+You are now in Linux. Check the card is visible:
 
 ```bash
-cd /mnt/c/Users/<you>/PI-NCA
-nvidia-smi          # must list the 4090; if not, update the Windows driver
+nvidia-smi
 ```
-
-Then follow §1 onward exactly as written. Clone into the WSL filesystem
-(`~/PI-NCA`) rather than `/mnt/c` if you care about I/O speed — `/mnt/c` is slow.
 
 ### Shell check
 
-`source` is a bash builtin. If `source .venv/bin/activate` says *not recognised*, you are in
-PowerShell or cmd, not WSL — the venv paths and activation differ:
+`source` is a bash builtin. If `source .venv/bin/activate` says *not recognised*, you
+are still in PowerShell or cmd, not WSL.
 
 | Shell | Activate |
 |---|---|
@@ -56,270 +69,240 @@ PowerShell or cmd, not WSL — the venv paths and activation differ:
 | cmd.exe | `.venv\Scripts\activate.bat` |
 | PowerShell | `.\.venv\Scripts\Activate.ps1` |
 
-PowerShell may refuse the last one with an execution-policy error. Allow it for that window
-only: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`.
+`nvidia-smi` working in PowerShell proves only that the **driver** sees the card. It
+says nothing about whether JAX can use it — on Windows it cannot.
 
-`nvidia-smi` working in PowerShell proves only that the **driver** sees the card. It says
-nothing about whether JAX can use it — on Windows it cannot.
+---
 
-### The Windows-side scripts
-
-`setup_win.bat` builds a CPU venv (runs from cmd or PowerShell), and `run_gpu.bat` runs the
-suite. Both can only ever produce **CPU** numbers, and both say so before starting. Use them
-for the correctness gate, `python -m pinca_jax.plots`, and reduced-scale sanity checks — not
-the final run.
-
-## 0. Prerequisites on the GPU box
+## 1. Get the code
 
 ```bash
-nvidia-smi                 # driver >= 525 for CUDA 12; note the VRAM figure
-python3 --version          # 3.10 - 3.13 (3.14 works too; jax wheels exist for 3.13+)
+git clone -b feature/final-benchmark-run https://github.com/Neural-Cellular-Automatons/PI-NCA.git ~/PI-NCA
+cd ~/PI-NCA
 ```
 
-JAX ships its own CUDA/cuDNN in the `jax[cuda12]` wheel — you do **not** need a system
-CUDA toolkit, only an NVIDIA driver new enough for CUDA 12.
-
-## 1. Get the code and the branch
-
-```bash
-git clone https://github.com/Neural-Cellular-Automatons/PI-NCA.git
-cd PI-NCA
-git checkout feature/final-benchmark-run
-```
+Clone into `~`, not `/mnt/c`. The Windows filesystem through WSL's translation layer is
+slow for the many small reads a benchmark does.
 
 ## 2. Environment
 
-One command. It picks an interpreter, builds `.venv`, installs the pinned stack, and
-refuses to report success unless the GPU backend is actually live:
+**Python 3.12, 3.13 or 3.14** — all three work. `jax`, `jaxlib` and `jax-cuda12-plugin`
+publish cp312/cp313/cp314 manylinux wheels, and the CUDA runtime ships *inside* the
+wheel, so you need only an NVIDIA driver new enough for CUDA 12 (>= 525). No system
+CUDA toolkit.
+
+Ubuntu ships `python3` without the `venv` module, so:
 
 ```bash
-bash setup_gpu.sh
+sudo apt update && sudo apt install -y python3 python3-venv python3-pip git
 ```
-
-```bash
-source .venv/bin/activate        # every new shell afterwards
-```
-
-There is deliberately **no committed virtualenv** — a venv bakes in absolute paths, ships
-platform-specific binaries, and the CUDA wheels run to several GB. `setup_gpu.sh` is the
-portable equivalent.
-
-<details><summary>What it does, if you prefer to run the steps by hand</summary>
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip
-pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu   # reference impl only
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements-gpu.txt
-pip install -e .                 # puts src/pinca_jax on the path — needed for `python -m pinca_jax.*`
+pip install -e .
+```
+
+`torch` is installed from the CPU index deliberately: it is only the reference
+implementation for the correctness gate, never used in the benchmarks, and the default
+build would pull ~3 GB of CUDA libraries duplicating what the jax wheel already ships.
+
+`pip install -e .` is not optional — without it `python -m pinca_jax.*` cannot resolve
+the `src/` layout.
+
+Confirm before spending hours:
+
+```bash
 python -c "import jax; print(jax.__version__, jax.default_backend(), jax.devices())"
 ```
 
-Expected: `0.10.1 gpu [CudaDevice(id=0)]`. If it prints `cpu`, the CUDA wheel did not
-install — read the pip error; do not proceed.
-</details>
+Expected: `0.11.1 gpu [CudaDevice(id=0)]`. If it says `cpu`, stop — the CUDA wheel did
+not install, and the benchmark drivers will refuse to run anyway (see below).
 
-**Python version:** the pins need **>= 3.12**; **3.12, 3.13 and 3.14 all work**, and
-`setup_gpu.sh` prefers the newest it finds. Verified against PyPI: jax 0.10.1 `>=3.12`,
-cax 0.3.3 `>=3.11`, and `jaxlib` / `jax-cuda12-plugin` / `torch` 2.12.0 all publish cp312,
-cp313 and cp314 manylinux x86_64 wheels. flax/optax are pure Python.
-
-Incidentally the wheel index is where the Windows limitation becomes concrete: `jaxlib`
-publishes a `win_amd64` wheel, but `jax-cuda12-plugin` publishes **manylinux only**. There is
-no Windows CUDA backend to install.
-
-Ubuntu ships `python3` without the `venv` module. `setup_gpu.sh` detects that and installs
-`python3.<N>-venv` for you (it will ask for your sudo password). To do it yourself first:
+## 3. Run it
 
 ```bash
-sudo apt update && sudo apt install -y python3.13 python3.13-venv python3-pip git
+bash run_gpu.sh
 ```
 
-CPU-only box (plots and sanity checks, not the final run):
-
-```bash
-bash setup_gpu.sh cpu
-```
-
-## 3. Correctness gate (always first)
-
-```bash
-python -m pytest tests/ -q
-```
-
-56 tests. They assert the JAX ports match the PyTorch reference to tolerance. Red gate ⇒
-the benchmarks below are meaningless.
-
-## 4. The run
-
-```bash
-bash run_gpu.sh smoke      # ~2 min, reduced scale, proves every stage wires up
-bash run_gpu.sh bench      # benchmarks + plots only, no field figures — much faster
-bash run_gpu.sh            # the real thing (benchmarks + figures)
-```
-
-`bench` skips only the field figures (the montages, GIFs and 3-D volume renders); it still
-produces every table and all 14 benchmark plots. The full run adds the figure stage, which
-trains one model per phenomenon and then renders — see "Capture once, render forever" below
-for why that stage no longer costs what it used to, and how to redo it later without a GPU.
-
-The benchmark stages are fatal on error; the baselines and figure stages are **not**. A
-figure failure is recorded and the run continues, so a completed benchmark is never thrown
-away by a plotting bug. Any non-fatal failures are listed at the end. `pinca_jax.plots` runs
-both immediately after the measurements and again at the end, so the plot suite exists on
-disk even if you stop the run early.
-
-Determinism is opt-in (it costs speed, and the XLA flag name has moved between releases):
-
-```bash
-DETERMINISTIC=1 bash run_gpu.sh
-```
-
-Long run over SSH — keep it alive and logged:
+Over SSH, keep it alive and logged:
 
 ```bash
 tmux new -s bench
+```
+
+```bash
 bash run_gpu.sh 2>&1 | tee run_gpu.log
-# detach: Ctrl-b then d      reattach: tmux attach -t bench
 ```
 
-No tmux available:
+Detach with `Ctrl-b` then `d`; reattach with `tmux attach -t bench`. Watch the card from
+a second shell with `watch -n2 nvidia-smi`.
+
+### Scale presets
 
 ```bash
-nohup bash run_gpu.sh > run_gpu.log 2>&1 &
-tail -f run_gpu.log
+bash run_gpu.sh --profile smoke   # ~2 min, tiny scale, proves every stage wires up
+bash run_gpu.sh --profile bench   # measurements + plots, no field figures
+bash run_gpu.sh                   # full (default)
 ```
 
-Watch the GPU from a second shell: `watch -n2 nvidia-smi`.
+| Knob | smoke | bench / full |
+|---|---|---|
+| seeds | 1 | 3 |
+| epochs (2-D) | 40 | 2000 |
+| grid (2-D) | 16 | 64 |
+| batch | 8 | 64 |
+| grid (3-D) | 8³ | 32³ |
+| epochs (3-D) | 20 | 800 |
 
-### What `run_gpu.sh` does
+Run `--profile smoke` once first and time it. The full run scales roughly with
+`epochs × grid² × seeds`, so your own smoke time is a far better predictor than any
+estimate here.
 
-| Stage | Command it runs | Writes | On failure |
+### Other flags
+
+Anything you pass is forwarded to the runner:
+
+```bash
+bash run_gpu.sh --only bench2d,plots      # just these stages
+bash run_gpu.sh --skip figures,baselines  # everything except these
+bash run_gpu.sh --force                   # recompute cells already on disk
+bash run_gpu.sh --no-gate                 # skip the test suite
+DETERMINISTIC=1 bash run_gpu.sh           # deterministic XLA ops (slower)
+```
+
+---
+
+## 4. What the run guarantees
+
+### It will not silently give you CPU numbers
+
+Every benchmark driver calls `env.require_gpu()` and **exits** on the CPU backend. Half
+a matrix measured on CPU and half on GPU is worse than no matrix: throughput, latency
+and achievable scale all differ. The escape hatch is `--allow-cpu`, which prints a
+warning that the numbers are not comparable, and exists for development only.
+
+### One model running out of memory will not end the run
+
+Each `(phenomenon, architecture)` cell is retried at **half the batch**, repeatedly, down
+to a floor. The batch actually used is recorded in the results as `_batch_used`, so you
+can see which cells were reduced. If even the floor fails, the cell is recorded as
+failed and the sweep continues.
+
+The distinction matters: a genuine bug — a shape error, a NaN — is **not** retried. It
+surfaces immediately instead of wasting five attempts.
+
+### A crash costs one model, not a night
+
+Results are written after **every cell**, atomically (temp file + rename, so a crash
+mid-write cannot corrupt a resumable file). Re-running skips completed cells:
+
+```bash
+bash run_gpu.sh          # crashed after 6 hours? just run it again
+```
+
+It picks up where it stopped. Add `--force` only if you want to recompute.
+
+### Memory is not preallocated
+
+`XLA_PYTHON_CLIENT_PREALLOCATE=false` and the platform allocator are set by the wrapper
+*and* by the Python entry point, so both paths behave. Without this XLA grabs ~90% of
+VRAM up front, which makes every later allocation failure look like a hard OOM and
+leaves no headroom for `nvidia-smi`.
+
+JAX's compilation caches are cleared between cells, so peak memory tracks the largest
+single model rather than the whole sweep.
+
+---
+
+## 5. The uniform matrix
+
+Every architecture now runs on **every** phenomenon — the same list of competitors in
+every table.
+
+Previously the flux-form models hardcoded a 2-channel flux head, so they only worked on
+single-channel fields. Multi-field phenomena (wave, Gray–Scott, shallow-water,
+FitzHugh–Nagumo) were therefore measured with three models while scalar ones got five,
+and the tables could not be compared row to row.
+
+All models are now generic in the channel count: they emit one `(f_x, f_y)` pair per
+field and apply a per-channel divergence, so each field's mass is conserved separately.
+The bounded variants take the PDE's **measured physical range** rather than a hardcoded
+`[-1, 1]` — clipping heat, whose amplitudes run 5–10, to `[-1, 1]` would have destroyed
+the field.
+
+At C = 1 the numerics are unchanged, so every previously published number still stands.
+`tests/test_uniform_matrix.py` asserts this, and the PyTorch migration-correctness gate
+still passes.
+
+| Stage | Command | Writes | On failure |
 |---|---|---|---|
-| 1 | `pytest tests/ -q` | — | fatal |
-| 2 | `pinca_jax.bench_all --group all` | `results/bench_<pde>_full.{md,json}`, `bench_*_A4/A5.*` | fatal |
-| 3 | `pinca_jax.bench3d` | `results/bench3d_<pde>.{md,json}` | fatal |
-| 4 | `pinca_jax.res_study` | `results/bench_resolution_<pde>.{md,json}` | fatal |
-| 5 | `pinca_jax.plots` | `docs/figures/bench/*.png` | continue |
-| 6 | `pinn_heat`, `deeponet_heat`, `darcy` | console + `results/` | continue |
-| 7a | `pinca_jax.capture` (skipped in `bench` mode) | `results/traj/<pde>_{2d,3d}.npz` | continue |
-| 7b | `viz`, `viz3d`, `viz3d_volume` — all `--npz`, no training | `docs/figures/*.png`, `results/gifs/*.gif` | continue |
-| 8 | `pinca_jax.plots` | `docs/figures/bench/*.png` | continue |
+| gate | `pytest tests/ -q` | — | fatal |
+| bench2d | `pinca_jax.bench_all --group all` | `results/bench_<pde>_full.{md,json}` | fatal |
+| bench3d | `pinca_jax.bench3d` | `results/bench3d_<pde>.{md,json}` | fatal |
+| resolution | `pinca_jax.res_study` | `results/bench_resolution_<pde>.*` | continue |
+| plots | `pinca_jax.plots` | `docs/figures/bench/*.png` | continue |
+| baselines | `pinn_heat`, `deeponet_heat`, `darcy` | console + `results/` | continue |
+| capture | `pinca_jax.capture` | `results/traj/*.npz` | continue |
+| figures | `viz`, `viz3d`, `viz3d_volume` (all `--npz`) | `docs/figures/*.png` | continue |
+| report | `arch_figs`, `report`, `md2pdf` | `docs/PI-NCA_Architectures_and_Results.{md,pdf}` | continue |
 
-### Full-scale vs smoke settings
+Only the measurement stages are fatal. Everything downstream is recorded and skipped.
 
-| knob | smoke | full (GPU) | why |
-|---|---|---|---|
-| seeds | 1 (fixed 42) | 3 | GPU makes real mean±std affordable |
-| epochs (2-D) | 60 | 2000 | CPU runs were truncated at 150 |
-| grid (2-D) | 24 | 64 | the scale the paper claims |
-| batch | 16 | 64 | 4090 VRAM is not the constraint here |
-| grid (3-D) | 16³ | 32³ | 8× the cells of the CPU run |
-| figure training | grid 24 / 60 ep | grid 48 / 400 ep | figures are pictures, not measurements |
-| 3-D figure grid | 16³ | 16³ | `viz3d_volume` renders every voxel on the CPU |
-
-Only numeric fields change — the code path is identical, which is the whole point of
-`docs/reproducibility.md` §6.
-
-## 4b. Capture once, render forever
-
-Training a model is the expensive part of a figure; drawing is not. `pinca_jax.capture`
-trains **once** per phenomenon, rolls the solver and the model forward from one held-out
-initial condition, and archives the raw arrays:
-
-```
-results/traj/<pde>_2d.npz    solver, model : (T+1, H, W)      channel 0
-results/traj/<pde>_3d.npz    solver, model : (T+1, D, H, W)   channel 0, full volumes
-```
-
-Every figure is then rendered *from those files*, with no training and no GPU:
-
-```bash
-python -m pinca_jax.viz          --npz results/traj/heat_2d.npz
-python -m pinca_jax.viz3d        --npz results/traj/heat_3d.npz
-python -m pinca_jax.viz3d_volume --npz results/traj/heat_3d.npz
-```
-
-Two things this buys you:
-
-1. **The 3-D figure stage costs half what it did.** `viz3d` and `viz3d_volume` used to each
-   retrain the same model for the same phenomenon. Now they share one capture.
-2. **You can rebuild or restyle anything later, anywhere.** Copy `results/traj/` to a laptop
-   and every montage, GIF, rotating volume, or new plot you write is reproducible from plain
-   numpy — no jax, no CUDA, no rerun. `np.load(path)["model"]` is the whole interface.
-
-Capture on its own, e.g. after a `bench` run:
-
-```bash
-python -m pinca_jax.capture --dims both --grid 48 --epochs 400 --grid3d 16 --epochs3d 200
-python -m pinca_jax.capture --dims 3d --pdes heat,gray_scott --grid3d 24 --epochs3d 400
-```
-
-**Size is bounded on purpose.** `--max-mb` (default 64 per phenomenon) strides frames out of
-the time axis if a trajectory would exceed it, so a bigger grid costs resolution in time
-rather than an unbounded file. For reference, 16³ × 33 frames × 2 arrays ≈ 1 MB; 32³ × 33 ≈
-9 MB. `results/**/*.npz` is gitignored, so captures stay local — copy them off deliberately.
-
-## 5. Running pieces by hand
-
-```bash
-# one phenomenon, all applicable architectures
-python -m pinca_jax.bench --pde heat --seeds 3 --epochs 2000 --grid 64 --batch 64 \
-                          --rollout 12 --eval 48
-
-# one group only
-python -m pinca_jax.bench_all --group local        --seeds 3 --epochs 2000 --grid 64 --batch 64
-python -m pinca_jax.bench_all --group multichannel --seeds 3 --epochs 2000 --grid 64 --batch 64
-python -m pinca_jax.bench_all --group special      --seeds 3 --epochs 2000 --grid 64 --batch 64
-python -m pinca_jax.bench_all --group ablation     --seeds 3 --epochs 2000 --grid 64 --batch 64
-
-# 3-D
-python -m pinca_jax.bench3d --grid 32 --epochs 800 --batch 16
-
-# replot from whatever JSON is already in results/ (no training, seconds)
-python -m pinca_jax.plots
-```
-
-`python -m pinca_jax.plots` is safe to run at any time — it only reads `results/*.json`.
+---
 
 ## 6. Reading the output
 
 ```bash
-cat results/bench_heat_full.md          # per-phenomenon table, winner per metric bolded
-ls docs/figures/bench/                  # every benchmark plot
+cat results/bench_heat_full.md      # one phenomenon, every model, winner bolded
+ls docs/figures/bench/              # 14 benchmark plots
+cat results/run_manifest.json       # per-stage timings, failures, device stamp
 ```
 
-| Figure | Shows |
-|---|---|
-| `bench_accuracy_2d.png` | rel-L2 @T, every architecture, every 2-D phenomenon |
-| `bench_psnr_2d.png` | PSNR (dB) |
-| `bench_conservation_2d.png` | mass-conservation drift — where PI-NCA's flux head earns its keep |
-| `bench_error_growth.png` | rel-L2 at T/4 → T: who degrades over a long rollout |
-| `bench_accuracy_vs_cost.png` | params vs error, the Pareto view |
-| `bench_train_time.png`, `bench_throughput.png` | wall-clock cost and inference speed |
-| `bench_regime_map.png` | normalised rel-L2 — the "no universal winner" claim in one image |
-| `bench_accuracy_3d.png` | the 3-D suite |
-| `bench_ablation_A4.png`, `bench_ablation_A5.png` | conservation on/off, perception size |
-| `bench_resolution_*.png` | train-grid × eval-grid zero-shot transfer |
+The report regenerates itself from the results, so its tables cannot disagree with the
+data:
 
-Copy them off the box with `scp -r user@box:PI-NCA/docs/figures/bench ./`.
+```bash
+python -m pinca_jax.report && python -m pinca_jax.md2pdf docs/PI-NCA_Architectures_and_Results.md
+```
+
+Every results file carries a `"device"` stamp (`jax` version, backend, device list, peak
+memory), so a GPU run is self-identifying afterwards.
+
+### Capture once, render forever
+
+`pinca_jax.capture` trains one model per phenomenon and archives the raw solver/model
+trajectories to `results/traj/*.npz` (2-D `(T+1,H,W)`, 3-D volumes `(T+1,D,H,W)`). Every
+figure is rendered from those files, so figures can be rebuilt or restyled later with no
+GPU and no retraining:
+
+```bash
+python -m pinca_jax.viz3d_volume --npz results/traj/heat_3d.npz
+```
+
+`np.load(path)["model"]` is the whole interface. `--max-mb` (default 64 per phenomenon)
+strides the time axis to bound file size.
+
+### Copy results off the box
+
+```bash
+cp -r ~/PI-NCA/docs/figures ~/PI-NCA/results /mnt/c/Users/<you>/Desktop/pinca_results
+```
+
+---
 
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `jax.default_backend() == 'cpu'` | CPU wheel installed | `pip uninstall -y jax jaxlib && pip install -r requirements-gpu.txt` |
-| `ModuleNotFoundError: pinca_jax` | src layout not on path | `pip install -e .` (or `export PYTHONPATH=src`) |
-| `RESOURCE_EXHAUSTED` / OOM | batch or grid too large | lower `--batch` first, then `--grid` |
-| GPU sits at ~0% util | grid too small — kernels finish faster than they launch | raise `--grid`/`--batch`; small grids are launch-bound, not a bug |
-| `CUDA_ERROR_NO_DEVICE` inside tmux | stale session predates the driver | start a fresh tmux session |
-| run dies on SSH disconnect | no tmux/nohup | see §4 |
-| stage 7 crawls for hours | matplotlib 3-D voxel rendering is CPU-bound | use `bash run_gpu.sh bench`, then capture + render separately (§4b) |
-| want a figure changed after the run | — | edit the renderer and re-run it with `--npz`; never retrain |
-| capture files too big | long rollouts at a large grid | lower `--max-mb`, or `--eval3d` |
-| Windows: backend is `cpu` however you install | native Windows has no JAX GPU wheels | run inside WSL2 — see the Windows section above |
-| `nvidia-smi` empty inside WSL2 | Windows driver too old, or a driver was installed *inside* WSL | update the Windows NVIDIA driver; never install one in WSL |
-
-Timings from the run land in the tables as `train wall(s)` and `infer s/step`, and the
-device stamp (`jax` version, backend, device list, peak VRAM) is written into every
-`results/*.json` under `"device"` — so a GPU run is self-identifying after the fact.
+| `NotOnGPU: refusing to benchmark on the 'cpu' backend` | working as intended | install `requirements-gpu.txt`; on Windows, move to WSL2 |
+| backend is `cpu` however you install | native Windows has no JAX CUDA wheels | use WSL2 |
+| `ModuleNotFoundError: pinca_jax` | src layout not installed | `pip install -e .` |
+| a cell reports `FAILED (oom)` | model too large even at the batch floor | lower `--profile` scale, or rerun that cell alone with a smaller `--grid` |
+| several cells OOM | grid/batch too large for the card | `bash run_gpu.sh --only bench2d --force` after lowering the profile |
+| `nvidia-smi` empty inside WSL2 | Windows driver too old, or a driver was installed *inside* WSL | update the Windows driver; never install one in WSL |
+| GPU sits near 0% util | small grids are launch-bound, not a bug | raise `--profile`; util is also low during pytest and plotting |
+| run died overnight | — | just run `bash run_gpu.sh` again; finished cells are skipped |
+| `orbax` path error on Windows install | MAX_PATH limit | see the note at the top of `requirements-jax.txt` |
