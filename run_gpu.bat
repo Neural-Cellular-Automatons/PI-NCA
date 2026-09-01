@@ -1,7 +1,8 @@
 @echo off
 REM Windows cmd.exe driver for the benchmark run.
 REM
-REM   run_gpu.bat            full run
+REM   run_gpu.bat            full run: benchmarks + figures
+REM   run_gpu.bat bench      benchmarks + plots only, no field figures (much faster)
 REM   run_gpu.bat smoke      ~2 min wiring check at reduced scale
 REM
 REM IMPORTANT: JAX has NO native-Windows GPU support (docs.jax.dev: Windows x86_64 = "no",
@@ -26,6 +27,11 @@ if "%MODE%"=="smoke" (
   set GRID3D=16
   set EPOCHS3D=40
   set RES_EPOCHS=40
+  set VIZ_GRID=24
+  set VIZ_EPOCHS=60
+  set VIZ3D_GRID=16
+  set VIZ3D_EPOCHS=40
+  set DO_FIGURES=1
 ) else (
   set SEEDS=3
   set EPOCHS=2000
@@ -34,7 +40,15 @@ if "%MODE%"=="smoke" (
   set GRID3D=32
   set EPOCHS3D=800
   set RES_EPOCHS=600
+  REM Figures are pictures, not measurements: they do not need benchmark-grade
+  REM training, and viz3d_volume renders every voxel through matplotlib on the CPU.
+  set VIZ_GRID=48
+  set VIZ_EPOCHS=400
+  set VIZ3D_GRID=16
+  set VIZ3D_EPOCHS=200
+  set DO_FIGURES=1
 )
+if "%MODE%"=="bench" set DO_FIGURES=0
 
 echo === 0. environment ===
 where python >nul 2>&1 || (echo python not on PATH - activate the venv first: .venv\Scripts\activate.bat & exit /b 1)
@@ -59,22 +73,32 @@ python -m pinca_jax.bench3d --grid %GRID3D% --epochs %EPOCHS3D% --batch 16 || ex
 echo === 4. resolution-transfer study ===
 python -m pinca_jax.res_study --pdes heat,allen_cahn,navier_stokes --epochs %RES_EPOCHS% || exit /b 1
 
-echo === 5. PINN / DeepONet / Darcy baselines ===
-python -m pinca_jax.pinn_heat || exit /b 1
-python -m pinca_jax.deeponet_heat || exit /b 1
-python -m pinca_jax.darcy || exit /b 1
+REM Plot as soon as measurements exist, so figures survive an early stop.
+echo === 5. benchmark plots (from results so far) ===
+python -m pinca_jax.plots
 
-echo === 6. field figures ===
-for %%p in (heat allen_cahn nagumo adv_diff gray_scott shallow_water fitzhugh_nagumo wave cahn_hilliard navier_stokes) do (
-  python -m pinca_jax.viz --pde %%p --grid %GRID% --epochs %EPOCHS% || exit /b 1
-)
-for %%p in (heat adv_diff allen_cahn nagumo gray_scott fitzhugh_nagumo) do (
-  python -m pinca_jax.viz3d --pde %%p --grid %GRID3D% --epochs %EPOCHS3D% || exit /b 1
-  python -m pinca_jax.viz3d_volume --pde %%p --grid %GRID3D% --epochs %EPOCHS3D% || exit /b 1
+REM Baselines and figures are NON-FATAL: they must never destroy a completed
+REM benchmark run. Failures are reported, not propagated.
+echo === 6. PINN / DeepONet / Darcy baselines ===
+python -m pinca_jax.pinn_heat
+python -m pinca_jax.deeponet_heat
+python -m pinca_jax.darcy
+
+if "%DO_FIGURES%"=="0" (
+  echo === 7. field figures SKIPPED ^(mode=%MODE%^) ===
+) else (
+  echo === 7. field figures ===
+  for %%p in (heat allen_cahn nagumo adv_diff gray_scott shallow_water fitzhugh_nagumo wave cahn_hilliard navier_stokes) do (
+    python -m pinca_jax.viz --pde %%p --grid %VIZ_GRID% --epochs %VIZ_EPOCHS%
+  )
+  for %%p in (heat adv_diff allen_cahn nagumo gray_scott fitzhugh_nagumo) do (
+    python -m pinca_jax.viz3d --pde %%p --grid %VIZ3D_GRID% --epochs %VIZ3D_EPOCHS%
+    python -m pinca_jax.viz3d_volume --pde %%p --grid %VIZ3D_GRID% --epochs %VIZ3D_EPOCHS%
+  )
 )
 
-echo === 7. benchmark plots ===
-python -m pinca_jax.plots || exit /b 1
+echo === 8. benchmark plots (final) ===
+python -m pinca_jax.plots
 
 echo.
 echo done. tables -^> results\*.md   figures -^> docs\figures\bench\*.png

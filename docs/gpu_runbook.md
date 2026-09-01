@@ -153,8 +153,25 @@ the benchmarks below are meaningless.
 ## 4. The run
 
 ```bash
-bash run_gpu.sh smoke      # ~2 min, CPU-scale numbers, proves every stage wires up
-bash run_gpu.sh            # the real thing
+bash run_gpu.sh smoke      # ~2 min, reduced scale, proves every stage wires up
+bash run_gpu.sh bench      # benchmarks + plots only, no field figures — much faster
+bash run_gpu.sh            # the real thing (benchmarks + figures)
+```
+
+**Prefer `bench` if you only need the numbers and the benchmark plots.** The field-figure
+stage retrains a model per phenomenon purely to draw pictures, and `viz3d_volume` renders
+every voxel through matplotlib on the CPU — it can cost more wall-clock than the benchmarks.
+
+The benchmark stages are fatal on error; the baselines and figure stages are **not**. A
+figure failure is recorded and the run continues, so a completed benchmark is never thrown
+away by a plotting bug. Any non-fatal failures are listed at the end. `pinca_jax.plots` runs
+both immediately after the measurements and again at the end, so the plot suite exists on
+disk even if you stop the run early.
+
+Determinism is opt-in (it costs speed, and the XLA flag name has moved between releases):
+
+```bash
+DETERMINISTIC=1 bash run_gpu.sh
 ```
 
 Long run over SSH — keep it alive and logged:
@@ -176,15 +193,16 @@ Watch the GPU from a second shell: `watch -n2 nvidia-smi`.
 
 ### What `run_gpu.sh` does
 
-| Stage | Command it runs | Writes |
-|---|---|---|
-| 1 | `pytest tests/ -q` | — |
-| 2 | `pinca_jax.bench_all --group all` | `results/bench_<pde>_full.{md,json}`, `bench_*_A4/A5.*` |
-| 3 | `pinca_jax.bench3d` | `results/bench3d_<pde>.{md,json}` |
-| 4 | `pinca_jax.res_study` | `results/bench_resolution_<pde>.{md,json}` |
-| 5 | `pinn_heat`, `deeponet_heat`, `darcy` | console + `results/` |
-| 6 | `viz`, `viz3d`, `viz3d_volume` | `docs/figures/*.png`, `results/gifs/*.gif` |
-| 7 | `pinca_jax.plots` | `docs/figures/bench/*.png` |
+| Stage | Command it runs | Writes | On failure |
+|---|---|---|---|
+| 1 | `pytest tests/ -q` | — | fatal |
+| 2 | `pinca_jax.bench_all --group all` | `results/bench_<pde>_full.{md,json}`, `bench_*_A4/A5.*` | fatal |
+| 3 | `pinca_jax.bench3d` | `results/bench3d_<pde>.{md,json}` | fatal |
+| 4 | `pinca_jax.res_study` | `results/bench_resolution_<pde>.{md,json}` | fatal |
+| 5 | `pinca_jax.plots` | `docs/figures/bench/*.png` | continue |
+| 6 | `pinn_heat`, `deeponet_heat`, `darcy` | console + `results/` | continue |
+| 7 | `viz`, `viz3d`, `viz3d_volume` (skipped in `bench` mode) | `docs/figures/*.png`, `results/gifs/*.gif` | continue |
+| 8 | `pinca_jax.plots` | `docs/figures/bench/*.png` | continue |
 
 ### Full-scale vs smoke settings
 
@@ -195,6 +213,8 @@ Watch the GPU from a second shell: `watch -n2 nvidia-smi`.
 | grid (2-D) | 24 | 64 | the scale the paper claims |
 | batch | 16 | 64 | 4090 VRAM is not the constraint here |
 | grid (3-D) | 16³ | 32³ | 8× the cells of the CPU run |
+| figure training | grid 24 / 60 ep | grid 48 / 400 ep | figures are pictures, not measurements |
+| 3-D figure grid | 16³ | 16³ | `viz3d_volume` renders every voxel on the CPU |
 
 Only numeric fields change — the code path is identical, which is the whole point of
 `docs/reproducibility.md` §6.
@@ -253,6 +273,7 @@ Copy them off the box with `scp -r user@box:PI-NCA/docs/figures/bench ./`.
 | GPU sits at ~0% util | grid too small — kernels finish faster than they launch | raise `--grid`/`--batch`; small grids are launch-bound, not a bug |
 | `CUDA_ERROR_NO_DEVICE` inside tmux | stale session predates the driver | start a fresh tmux session |
 | run dies on SSH disconnect | no tmux/nohup | see §4 |
+| stage 7 crawls for hours | matplotlib 3-D voxel rendering is CPU-bound | use `bash run_gpu.sh bench`, then draw figures separately |
 | Windows: backend is `cpu` however you install | native Windows has no JAX GPU wheels | run inside WSL2 — see the Windows section above |
 | `nvidia-smi` empty inside WSL2 | Windows driver too old, or a driver was installed *inside* WSL | update the Windows NVIDIA driver; never install one in WSL |
 
