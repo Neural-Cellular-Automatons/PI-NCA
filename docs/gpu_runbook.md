@@ -53,7 +53,7 @@ PowerShell or cmd, not WSL — the venv paths and activation differ:
 | Shell | Activate |
 |---|---|
 | WSL / Linux | `source .venv/bin/activate` |
-| cmd.exe | `.venv\Scriptsctivate.bat` |
+| cmd.exe | `.venv\Scripts\activate.bat` |
 | PowerShell | `.\.venv\Scripts\Activate.ps1` |
 
 PowerShell may refuse the last one with an execution-policy error. Allow it for that window
