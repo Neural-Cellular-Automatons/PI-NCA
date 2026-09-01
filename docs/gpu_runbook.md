@@ -69,21 +69,52 @@ git checkout feature/final-benchmark-run
 
 ## 2. Environment
 
+One command. It picks an interpreter, builds `.venv`, installs the pinned stack, and
+refuses to report success unless the GPU backend is actually live:
+
+```bash
+bash setup_gpu.sh
+```
+
+```bash
+source .venv/bin/activate        # every new shell afterwards
+```
+
+There is deliberately **no committed virtualenv** — a venv bakes in absolute paths, ships
+platform-specific binaries, and the CUDA wheels run to several GB. `setup_gpu.sh` is the
+portable equivalent.
+
+<details><summary>What it does, if you prefer to run the steps by hand</summary>
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip
+pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu   # reference impl only
 pip install -r requirements-gpu.txt
 pip install -e .                 # puts src/pinca_jax on the path — needed for `python -m pinca_jax.*`
-```
-
-Confirm the GPU is actually the backend before spending hours on it:
-
-```bash
 python -c "import jax; print(jax.__version__, jax.default_backend(), jax.devices())"
 ```
 
 Expected: `0.10.1 gpu [CudaDevice(id=0)]`. If it prints `cpu`, the CUDA wheel did not
-install — re-run the pip step and read the error; do not proceed.
+install — read the pip error; do not proceed.
+</details>
+
+**Python version:** the pins need **>= 3.12**; 3.13 is fine and is what `setup_gpu.sh`
+prefers. Verified against PyPI: jax 0.10.1 `>=3.12`, cax 0.3.3 `>=3.11`, torch 2.12.0 ships
+cp313 wheels, flax/optax are pure Python.
+
+Ubuntu ships `python3` without the `venv` module. `setup_gpu.sh` detects that and installs
+`python3.<N>-venv` for you (it will ask for your sudo password). To do it yourself first:
+
+```bash
+sudo apt update && sudo apt install -y python3.13 python3.13-venv python3-pip git
+```
+
+CPU-only box (plots and sanity checks, not the final run):
+
+```bash
+bash setup_gpu.sh cpu
+```
 
 ## 3. Correctness gate (always first)
 

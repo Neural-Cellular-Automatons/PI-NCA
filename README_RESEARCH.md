@@ -68,10 +68,11 @@ python -m pytest tests/                          # migration correctness gate
 
 ## Quickstart (GPU — full benchmark run)
 Headless, terminal-only; full instructions in **`docs/gpu_runbook.md`**.
+Needs Python >= 3.12 (3.13 preferred). Windows hosts must run inside WSL2 — JAX publishes no
+native-Windows GPU wheels.
 ```bash
-python -m pip install -r requirements-gpu.txt   # jax[cuda12]; only the jax wheel differs
-python -m pip install -e .
-python -c "import jax; print(jax.default_backend(), jax.devices())"   # expect: gpu [CudaDevice(id=0)]
+bash setup_gpu.sh                                # builds .venv, installs jax[cuda12], verifies the GPU
+source .venv/bin/activate
 bash run_gpu.sh smoke                            # ~2 min wiring check
 bash run_gpu.sh                                  # full run: gate -> 2D -> 3D -> res-study -> figures -> plots
 ```
