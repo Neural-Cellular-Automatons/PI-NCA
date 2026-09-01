@@ -45,9 +45,29 @@ nvidia-smi          # must list the 4090; if not, update the Windows driver
 Then follow §1 onward exactly as written. Clone into the WSL filesystem
 (`~/PI-NCA`) rather than `/mnt/c` if you care about I/O speed — `/mnt/c` is slow.
 
-`run_gpu.bat` exists for running the suite from cmd.exe, but it can only ever
-produce **CPU** numbers, and it says so before it starts. Use it for
-`python -m pinca_jax.plots` and for reduced-scale sanity checks, not the final run.
+### Shell check
+
+`source` is a bash builtin. If `source .venv/bin/activate` says *not recognised*, you are in
+PowerShell or cmd, not WSL — the venv paths and activation differ:
+
+| Shell | Activate |
+|---|---|
+| WSL / Linux | `source .venv/bin/activate` |
+| cmd.exe | `.venv\Scriptsctivate.bat` |
+| PowerShell | `.\.venv\Scripts\Activate.ps1` |
+
+PowerShell may refuse the last one with an execution-policy error. Allow it for that window
+only: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`.
+
+`nvidia-smi` working in PowerShell proves only that the **driver** sees the card. It says
+nothing about whether JAX can use it — on Windows it cannot.
+
+### The Windows-side scripts
+
+`setup_win.bat` builds a CPU venv (runs from cmd or PowerShell), and `run_gpu.bat` runs the
+suite. Both can only ever produce **CPU** numbers, and both say so before starting. Use them
+for the correctness gate, `python -m pinca_jax.plots`, and reduced-scale sanity checks — not
+the final run.
 
 ## 0. Prerequisites on the GPU box
 
