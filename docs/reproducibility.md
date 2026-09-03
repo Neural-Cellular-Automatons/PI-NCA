@@ -58,6 +58,14 @@ python -m pinca_jax.plots            # reads results/*.json only; writes docs/fi
 Accuracy / PSNR / conservation / cost bars, error-growth profiles, accuracy-vs-params Pareto,
 the regime map, the 3-D suite, ablations A4/A5, and resolution-transfer heatmaps. No training.
 
+## 5c. Divergence guard (why no metric is ever nonsense)
+`EmuConfig.safety_factor` (default **1.25**) clamps every emulator rollout to the teacher's
+measured physical range (`harness.field_bounds`) widened by that factor. A healthy model never
+touches it; a diverging one can no longer run off to 1e2+ and emit meaningless numbers such as a
+**negative PSNR** (which only ever meant "MSE exceeded the signal range", i.e. blow-up). An
+explicit `output_clip` still takes precedence, so the bounding ablation (A1) is unchanged.
+Failed models remain visibly failed - their rel-L2 sits at or above the identity floor.
+
 ## 6. Scale knobs (CPU ↔ GPU)
 `EmuConfig` / `HeatNCAConfig` / `PINNConfig` fields (`grid_size`, `rollout_steps`,
 `eval_steps`, `epochs`, `batch`, seeds) are the *only* difference between the

@@ -36,6 +36,12 @@ measured time has sub-optimal accuracy` — a benign warmup-kernel warning, not 
 correctness issue. It does not change the conclusion; a larger grid or step count would
 clear it if tighter timing precision were ever needed here.
 
+## Re-measurement (2026-07, after the training loop became a single `lax.scan`)
+`python -m pinca_jax.cax_eval` on the same CPU host: our `lax.scan` rollout **0.638 ms/step**
+vs CAX `ComplexSystem` **1.202 ms/step** — CAX is **1.88x slower**. Training now runs *all*
+epochs inside one jitted `lax.scan` (`harness.train_emulator`), so the rollout is already a
+single fused XLA program; CAX's `nnx.scan` cannot improve on that, it is the same mechanism.
+
 ## Decision
 - **Not integrated into the hot path, on either backend.** Our `lax.scan` core is fully
   under our control, correctness-gated (119+ tests), and uses Flax `linen` consistently
