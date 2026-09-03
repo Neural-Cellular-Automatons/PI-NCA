@@ -21,7 +21,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from . import ic, metrics
+from . import cax_backend, ic, metrics
 from .equations import pdes
 
 
@@ -94,24 +94,23 @@ def effective_clip(cfg: "EmuConfig"):
     return None
 
 
+def _step_fn(model, params, clip):
+    """One emulator step as a pure state->state function (clip applied if any)."""
+    def step(x):
+        y = model.apply(params, x)
+        return y if clip is None else jnp.clip(y, clip[0], clip[1])
+    return step
+
+
 def _emu_rollout(model, params, x0, steps, clip=None):
-    def body(x, _):
-        x = model.apply(params, x)
-        if clip is not None:
-            x = jnp.clip(x, clip[0], clip[1])
-        return x, None
-    xf, _ = jax.lax.scan(body, x0, xs=None, length=steps)
-    return xf
+    """Final state after `steps`. Routed through cax_backend: CAX on GPU, scan otherwise."""
+    return cax_backend.rollout(_step_fn(model, params, clip), x0, steps)
 
 
 def _emu_traj(model, params, x0, steps, clip=None):
-    def body(x, _):
-        x = model.apply(params, x)
-        if clip is not None:
-            x = jnp.clip(x, clip[0], clip[1])
-        return x, x
-    _, traj = jax.lax.scan(body, x0, xs=None, length=steps)
-    return traj  # (steps, B, H, W, C)
+    """Stacked trajectory (steps, B, H, W, C). Always lax.scan - the metrics need every
+    frame and CAX's driver returns only the final state."""
+    return cax_backend.rollout(_step_fn(model, params, clip), x0, steps, collect=True)
 
 
 def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):

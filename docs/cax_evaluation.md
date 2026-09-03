@@ -33,18 +33,29 @@ vs CAX `ComplexSystem` **1.202 ms/step** — CAX is **1.88x slower**. Training n
 epochs inside one jitted `lax.scan` (`harness.train_emulator`), so the rollout is already a
 single fused XLA program; CAX's `nnx.scan` cannot improve on that, it is the same mechanism.
 
-## Decision
-- **Not integrated into the hot path.** Our `lax.scan` core is fully under our control,
-  correctness-gated (36+ tests), and uses Flax `linen` consistently with the conservative
-  flux/divergence physics layers; swapping to CAX's `nnx` NCA would not speed up CPU
-  rollouts and would fork the architecture.
-- **Where CAX *would* be beneficial (documented for future GPU work):** (1) multi-device /
-  large-grid scaling, where its `nnx.scan` composes with `jax.sharding` the same way ours
-  would — no advantage but no disadvantage; (2) reusing its CA zoo (Lenia/Flow-Lenia) as
-  additional emulation targets or pretrained perception kernels; (3) its `MoorePerceive` /
-  `VonNeumann` perception stencils as ready-made ablation variants for neighbourhood-size
-  studies (ablation A5).
-- A working CAX NCA subclass is kept in `cax_eval.py` as a reference integration point.
+## Decision: auto-selected on GPU, never on CPU
+CAX is now wired in behind a backend switch (`src/pinca_jax/cax_backend.py`), not forked
+into the models:
+
+* `rollout(step_fn, x0, steps)` drives the rollout with CAX's `ComplexSystem`
+  (`nnx.scan` + `nnx.jit`) when `jax.default_backend() == "gpu"` and `cax` imports,
+  and with `jax.lax.scan` otherwise.
+* `PINCA_CAX=1` / `PINCA_CAX=0` forces either backend (the tests use this).
+* Trajectory rollouts (`collect=True`) always use `lax.scan`: CAX's driver returns only
+  the final state, and the metrics need every frame.
+* `harness._emu_rollout` / `_emu_traj` both route through it, so training, evaluation,
+  capture and the figures all inherit the policy from one place.
+
+**Equivalence is asserted, not assumed** (`tests/test_cax_backend.py`): the two backends
+agree to 1e-6 on a rollout, the CAX path is differentiable (checked against the analytic
+gradient of `sum(x s^n)`), and a 40-epoch heat training run gives bit-identical results
+either way (loss 2.129980e-03, rel-L2 7.424576e-02). On CPU the CAX path is measurably
+slower (15.2 s vs 14.6 s for that run; 1.202 vs 0.638 ms/step in the microbenchmark),
+which is precisely why the default is GPU-only.
+
+**Still unmeasured:** whether CAX beats `lax.scan` on an actual GPU. No GPU was available
+here. The switch means a GPU run picks it up automatically; if it turns out slower there
+too, `PINCA_CAX=0` disables it without touching any model code.
 
 ## Reproduce
 ```bash
