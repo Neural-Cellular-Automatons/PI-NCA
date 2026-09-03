@@ -43,6 +43,10 @@ class EmuConfig:
     warmup_lr: float = 2e-4           # LR at step 0 of warmup
     preseed_steps: int = 0            # pre-evolve training ICs by the solver this many steps
                                       # (so the model trains on DEVELOPED states, not just early ones)
+    safety_factor: float = 1.25      # divergence guard: clamp rollouts to the teacher's
+                                      # physical range widened by this factor (0 = off).
+                                      # An explicit output_clip always takes precedence, so
+                                      # the bounding ablation (A1) is unaffected.
 
     def spec(self):
         # use the numerically stable teacher config where one exists (e.g. gray_scott)
@@ -68,6 +72,26 @@ def field_bounds(pde: str, grid: int, seed: int = 0, steps: int = 64, margin: fl
         return None                      # teacher itself blew up; leave the model unbounded
     pad = margin * (hi - lo) + 1e-6
     return (lo - pad, hi + pad)
+
+
+def effective_clip(cfg: "EmuConfig"):
+    """Clip actually applied to a rollout.
+
+    Explicit `output_clip` wins (that is the bounding ablation). Otherwise a *safety*
+    clamp at `safety_factor` x the teacher's physical range: wide enough that a healthy
+    model never touches it, tight enough that a diverging rollout cannot run off to 1e2+
+    and produce meaningless metrics (a negative PSNR is just "MSE exceeded the signal
+    range", i.e. the model blew up).
+    """
+    if cfg.output_clip is not None:
+        return cfg.output_clip
+    if cfg.safety_factor and cfg.safety_factor > 0:
+        b = field_bounds(cfg.pde, cfg.grid_size)
+        if b is not None:
+            lo, hi = b
+            mid, half = 0.5 * (lo + hi), 0.5 * (hi - lo) * cfg.safety_factor
+            return (mid - half, mid + half)
+    return None
 
 
 def _emu_rollout(model, params, x0, steps, clip=None):
@@ -109,8 +133,8 @@ def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):
         schedule = cfg.lr
     opt = optax.adamw(schedule, weight_decay=cfg.weight_decay)
     opt_state = opt.init(params)
+    clip = effective_clip(cfg)   # divergence guard (see effective_clip)
 
-    @jax.jit
     def step(params, opt_state, k):
         x0 = ic.make_state(k, cfg.pde, cfg.batch, cfg.grid_size)
         if cfg.preseed_steps > 0:                  # start from a DEVELOPED state
@@ -118,21 +142,33 @@ def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):
         target = pdes.rollout(spec, x0, cfg.rollout_steps)
 
         def loss_fn(p):
-            pred = _emu_rollout(model, p, x0, cfg.rollout_steps, cfg.output_clip)
+            pred = _emu_rollout(model, p, x0, cfg.rollout_steps, clip)
             return jnp.mean((pred - target) ** 2)
 
         loss, grads = jax.value_and_grad(loss_fn)(params)
         updates, opt_state = opt.update(grads, opt_state, params)
         return optax.apply_updates(params, updates), opt_state, loss
 
-    losses = []
+    # All epochs run inside ONE jitted lax.scan. The previous Python loop dispatched
+    # (and, via float(loss), *synchronised*) once per epoch, which dominates wall-clock
+    # on GPU for these small models. Buffers are donated so params/opt_state are updated
+    # in place instead of reallocated each step.
+    @functools.partial(jax.jit, donate_argnums=(0, 1))
+    def run_epochs(params, opt_state, keys):
+        def body(carry, k):
+            p, o = carry
+            p, o, loss = step(p, o, k)
+            return (p, o), loss
+        (params, opt_state), losses = jax.lax.scan(body, (params, opt_state), keys)
+        return params, opt_state, losses
+
     t0 = time.time()
-    for e in range(cfg.epochs):
-        key, sk = jax.random.split(key)
-        params, opt_state, loss = step(params, opt_state, sk)
-        losses.append(float(loss))
-        if verbose and (e % max(1, cfg.epochs // 10) == 0 or e == cfg.epochs - 1):
-            print(f"  epoch {e:4d} | loss {float(loss):.4e}")
+    keys = jax.random.split(key, cfg.epochs)
+    params, opt_state, loss_arr = run_epochs(params, opt_state, keys)
+    losses = [float(v) for v in loss_arr]        # one sync, after training
+    if verbose:
+        for e in range(0, cfg.epochs, max(1, cfg.epochs // 10)):
+            print(f"  epoch {e:4d} | loss {losses[e]:.4e}")
     return {"params": params, "model": model, "losses": losses,
             "wall_s": time.time() - t0}
 
@@ -150,7 +186,7 @@ def evaluate_emulator(model, params, cfg: EmuConfig):
     x0 = ic.make_state(key, cfg.pde, cfg.n_eval, cfg.grid_size)
     K = cfg.eval_steps
     tgt_traj = pdes.rollout_trajectory(spec, x0, K)            # (K,B,H,W,C)
-    pred_traj = _emu_traj(model, params, x0, K, cfg.output_clip)
+    pred_traj = _emu_traj(model, params, x0, K, effective_clip(cfg))
     pred, target = pred_traj[-1], tgt_traj[-1]
 
     qs = {"t_q1": max(1, K // 4) - 1, "t_half": max(1, K // 2) - 1,

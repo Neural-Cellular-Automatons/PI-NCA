@@ -27,6 +27,12 @@ multi-channel NCA (16 state channels, 48 perception, 128 hidden) doing more work
 than our scalar conservative flux NCA, so the 2× gap is mostly model size, not framework
 overhead. The point stands regardless: **CAX gives no rollout speedup on a single CPU**.
 
+## Re-measurement (2026-07, after the training loop became a single `lax.scan`)
+`python -m pinca_jax.cax_eval` on the same CPU host: our `lax.scan` rollout **0.638 ms/step**
+vs CAX `ComplexSystem` **1.202 ms/step** — CAX is **1.88x slower**. Training now runs *all*
+epochs inside one jitted `lax.scan` (`harness.train_emulator`), so the rollout is already a
+single fused XLA program; CAX's `nnx.scan` cannot improve on that, it is the same mechanism.
+
 ## Decision
 - **Not integrated into the hot path.** Our `lax.scan` core is fully under our control,
   correctness-gated (36+ tests), and uses Flax `linen` consistently with the conservative
