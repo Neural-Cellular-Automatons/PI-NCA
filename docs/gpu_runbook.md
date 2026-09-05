@@ -306,3 +306,4 @@ cp -r ~/PI-NCA/docs/figures ~/PI-NCA/results /mnt/c/Users/<you>/Desktop/pinca_re
 | GPU sits near 0% util | small grids are launch-bound, not a bug | raise `--profile`; util is also low during pytest and plotting |
 | run died overnight | — | just run `bash run_gpu.sh` again; finished cells are skipped |
 | `orbax` path error on Windows install | MAX_PATH limit | see the note at the top of `requirements-jax.txt` |
+| `test_flux_nca_matches_torch_with_nonzero_head` fails only on GPU, passes on CPU | Ampere+ cards (RTX 30xx/40xx, A100...) default JAX conv/matmul to TF32, ~1e-3 less precise than float32 — enough to blow the 1e-5/1e-4 PyTorch-parity tolerance | already fixed: `conftest.py` sets `JAX_DEFAULT_MATMUL_PRECISION=highest` before jax is imported, forcing true float32 for the gate on any backend |

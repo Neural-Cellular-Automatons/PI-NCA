@@ -4,14 +4,15 @@ CAX (arXiv:2410.02651) provides nnx-based CA primitives (ConvPerceive + NCAUpdat
 and a `ComplexSystem` whose multi-step call wraps the step in `nnx.scan` + `nnx.jit`
 — structurally identical to our hand-written `jax.lax.scan` rollout. This script
 builds a CAX NCA and times its K-step rollout against our lax.scan rollout of a
-comparable Flax-linen NCA, to test whether CAX is faster on this CPU host.
+comparable Flax-linen NCA, to test whether CAX is faster on this host (CPU or GPU —
+whichever backend `jax.default_backend()` reports is what gets measured).
 """
 from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
 
-from . import metrics
+from . import env, metrics
 from .models.flux_nca import DeepFluxNCA
 
 
@@ -36,7 +37,8 @@ def build_cax_nca(channel_size=16, perception_size=48, hidden=(128,), seed=0):
 
 
 def main(grid=32, channel=16, steps=64, batch=8):
-    print(f"CAX vs lax.scan NCA rollout — grid {grid}, {steps} steps, batch {batch}, CPU")
+    backend = env.banner("cax_eval")
+    print(f"CAX vs lax.scan NCA rollout — grid {grid}, {steps} steps, batch {batch}, backend={backend}")
 
     # --- CAX path ---
     cax_ok = True
@@ -73,7 +75,8 @@ def main(grid=32, channel=16, steps=64, batch=8):
         print(f"  CAX ComplexSystem    : {cax_per_step*1e3:.3f} ms/step  ({cax_t*1e3:.1f} ms / {steps})")
         print(f"  ratio (CAX/ours)     : {cax_per_step/ours_per_step:.2f}x")
     return {"ours_ms_per_step": ours_per_step * 1e3,
-            "cax_ms_per_step": (cax_per_step * 1e3) if cax_ok else None}
+            "cax_ms_per_step": (cax_per_step * 1e3) if cax_ok else None,
+            "backend": backend}
 
 
 if __name__ == "__main__":

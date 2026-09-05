@@ -16,8 +16,16 @@
 jax[cuda12]==0.11.1
 flax==0.12.9
 optax==0.2.8
-cax==0.4.3
 pillow
+
+# cax==0.4.3 is deliberately NOT installed here. It was evaluated as an accelerator
+# for the NCA rollout (see docs/cax_evaluation.md) and found to give no speedup on
+# either CPU or GPU — both it and our jax.lax.scan core compile to the same XLA scan,
+# and the CAX reference model in cax_eval.py is simply bigger (more channels, plus a
+# Growing-NCA alive-mask the pipeline doesn't use). It was never on the pipeline's hot
+# path; this just stops installing the dead weight for a real GPU run.
+# `pip install cax==0.4.3` only if re-running `python -m pinca_jax.cax_eval` yourself
+# — it degrades gracefully (prints "CAX path error" and skips) without it.
 
 # Reference implementation for the migration-correctness gate only — never used in
 # the benchmarks themselves, so the CPU build is the right one and saves ~3 GB of
