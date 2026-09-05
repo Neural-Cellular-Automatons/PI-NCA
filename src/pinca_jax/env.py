@@ -76,31 +76,3 @@ def configure_memory():
     import os
     os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
     os.environ.setdefault("XLA_PYTHON_CLIENT_ALLOCATOR", "platform")
-
-
-def configure_compilation_cache():
-    """Turn on JAX's persistent compilation cache, if the caller has not.
-
-    `runner.py` runs every stage as a fresh subprocess (deliberately, to hand device
-    memory all the way back between stages — see runner.py's Run class), and a crash
-    or `--force` re-runs stages from scratch. Without a cache directory, JAX's
-    compilation cache is in-process only (`jax_enable_compilation_cache` defaults to
-    True but has nowhere to persist to), so every one of those fresh processes
-    re-lowers and re-optimizes every XLA program it needs, even ones an earlier
-    process already compiled for the same (model, shape) pair. Pointing the cache at
-    disk means a resumed run, or a `bench2d`/`bench3d` re-run after `--force`, reuses
-    those compiled programs instead of paying compile time again. Compiled artifacts
-    are backend/version-specific and not benchmark output, so they live under the
-    user's cache home, not in the repo.
-    """
-    import os
-    cache_dir = os.environ.get("JAX_COMPILATION_CACHE_DIR") or os.path.join(
-        os.path.expanduser(os.environ.get("XDG_CACHE_HOME", "~/.cache")), "pinca_jax", "jax_cache")
-    os.makedirs(cache_dir, exist_ok=True)
-    os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", cache_dir)
-    # `jax` reads the env var into its config default at import time, so setting the
-    # env var alone only reaches processes that import jax *after* this call (i.e.
-    # subprocesses spawned later, via inherited env) — it's a no-op for `jax` already
-    # imported in this process (e.g. by an earlier `from . import bench`). Calling
-    # jax.config.update directly makes this work regardless of call order too.
-    jax.config.update("jax_compilation_cache_dir", cache_dir)

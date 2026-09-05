@@ -19,12 +19,6 @@ cd "$(dirname "$0")"
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_PYTHON_CLIENT_ALLOCATOR=platform
 
-# Persist compiled XLA programs to disk. Each stage below runs as its own subprocess
-# (see runner.py), so without this every stage re-compiles from a cold cache; a
-# crash-resume or a --force re-run then reuses what an earlier process already built.
-export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/pinca_jax/jax_cache}"
-mkdir -p "$JAX_COMPILATION_CACHE_DIR"
-
 # Opt-in determinism. It costs speed, and the XLA flag name has moved between
 # releases, so it is off unless asked for:  DETERMINISTIC=1 bash run_gpu.sh
 if [ "${DETERMINISTIC:-0}" = "1" ]; then

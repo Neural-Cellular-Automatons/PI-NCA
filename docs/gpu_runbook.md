@@ -212,8 +212,26 @@ It picks up where it stopped. Add `--force` only if you want to recompute.
 VRAM up front, which makes every later allocation failure look like a hard OOM and
 leaves no headroom for `nvidia-smi`.
 
-JAX's compilation caches are cleared between cells, so peak memory tracks the largest
-single model rather than the whole sweep.
+JAX's compilation caches are cleared between cells (`bench.py:free_device_memory`), so
+peak memory tracks the largest single model rather than the whole sweep. That clearing
+also rules out a persistent on-disk compilation cache as a speedup: it was tried and
+measured — a warm cache still forces every one of the 184 matrix cells through a full
+disk round-trip on every re-compile, and at this project's model sizes that round-trip
+cost more than it saved (a full smoke run got **20% slower**, concentrated entirely in
+`bench2d`/`bench3d`, despite a 94% cache-hit rate). Reverted; not worth the added
+moving part.
+
+### The real free speedup: TF32 stays on for training, off for the gate
+
+Ampere+ GPUs (this includes the RTX 3050 this was verified on) default JAX's conv/matmul
+to TF32, which is faster than true float32 and imprecise enough to fail the correctness
+gate's tight PyTorch-parity tolerance (see the troubleshooting entry below) — that's why
+`conftest.py` forces full precision, but *only* for `pytest`. Every other stage
+(`bench_all`, `bench3d`, `capture`, the baselines, training in general) inherits JAX's
+GPU default and keeps using TF32, which is the right tradeoff here: the benchmarks judge
+a model's accuracy against the PDE solver's teacher trajectory at physically meaningful
+tolerances, not bit-parity with a CPU reference, so there's no correctness reason to give
+up the faster matmuls for the actual measurements.
 
 ---
 

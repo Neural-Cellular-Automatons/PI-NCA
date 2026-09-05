@@ -130,7 +130,6 @@ def main():
     args = ap.parse_args()
 
     env.configure_memory()
-    env.configure_compilation_cache()
     P = PROFILES[args.profile]
     # Fail here, before anything expensive, rather than three hours in.
     env.require_gpu("runner", allow_cpu=args.allow_cpu)
