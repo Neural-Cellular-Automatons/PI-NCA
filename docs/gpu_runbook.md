@@ -164,7 +164,7 @@ a second shell with `watch -n2 nvidia-smi`.
 ### Scale presets
 
 ```bash
-bash run_paper.sh --profile smoke   # minutes; every stage, tiny scale, meaningless numbers
+bash run_paper.sh --profile smoke   # ~20 min on CPU; every stage, tiny scale, meaningless
 bash run_paper.sh --profile bench   # measurements + plots, no field figures
 bash run_paper.sh                   # paper (default)
 bash run_paper.sh --profile full    # largest scale attempted; expect multiple days

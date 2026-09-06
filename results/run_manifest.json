@@ -2,64 +2,81 @@
   "results": {},
   "stages": [
     {
-      "stage": "headline: 2 seeds on heat,cahn_hilliard,navier_stokes",
-      "seconds": 963.9,
+      "stage": "baseline: PINN (heat)",
+      "seconds": 133.6,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.bench_all --group all --seeds 2 --epochs 40 --grid 16 --batch 8 --rollout 4 --eval 12 --pdes heat,cahn_hilliard,navier_stokes --tag headline --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.pinn_heat --grid 12 --steps 8 --iters 150"
     },
     {
-      "stage": "teacher error: what the distillation target itself gets wrong",
-      "seconds": 27.4,
+      "stage": "baseline: DeepONet (heat)",
+      "seconds": 1.7,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.teacher_error --grid 16 --steps 12 --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.deeponet_heat --seeds 1"
     },
     {
-      "stage": "OOD generalisation: heat",
-      "seconds": 322.6,
+      "stage": "baseline: Darcy (steady operator)",
+      "seconds": 38.9,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.ood --pde heat --grid 16 --epochs 40 --eval 12 --n-eval 8 --seeds 1 --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.darcy --seeds 1 --iters 60 --n-train 32"
     },
     {
-      "stage": "OOD generalisation: cahn_hilliard",
-      "seconds": 322.3,
+      "stage": "matched PINN vs emulator (same task, both cost structures)",
+      "seconds": 40.0,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.ood --pde cahn_hilliard --grid 16 --epochs 40 --eval 12 --n-eval 8 --seeds 1 --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.matched --pde heat --k 4 --grid 12 --steps 8 --epochs 25 --pinn-iters 150 --allow-cpu"
     },
     {
-      "stage": "OOD generalisation: navier_stokes",
-      "seconds": 319.3,
+      "stage": "claims audit: prose vs measured inventory",
+      "seconds": 0.2,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.ood --pde navier_stokes --grid 16 --epochs 40 --eval 12 --n-eval 8 --seeds 1 --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.claims"
     },
     {
-      "stage": "stability stress (guard OFF): heat",
-      "seconds": 303.6,
+      "stage": "bibliography: re-verify every citation against arXiv",
+      "seconds": 0.3,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.stability --pde heat --grid 16 --epochs 40 --eval 12 --n-ic 8 --seeds 1 --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.bib"
     },
     {
-      "stage": "stability stress (guard OFF): cahn_hilliard",
-      "seconds": 303.8,
+      "stage": "paper: regenerate every table and every quoted number",
+      "seconds": 3.8,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.stability --pde cahn_hilliard --grid 16 --epochs 40 --eval 12 --n-ic 8 --seeds 1 --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.paper"
     },
     {
-      "stage": "stability stress (guard OFF): navier_stokes",
-      "seconds": 351.0,
+      "stage": "architecture diagrams",
+      "seconds": 1.8,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.stability --pde navier_stokes --grid 16 --epochs 40 --eval 12 --n-ic 8 --seeds 1 --allow-cpu"
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.arch_figs"
+    },
+    {
+      "stage": "report: regenerate Markdown from results",
+      "seconds": 1.7,
+      "rc": 0,
+      "ok": true,
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.report"
+    },
+    {
+      "stage": "report: render PDF",
+      "seconds": 0.1,
+      "rc": 0,
+      "ok": true,
+      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.md2pdf C:\\Users\\tharu\\OneDrive\\Desktop\\PI-NCA\\docs\\PI-NCA_Architectures_and_Results.md"
     }
   ],
-  "total_seconds": 2913.9,
+  "total_seconds": 222.1,
   "failures": [],
+  "skipped": [
+    "pdf (no LaTeX toolchain)"
+  ],
   "device": {
     "tag": "runner",
     "jax": "0.10.1",

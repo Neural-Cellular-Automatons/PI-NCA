@@ -9,3 +9,7 @@ results/**/*.gif
 results/**/*.npz
 results/**/*.png
 *.zip
+
+# unattended-run log; regenerated on every run and appended to across resumes
+run_paper.log
+run_gpu.log

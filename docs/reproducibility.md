@@ -21,8 +21,8 @@ stages are skipped when their outputs already exist, so re-running the same comm
 continues rather than restarting. `--force` recomputes; `--list-stages` prints the names
 `--only` and `--skip` accept.
 
-A minutes-long wiring check that touches every stage and every phenomenon and whose
-numbers are meaningless by design:
+A wiring check that touches every stage and every phenomenon and whose numbers are
+meaningless by design (~20 minutes on a laptop CPU, a few on a GPU):
 
 ```bash
 bash run_paper.sh --profile smoke --allow-cpu

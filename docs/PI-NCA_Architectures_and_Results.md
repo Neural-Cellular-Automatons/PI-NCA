@@ -122,10 +122,10 @@ a difference in results can be attributed to one component.
 | `fno_small` | iso-parameter FNO (~NCA budget) — A2 ablation: spectral mixing vs param count | — |
 | `mc_flux_nca` | multi-channel per-field conservative flux NCA (SWE/FHN/GS) | — |
 | `resnet` | autoregressive residual CNN, circular pad (~7.4e4 params) | — |
-| `resnet_iso` | iso-parameter CNN control (~5.4e3, matched to the NCA budget) | — |
+| `resnet_iso` | iso-parameter CNN control (~5.4e3, matched to the NCA budget) | 5 364 |
 | `unet` | multi-resolution U-Net emulator (~2.7e5 params) | — |
 | `unet_iso` | iso-parameter U-Net control (~7.5e3, matched to the NCA budget) | — |
-| `identity` | do-nothing floor g(x)=x -- any model above this learned worse than nothing | — |
+| `identity` | do-nothing floor g(x)=x -- any model above this learned worse than nothing | 1 |
 | `bounded_cons_nca` | flux NCA + clip + mass re-projection (bounded AND conserving) | — |
 | `spectral_flux_nca` | local conservative flux + global FNO spectral correction | 134 225 |
 | `multiscale_flux_nca` | dilated multi-scale perception + conservative flux | 5 520 |
@@ -358,10 +358,10 @@ to the solution — so unlike a PINN it generalises across initial conditions.
 | Advection-diffusion | 0.018 | — | — | — | fno 0.007 |
 | Allen-Cahn | 0.053 | — | — | — | fno 0.007 |
 | Nagumo | 0.376 | — | — | — | plain_nca 0.073 |
-| Wave | — | — | — | — | plain_nca 0.052 |
+| Wave | — | — | — | — | pi_nca 0.042 |
 | Cahn-Hilliard | 0.088 | 0.083 | 0.088 | 0.046 | fno 0.051 |
-| Gray-Scott | — | — | — | — | fno 0.674 |
-| Shallow-water | — | — | — | — | fno 0.024 |
+| Gray-Scott | — | — | — | — | pi_nca 0.410 |
+| Shallow-water | — | — | — | — | pi_nca 0.013 |
 | FitzHugh-Nagumo | — | — | — | — | plain_nca 0.125 |
 | Navier-Stokes | — | — | — | — | pi_nca 0.192 |
 
@@ -383,23 +383,25 @@ Every table in this section is **generated from `results/*.json`** by
 architectures from the one the benchmarks actually ran. A dash means that cell has not
 been measured yet; re-run `bash run_gpu.sh` and regenerate to fill it in.
 
-Measured on **cpu** (`cpu:0`), JAX 0.10.1, grid 16, batch 8, 150 epochs, train horizon 6 / eval horizon 12, 2 seeds.
+Measured on **cpu** (`cpu:0`), JAX 0.10.1, grid 12, batch 4, 25 epochs, train horizon 3 / eval horizon 8, 1 seed.
 
-Total run time **0.81 h**. Peak device memory 0 MB.
+Total run time **0.68 h**. Peak device memory 0 MB.
+
+Single fixed seed (42), so no ± is shown; the protocol is the originals' He-init + zero-init heads + LR warm-up + pre-seeding.
 
 ### 6.1 The regime map — which architecture wins where
 
 | PDE | Character | Winner | rel-L2 | Runner-up | Models compared |
 |---|---|---|---|---|---|
-| Heat | smooth, local, conservative | **spectral_flux_nca** | 0.006 | fno 0.021 | 5 |
-| Advection-diffusion | linear transport, conservative | **fno** | 0.007 | pi_nca 0.012 | 4 |
-| Allen-Cahn | non-conservative phase separation | **fno** | 0.007 | plain_nca 0.049 | 4 |
-| Nagumo | non-conservative bistable | **plain_nca** | 0.073 | fno 0.081 | 4 |
-| Wave | 2nd-order hyperbolic | **plain_nca** | 0.052 | mc_flux_nca 0.056 | 3 |
+| Heat | smooth, local, conservative | **spectral_flux_nca** | 0.006 | fno 0.021 | 7 |
+| Advection-diffusion | linear transport, conservative | **fno** | 0.007 | pi_nca 0.012 | 6 |
+| Allen-Cahn | non-conservative phase separation | **fno** | 0.007 | resnet_iso 0.026 | 6 |
+| Nagumo | non-conservative bistable | **resnet_iso** | 0.022 | plain_nca 0.073 | 6 |
+| Wave | 2nd-order hyperbolic | **pi_nca** | 0.042 | resnet_iso 0.048 | 6 |
 | Cahn-Hilliard | stiff 4th-order, bounded | **resnet** | 0.044 | spectral_flux_nca 0.046 | 14 |
-| Gray-Scott | reaction-diffusion patterns | **fno** | 0.674 | mc_flux_nca 0.692 | 3 |
-| Shallow-water | conservative, multi-field | **mc_flux_nca** | 0.016 | fno 0.024 | 3 |
-| FitzHugh-Nagumo | non-conservative reaction | **plain_nca** | 0.125 | fno 0.199 | 3 |
+| Gray-Scott | reaction-diffusion patterns | **resnet_iso** | 0.213 | identity 0.389 | 6 |
+| Shallow-water | conservative, multi-field | **pi_nca** | 0.013 | mc_flux_nca 0.016 | 6 |
+| FitzHugh-Nagumo | non-conservative reaction | **plain_nca** | 0.125 | fno 0.199 | 6 |
 | Navier-Stokes | globally coupled | **resnet_iso** | 0.190 | pi_nca 0.192 | 4 |
 
 *Figure: `docs/figures/bench/bench_regime_map.png`*
@@ -408,50 +410,61 @@ Total run time **0.81 h**. Peak device memory 0 MB.
 
 Every architecture on every phenomenon, same list throughout.
 
-**Heat** — smooth, local, conservative, C=1, grid 24, eval 48 steps
+**Heat** — smooth, local, conservative, C=1, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
 | **spectral_flux_nca** | **6.365e-03** | 55.56 | 1.728e-03 | 134 225 | 2.424e-03 |
 | fno | 2.102e-02 | 45.19 | 9.846e+00 | 592 897 | 4.667e-03 |
 | multiscale_flux_nca | 2.749e-02 | 42.85 | 1.850e-03 | 5 520 | 8.546e-04 |
-| pi_nca | 3.100e-02 | 41.81 | **3.128e-04** | **4 576** | 5.981e-04 |
+| pi_nca | 3.100e-02 | 41.81 | **3.128e-04** | 4 576 | 5.981e-04 |
+| resnet_iso | 2.239e-01 | 26.27 | 8.920e+00 | 5 364 | 8.898e-04 |
 | plain_nca | 2.242e-01 | 24.63 | 3.972e+01 | 6 784 | 9.823e-04 |
+| identity | 3.608e-01 | 22.13 | 1.140e+00 | **1** | 8.850e-06 |
 
-**Advection-diffusion** — linear transport, conservative, C=1, grid 24, eval 48 steps
+**Advection-diffusion** — linear transport, conservative, C=1, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
 | **fno** | **6.575e-03** | 57.16 | 1.202e+00 | 592 897 | 1.001e-02 |
-| pi_nca | 1.231e-02 | 51.71 | **3.891e-04** | **4 576** | 6.815e-04 |
+| pi_nca | 1.231e-02 | 51.71 | **3.891e-04** | 4 576 | 6.815e-04 |
 | multiscale_flux_nca | 1.816e-02 | 48.34 | 1.595e-03 | 5 520 | 1.038e-03 |
 | plain_nca | 2.220e-02 | 46.59 | 9.508e+00 | 6 784 | 1.291e-03 |
+| resnet_iso | 7.185e-02 | 38.19 | 6.014e+00 | 5 364 | 1.229e-03 |
+| identity | 1.351e-01 | 32.71 | 7.451e-01 | **1** | 5.900e-06 |
 
-**Allen-Cahn** — non-conservative phase separation, C=1, grid 24, eval 48 steps
+**Allen-Cahn** — non-conservative phase separation, C=1, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
 | **fno** | **6.848e-03** | 49.50 | 7.072e-01 | 592 897 | 4.226e-03 |
+| resnet_iso | 2.642e-02 | 38.18 | 4.385e-01 | 5 364 | 1.014e-03 |
+| identity | 2.663e-02 | 38.11 | **0.000e+00** | **1** | 7.700e-06 |
 | plain_nca | 4.907e-02 | 32.39 | 2.547e-01 | 6 784 | 6.710e-04 |
-| pi_nca | 4.922e-02 | 32.36 | **1.431e-05** | **4 576** | 8.806e-04 |
+| pi_nca | 4.922e-02 | 32.36 | 1.431e-05 | 4 576 | 8.806e-04 |
 | multiscale_flux_nca | 5.274e-02 | 31.76 | 8.100e-05 | 5 520 | 7.864e-04 |
 
-**Nagumo** — non-conservative bistable, C=1, grid 24, eval 48 steps
+**Nagumo** — non-conservative bistable, C=1, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **plain_nca** | **7.333e-02** | 22.44 | 1.930e+02 | 6 784 | 6.538e-04 |
+| **resnet_iso** | **2.204e-02** | 34.90 | 7.270e+00 | 5 364 | 8.552e-04 |
+| plain_nca | 7.333e-02 | 22.44 | 1.930e+02 | 6 784 | 6.538e-04 |
+| identity | 8.043e-02 | 23.66 | **0.000e+00** | **1** | 1.350e-05 |
 | fno | 8.068e-02 | 21.61 | 1.392e+02 | 592 897 | 5.983e-03 |
 | multiscale_flux_nca | 3.763e-01 | 8.24 | 6.828e-04 | 5 520 | 1.391e-03 |
-| pi_nca | 3.768e-01 | 8.22 | **1.106e-04** | **4 576** | 7.949e-04 |
+| pi_nca | 3.768e-01 | 8.22 | 1.106e-04 | 4 576 | 7.949e-04 |
 
-**Wave** — 2nd-order hyperbolic, C=2, grid 24, eval 48 steps
+**Wave** — 2nd-order hyperbolic, C=2, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **plain_nca** | **5.205e-02** | 41.53 | 5.636e+00 | **7 264** | 1.480e-03 |
+| **pi_nca** | **4.243e-02** | 45.33 | 2.147e-01 | 4 928 | 2.913e-04 |
+| resnet_iso | 4.840e-02 | 44.19 | 3.686e+00 | 5 484 | 8.297e-04 |
+| plain_nca | 5.205e-02 | 41.53 | 5.636e+00 | 7 264 | 1.480e-03 |
 | mc_flux_nca | 5.571e-02 | 40.94 | **1.373e-04** | 10 464 | 2.564e-03 |
 | fno | 5.650e-02 | 40.81 | 5.188e-01 | 592 946 | 4.585e-03 |
+| identity | 7.550e-02 | 40.33 | 2.276e-01 | **1** | 1.175e-05 |
 
 **Cahn-Hilliard** — stiff 4th-order, bounded, C=1, grid 16, eval 12 steps
 
@@ -472,29 +485,38 @@ Every architecture on every phenomenon, same list throughout.
 | unet_iso | 1.632e-01 ± 3.003e-03 | 30.80 | 3.571e-01 | 7 464 | 1.460e-03 |
 | identity | 4.104e-01 ± 7.468e-03 | 22.79 | **0.000e+00** | **1** | 1.185e-05 |
 
-**Gray-Scott** — reaction-diffusion patterns, C=2, grid 24, eval 48 steps
+**Gray-Scott** — reaction-diffusion patterns, C=2, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **fno** | **6.741e-01** | 10.11 | 1.729e+02 | 592 946 | 8.026e-03 |
-| mc_flux_nca | 6.916e-01 | 9.89 | **1.450e-04** | 10 464 | 1.317e-03 |
-| plain_nca | 1.762e+00 | 1.77 | 1.113e+02 | **7 264** | 1.009e-03 |
+| **resnet_iso** | **2.127e-01** | 19.90 | 1.749e+01 | 5 484 | 9.527e-04 |
+| identity | 3.889e-01 | 14.65 | **0.000e+00** | **1** | 7.350e-06 |
+| pi_nca | 4.103e-01 | 14.19 | 1.831e-04 | 4 928 | 3.290e-04 |
+| fno | 6.741e-01 | 10.11 | 1.729e+02 | 592 946 | 8.026e-03 |
+| mc_flux_nca | 6.916e-01 | 9.89 | 1.450e-04 | 10 464 | 1.317e-03 |
+| plain_nca | 1.762e+00 | 1.77 | 1.113e+02 | 7 264 | 1.009e-03 |
 
-**Shallow-water** — conservative, multi-field, C=3, grid 24, eval 48 steps
+**Shallow-water** — conservative, multi-field, C=3, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **mc_flux_nca** | **1.613e-02** | 44.14 | **1.373e-04** | 10 992 | 1.456e-03 |
+| **pi_nca** | **1.252e-02** | 46.34 | 4.768e-05 | 5 280 | 3.326e-04 |
+| mc_flux_nca | 1.613e-02 | 44.14 | 1.373e-04 | 10 992 | 1.456e-03 |
+| resnet_iso | 1.991e-02 | 42.31 | 6.059e-01 | 5 604 | 8.371e-04 |
 | fno | 2.445e-02 | 40.53 | 2.140e+00 | 592 995 | 1.016e-02 |
-| plain_nca | 2.618e-02 | 39.93 | 9.869e+00 | **7 744** | 1.185e-03 |
+| plain_nca | 2.618e-02 | 39.93 | 9.869e+00 | 7 744 | 1.185e-03 |
+| identity | 2.918e-02 | 38.99 | **0.000e+00** | **1** | 1.370e-05 |
 
-**FitzHugh-Nagumo** — non-conservative reaction, C=2, grid 24, eval 48 steps
+**FitzHugh-Nagumo** — non-conservative reaction, C=2, grid 12, eval 8 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **plain_nca** | **1.247e-01** | 26.48 | 9.217e+01 | **7 264** | 2.270e-03 |
+| **plain_nca** | **1.247e-01** | 26.48 | 9.217e+01 | 7 264 | 2.270e-03 |
 | fno | 1.986e-01 | 22.44 | 8.621e+01 | 592 946 | 1.051e-02 |
-| mc_flux_nca | 9.986e-01 | 8.41 | **1.668e-06** | 10 464 | 1.097e-03 |
+| pi_nca | 9.121e-01 | 17.41 | 3.874e-07 | 4 928 | 2.644e-04 |
+| resnet_iso | 9.709e-01 | 16.87 | 1.260e+00 | 5 484 | 1.419e-03 |
+| mc_flux_nca | 9.986e-01 | 8.41 | 1.668e-06 | 10 464 | 1.097e-03 |
+| identity | 1.045e+00 | 16.23 | **0.000e+00** | **1** | 7.500e-06 |
 
 **Navier-Stokes** — globally coupled, C=1, grid 16, eval 12 steps
 
@@ -535,67 +557,89 @@ Cost of accuracy on heat, as rel-L2 x parameters (lower is better). This is wher
 
 | Model | rel-L2 | Params | rel-L2 x params | vs best |
 |---|---|---|---|---|
-| **pi_nca** | 0.031 | 4 576 | 1.419e+02 | 1x |
-| multiscale_flux_nca | 0.027 | 5 520 | 1.518e+02 | 1x |
-| spectral_flux_nca | 0.006 | 134 225 | 8.544e+02 | 6x |
-| plain_nca | 0.224 | 6 784 | 1.521e+03 | 11x |
-| fno | 0.021 | 592 897 | 1.246e+04 | 88x |
+| **identity** | 0.361 | 1 | 3.608e-01 | 1x |
+| pi_nca | 0.031 | 4 576 | 1.419e+02 | 393x |
+| multiscale_flux_nca | 0.027 | 5 520 | 1.518e+02 | 421x |
+| spectral_flux_nca | 0.006 | 134 225 | 8.544e+02 | 2368x |
+| resnet_iso | 0.224 | 5 364 | 1.201e+03 | 3328x |
+| plain_nca | 0.224 | 6 784 | 1.521e+03 | 4215x |
+| fno | 0.021 | 592 897 | 1.246e+04 | 34541x |
 
 *Figure: `docs/figures/bench/bench_accuracy_vs_cost.png`*
 
 ### 6.5 The full 3-D matrix
 
-**Advection-diffusion** — 16³
+**Advection-diffusion** — 8³
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
 |---|---|---|---|---|
-| **fno** | **0.008** | 62.13 | 4.050e+00 | 747 157 |
-| pi_nca | 0.014 | 57.71 | 1.404e-03 | 3 200 |
-| multiscale_flux_nca | 0.022 | 53.89 | **1.282e-03** | 3 936 |
-| plain_nca | 0.029 | 51.38 | 2.771e+01 | 3 072 |
+| **pi_nca** | **0.186** | 31.59 | 3.433e-05 | 3 200 |
+| bounded_cons_nca | 0.186 | 31.59 | 8.011e-05 | 3 200 |
+| mc_flux_nca | 0.218 | 30.19 | **1.907e-05** | 6 336 |
+| multiscale_flux_nca | 0.224 | 29.97 | 1.221e-04 | 3 936 |
+| bounded_multiscale_nca | 0.224 | 29.97 | 1.221e-04 | 3 936 |
+| plain_nca | 0.235 | 29.57 | 1.056e+01 | 3 072 |
+| fno | 0.300 | 27.43 | 4.549e+00 | 277 141 |
 
-**Allen-Cahn** — 16³
-
-| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
-|---|---|---|---|---|
-| **fno** | **0.012** | 44.82 | 1.381e+01 | 747 157 |
-| pi_nca | 0.044 | 33.43 | **1.206e-04** | 3 200 |
-| plain_nca | 0.045 | 33.32 | 3.528e+00 | 3 072 |
-| multiscale_flux_nca | 0.046 | 33.17 | 1.655e-04 | 3 936 |
-
-**FitzHugh-Nagumo** — 16³
+**Allen-Cahn** — 8³
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
 |---|---|---|---|---|
-| **fno** | **0.163** | 25.40 | 4.127e+02 | 747 182 |
-| mc_flux_nca | 0.987 | 9.75 | **3.695e-06** | 7 920 |
-| plain_nca | 1.153 | 8.40 | 6.336e+02 | 4 000 |
+| **fno** | **0.042** | 33.78 | 6.084e-01 | 277 141 |
+| multiscale_flux_nca | 0.077 | 28.56 | 5.722e-06 | 3 936 |
+| bounded_multiscale_nca | 0.077 | 28.56 | 5.722e-06 | 3 936 |
+| plain_nca | 0.079 | 28.39 | 2.683e+01 | 3 072 |
+| mc_flux_nca | 0.092 | 27.01 | **3.338e-06** | 6 336 |
+| bounded_cons_nca | 0.098 | 26.50 | 7.391e-06 | 3 200 |
+| pi_nca | 0.098 | 26.49 | 4.172e-06 | 3 200 |
 
-**Gray-Scott** — 16³
-
-| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
-|---|---|---|---|---|
-| **plain_nca** | **0.418** | 16.21 | 3.616e+02 | 4 000 |
-| fno | 0.448 | 15.60 | 2.801e+02 | 747 182 |
-| mc_flux_nca | 1.087 | 7.90 | **1.221e-03** | 7 920 |
-
-**Heat** — 16³
+**FitzHugh-Nagumo** — 8³
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
 |---|---|---|---|---|
-| **pi_nca** | **0.047** | 44.15 | 1.801e-03 | 3 200 |
-| multiscale_flux_nca | 0.052 | 43.19 | **1.770e-03** | 3 936 |
-| fno | 0.056 | 42.50 | 1.452e+02 | 747 157 |
-| plain_nca | 0.111 | 36.65 | 5.041e+01 | 3 072 |
+| **fno** | **0.950** | 9.44 | 7.206e+01 | 277 166 |
+| mc_flux_nca | 1.121 | 8.01 | 1.967e-06 | 7 920 |
+| pi_nca | 1.275 | 6.89 | **1.818e-06** | 4 256 |
+| bounded_cons_nca | 1.275 | 6.89 | 3.874e-06 | 4 256 |
+| multiscale_flux_nca | 1.310 | 6.65 | 4.947e-06 | 5 208 |
+| bounded_multiscale_nca | 1.310 | 6.65 | 4.947e-06 | 5 208 |
+| plain_nca | 1.864 | 3.59 | 1.574e+02 | 4 000 |
 
-**Nagumo** — 16³
+**Gray-Scott** — 8³
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
 |---|---|---|---|---|
-| **plain_nca** | **0.041** | 28.34 | 4.643e+02 | 3 072 |
-| fno | 0.063 | 24.61 | 4.040e+02 | 747 157 |
-| pi_nca | 0.197 | 14.62 | **6.409e-04** | 3 200 |
-| multiscale_flux_nca | 0.198 | 14.61 | 1.251e-03 | 3 936 |
+| **fno** | **0.345** | 17.18 | 4.596e+00 | 277 166 |
+| plain_nca | 0.408 | 15.73 | 6.951e+01 | 4 000 |
+| bounded_multiscale_nca | 0.630 | 11.95 | 1.221e-03 | 5 208 |
+| multiscale_flux_nca | 0.654 | 11.62 | 3.357e-04 | 5 208 |
+| bounded_cons_nca | 0.654 | 11.62 | 2.121e-03 | 4 256 |
+| mc_flux_nca | 0.680 | 11.28 | **3.052e-05** | 7 920 |
+| pi_nca | 0.709 | 10.93 | 5.341e-05 | 4 256 |
+
+**Heat** — 8³
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
+|---|---|---|---|---|
+| **mc_flux_nca** | **1.155** | 8.06 | 4.578e-05 | 6 336 |
+| plain_nca | 1.286 | 7.13 | 4.975e+01 | 3 072 |
+| fno | 1.403 | 6.37 | 5.786e+00 | 277 141 |
+| bounded_cons_nca | 1.427 | 6.22 | 1.945e-04 | 3 200 |
+| pi_nca | 1.687 | 4.77 | **1.526e-05** | 3 200 |
+| bounded_multiscale_nca | 2.186 | 2.52 | 4.463e-04 | 3 936 |
+| multiscale_flux_nca | 3.541 | -1.67 | 1.221e-04 | 3 936 |
+
+**Nagumo** — 8³
+
+| Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ |
+|---|---|---|---|---|
+| **mc_flux_nca** | **0.214** | 13.97 | 9.918e-05 | 6 336 |
+| bounded_cons_nca | 0.217 | 13.85 | 9.155e-05 | 3 200 |
+| pi_nca | 0.217 | 13.85 | **3.815e-05** | 3 200 |
+| plain_nca | 0.226 | 13.51 | 3.437e+01 | 3 072 |
+| multiscale_flux_nca | 0.228 | 13.42 | 1.602e-04 | 3 936 |
+| bounded_multiscale_nca | 0.228 | 13.42 | 1.602e-04 | 3 936 |
+| fno | 0.262 | 12.21 | 8.006e+01 | 277 141 |
 
 *Figure: `docs/figures/bench/bench_accuracy_3d.png`*
 

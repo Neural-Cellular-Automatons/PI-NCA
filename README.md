@@ -53,8 +53,8 @@ python -m pytest tests/ -q                      # correctness gate; must be gree
 fresh clone runs without it. `bash setup_gpu.sh` does the whole setup; see
 [docs/gpu_runbook.md](docs/gpu_runbook.md).
 
-A minutes-long wiring check that touches every stage and every phenomenon, whose numbers
-are meaningless by design:
+A wiring check that touches every stage and every phenomenon, whose numbers are
+meaningless by design (~20 minutes on a laptop CPU, a few on a GPU):
 
 ```bash
 bash run_paper.sh --profile smoke --allow-cpu

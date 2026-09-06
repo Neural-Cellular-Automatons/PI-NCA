@@ -91,8 +91,8 @@ SCALING_ARCHS = "plain_nca,pi_nca,multiscale_flux_nca,fno,resnet_iso,identity"
 
 # grid / batch / epochs per scale preset.
 PROFILES = {
-    # Minutes end to end: proves every stage wires up. The numbers are meaningless and
-    # every driver says so in its own output.
+    # Roughly twenty minutes on a laptop CPU, a few on a GPU: proves every stage wires
+    # up. The numbers are meaningless and every driver says so in its own output.
     "smoke": dict(seeds=1, epochs=25, grid=12, batch=4, rollout=3, eval=8,
                   grid3d=8, epochs3d=15, batch3d=2, res_epochs=15,
                   viz_grid=12, viz_epochs=25, viz3d_grid=8, viz3d_epochs=15, max_mb=8,

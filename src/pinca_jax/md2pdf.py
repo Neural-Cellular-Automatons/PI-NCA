@@ -16,14 +16,25 @@ import html
 import os
 import re
 
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import (BaseDocTemplate, Frame, Image, KeepTogether, PageBreak,
-                                PageTemplate, Paragraph, Spacer, Table, TableStyle)
-from reportlab.platypus.flowables import HRFlowable
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (BaseDocTemplate, Frame, Image, KeepTogether,
+                                    PageBreak, PageTemplate, Paragraph, Spacer, Table,
+                                    TableStyle)
+    from reportlab.platypus.flowables import HRFlowable
+except ImportError:                                   # optional: only this module needs it
+    # Rendering the report to PDF is a convenience, not a result. A missing optional
+    # dependency should print one line at the end of a long unattended run, not a
+    # traceback that looks like the run went wrong.
+    import sys
+    print("[md2pdf] reportlab is not installed, so the PDF was not rendered.\n"
+          "         The Markdown report itself is already written and is the source of\n"
+          "         truth; install with:  pip install reportlab")
+    sys.exit(0)
 
 ACCENT = colors.HexColor("#2C6EA8")
 INK = colors.HexColor("#1B1B22")
