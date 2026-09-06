@@ -288,6 +288,67 @@ def table_matched(pde="heat"):
     return "\n".join(lines) + "\n"
 
 
+def table_efficiency(pde="heat", tag="headline"):
+    """Accuracy grouped by parameter budget class, not across it.
+
+    Comparing a 5.9e5-parameter spectral operator with a 5e3-parameter cellular automaton
+    and calling the difference an architecture result is the standard way to smuggle a
+    capacity result into an inductive-bias claim. Grouping by budget makes the two
+    questions separable: within a class the comparison is about the prior, and across
+    classes the table reports what the extra parameters actually bought.
+    """
+    from .models import registry as _reg
+    d = load(f"bench_{pde}_{tag}") or load(f"bench_{pde}_full")
+    ok, _ = _rows(d)
+    if not ok:
+        return _missing(f"efficiency table on {pde}",
+                        "python -m pinca_jax.bench_all --group all --seeds 5")
+    order = {"floor": 0, "small": 1, "medium": 2, "large": 3}
+    rows = sorted(ok, key=lambda a: (order.get(_reg.BUDGET_CLASS.get(a, "small"), 9),
+                                     _summary(ok[a]).mean))
+    lines, seen = [], None
+    for a in rows:
+        cls = _reg.BUDGET_CLASS.get(a, "small")
+        if cls != seen:
+            lines.append("\\multicolumn{6}{l}{\\emph{" + tex(cls) +
+                         " budget}} \\\\")
+            seen = cls
+        s = _summary(ok[a])
+        lines.append(
+            f"\\quad {label(a)} & {int(_mean(ok[a], 'params', 0))} & {num(s.mean)} & "
+            f"{ci(s)} & {num(_mean(ok[a], 'train_wall_s'), '.0f')} & "
+            f"{num(_mean(ok[a], 'infer_s_per_step') * 1e3, '.3f')} \\\\")
+    return "\n".join(lines) + "\n"
+
+
+def table_scaling(pde="heat"):
+    """Rank stability along grid, horizon and training budget -- the whole tabular.
+
+    The interesting quantity is not the errors, it is Kendall's tau between the ordering
+    at the smallest and largest setting on each axis. A tau below 1 means the paper's
+    ranking is conditional on its operating point and must be quoted with it.
+    """
+    d = load(f"scaling_{pde}")
+    if not d:
+        return ("\\begin{tabular}{l}\n\\toprule\nAxis \\\\\n\\midrule\n"
+                + _missing(f"scaling study on {pde}",
+                           f"python -m pinca_jax.scaling --pde {pde}")
+                + "\\bottomrule\n\\end{tabular}\n")
+    L = ["\\begin{tabular}{lllcl}", "\\toprule",
+         "Axis & Swept & Best at each end & Kendall $\\tau$ & Verdict \\\\", "\\midrule"]
+    for axis, b in d["results"].items():
+        st = b["stability"]
+        lo, hi = st.get("order_small", []), st.get("order_large", [])
+        ends = (f"{label(lo[0])} $\\to$ {label(hi[0])}") if lo and hi else "--"
+        tau = st.get("tau", float("nan"))
+        verdict = ("stable" if st.get("stable")
+                   else "\\textbf{ordering changes}")
+        L.append(f"{tex(axis)} & {tex(st.get('from'))}--{tex(st.get('to'))} & {ends} & "
+                 f"{num(tau, '.2f')} & {verdict} \\\\")
+    L += ["\\bottomrule", "\\end{tabular}"]
+    return "\n".join(L) + "\n"
+
+
 def table_3d(tag=None):
     lines = []
     for pde in sorted(PDE_LABEL):
@@ -352,6 +413,12 @@ def facts() -> dict:
         f["matchedPinnErr"] = f"{m['pinn']['summary']['mean']:.3g}"
         sp = (m["emulator"]["infer_wall_s"] / m["k"]) / max(m["solver"]["s_per_ic"], 1e-12)
         f["matchedSolverSpeedup"] = f"{sp:.0f}"
+    sc = load("scaling_heat")
+    if sc:
+        unstable = [a for a, b in sc["results"].items()
+                    if not (b.get("stability") or {}).get("stable")]
+        f["scalingUnstableAxes"] = ", ".join(unstable) if unstable else "none"
+        f["scalingNunstable"] = len(unstable)
     st = load("stability_cahn_hilliard")
     if st:
         rs = st["results"]
@@ -413,6 +480,8 @@ def write_all(out=OUT):
         "tab_stability": table_stability(),
         "tab_teacher": table_teacher(),
         "tab_matched": table_matched(),
+        "tab_efficiency": table_efficiency("heat"),
+        "tab_scaling": table_scaling("heat"),
         "tab_3d": table_3d(),
     }
     for name, body in tables.items():

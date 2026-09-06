@@ -51,7 +51,8 @@ def inventory() -> dict:
            "seeds": {}, "grids": set(), "backends": set(), "failed_cells": [],
            "files": 0, "ood_pdes": set(), "stability_pdes": set(),
            "resolution_pdes": set(), "ablations": set(), "has_teacher_error": False,
-           "n_eval_ics": set(), "has_matched": False,
+           "n_eval_ics": set(), "has_matched": False, "scaling_pdes": set(),
+           "unstable_rank_axes": [],
            "teacher_all_converging": None, "teacher_not_converging": []}
     for path in sorted(glob.glob(os.path.join(RES, "*.json"))):
         d = _load(path)
@@ -76,6 +77,11 @@ def inventory() -> dict:
             inv["teacher_all_converging"] = not bad
         elif name.startswith("matched_"):
             inv["has_matched"] = True
+        elif name.startswith("scaling_"):
+            inv["scaling_pdes"].add(name[len("scaling_"):])
+            for axis, b in (d.get("results") or {}).items():
+                if not (b.get("stability") or {}).get("stable"):
+                    inv["unstable_rank_axes"].append(f"{name[len('scaling_'):]}/{axis}")
         elif name.startswith("ood_"):
             inv["ood_pdes"].add(name[4:])
         elif name.startswith("stability_"):
@@ -98,7 +104,8 @@ def inventory() -> dict:
         if d.get("seeds"):
             inv["seeds"][name] = list(d["seeds"])
     for k in ("pdes_2d", "pdes_3d", "archs_2d", "archs_3d", "grids", "backends",
-              "ood_pdes", "stability_pdes", "resolution_pdes", "ablations", "n_eval_ics"):
+              "ood_pdes", "stability_pdes", "resolution_pdes", "ablations",
+              "n_eval_ics", "scaling_pdes"):
         inv[k] = sorted(inv[k])
     inv["n_pdes_2d"] = len(inv["pdes_2d"])
     inv["n_pdes_3d"] = len(inv["pdes_3d"])
@@ -153,6 +160,9 @@ CLAIMS = [
      lambda i: i["teacher_all_converging"] if i["has_teacher_error"] else None),
     ("C14", "A matched PINN-vs-emulator comparison is reported with both cost structures.",
      lambda i: i["has_matched"] or None),
+    ("C15", "Headline rankings are stable under changes of grid, horizon and training "
+            "budget (otherwise they must be quoted with their operating point).",
+     lambda i: (not i["unstable_rank_axes"]) if i["scaling_pdes"] else None),
 ]
 
 
@@ -243,6 +253,9 @@ def to_markdown(inv=None) -> str:
             "  **teacher NOT converging on: " +
             ", ".join(inv["teacher_not_converging"]) + "**"),
          f"- Matched PINN comparison: {'yes' if inv['has_matched'] else 'no'}",
+         f"- Scaling studies: {', '.join(inv['scaling_pdes']) or 'none'}"
+         + ("" if not inv["unstable_rank_axes"] else
+            "  **ranking NOT stable along: " + ", ".join(inv["unstable_rank_axes"]) + "**"),
          f"- Result files scanned: {inv['files']}", ""]
     if inv["single_seed_files"]:
         L += ["> **Single-seed tables still present** (a headline number must not come "

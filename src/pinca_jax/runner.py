@@ -101,7 +101,8 @@ class Run:
         if self.force and module in ("bench_all", "bench3d"):
             cmd.append("--force")
         if self.allow_cpu and module in ("bench_all", "bench3d", "res_study", "ood",
-                                         "stability", "teacher_error", "matched"):
+                                         "stability", "teacher_error", "matched",
+                                         "scaling"):
             cmd.append("--allow-cpu")
         return cmd
 
@@ -209,6 +210,15 @@ def main():
         r.stage("3-D matrix: every architecture x every phenomenon", "bench3d",
                 ["--grid", P["grid3d"], "--epochs", P["epochs3d"],
                  "--batch", P["batch3d"]], fatal=True)
+
+    if want("scaling"):
+        # Does the ranking survive a change of scale? A headline ordering measured at one
+        # operating point is only quotable if this says it is stable.
+        for pde in HEADLINE_PDES.split(","):
+            r.stage(f"scaling: does the ranking survive scale? ({pde})", "scaling",
+                    ["--pde", pde, "--grid", P["grid"], "--rollout", P["rollout"],
+                     "--epochs", P["epochs"], "--eval", P["eval"],
+                     "--batch", P["batch"], "--n-eval", P["n_eval"]], fatal=False)
 
     if want("resolution"):
         r.stage("resolution transfer study", "res_study",

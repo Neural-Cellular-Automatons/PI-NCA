@@ -589,6 +589,74 @@ Appendix~\ref{app:resolution}, because the convolutional and spectral models are
 size-agnostic and can be evaluated at grids they were never trained on.
 
 % =====================================================================
+\section{Efficiency, within a budget rather than across one}
+\label{sec:efficiency}
+
+Comparing a spectral operator with $5.9\times10^5$ parameters against a cellular automaton
+with $5\times10^3$ and calling the difference an architecture result smuggles a capacity
+result into an inductive-bias claim. We therefore group by parameter budget and compare
+within a class first.
+
+\begin{table}[h]
+\centering
+\caption{Heat, grouped by parameter budget. Within a class the comparison isolates the
+prior; across classes it reports what the extra parameters bought.}
+\label{tab:efficiency}
+\small
+\begin{tabular}{lrccrr}
+\toprule
+Architecture & Params & rel-$L_2$ & 95\% CI & Train (s) & Infer (ms/step) \\
+\midrule
+\input{generated/tab_efficiency}
+\bottomrule
+\end{tabular}
+\end{table}
+
+The within-class comparison is the one that speaks to the hypothesis: at a matched
+parameter budget the conservative local models are compared against a plain CNN, a U-Net
+and a spectral operator reduced to the same budget, so any gap there is attributable to the
+prior rather than to capacity. The across-class rows then answer the separate question of
+what a two-order-of-magnitude increase in parameters actually buys on this equation, which
+is not the same question and should not be reported as though it were.
+
+% =====================================================================
+\section{Does the ranking survive a change of scale?}
+\label{sec:scaling}
+
+Every table above is measured at one grid, one training horizon and one epoch budget. A
+ranking read off a single operating point is only quotable if it is stable under scale,
+and there is no reason to assume that: a spectral operator retains a fixed number of
+Fourier modes and should improve with resolution differently from a local rule whose
+receptive field is fixed in cells, and a model with two orders of magnitude more
+parameters should respond differently to a larger training budget. We therefore sweep each
+axis with everything else held fixed and report Kendall's $\tau$ between the ordering at
+the smallest and the largest setting.
+
+\begin{table}[h]
+\centering
+\caption{Rank stability along each scale axis on heat. $\tau = 1$ means the ordering is
+unchanged; anything less means the paper's ranking is conditional on its operating point.}
+\label{tab:scaling}
+\small
+\input{generated/tab_scaling}
+\end{table}
+
+This is the section that most constrains how the rest of the paper may be read. Where
+$\tau < 1$ the ordering between architectures changes with the axis, and the headline
+ranking must be quoted together with the grid and horizon it was measured at rather than
+as a property of the architectures. Currently the ordering is not stable along
+\scalingUnstableAxes{}, which is exactly what one would predict from the mechanism in
+Appendix~\ref{app:spectral}: the local models' fixed per-step receptive field means the
+number of steps required for information to cross the domain grows with the grid, so their
+advantage on a small domain is partly an artefact of the domain being small.
+
+\limitation{Kendall's $\tau$ compares only the endpoints of each sweep and treats all rank
+inversions as equal, including inversions between architectures whose intervals overlap.
+An ordering flagged unstable here may be a flip between two models the paired tests
+already call a tie; the per-setting errors in \code{results/scaling\_*.md} are what
+distinguish the two cases.}
+
+% =====================================================================
 \section{Three dimensions}
 \label{sec:threed}
 

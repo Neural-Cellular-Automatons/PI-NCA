@@ -186,8 +186,17 @@ def run_ablations(seeds, epochs, grid, batch=16, rollout=12, eval_steps=48, forc
     whole point is that only one factor differs.
     """
     os.makedirs(RES, exist_ok=True)
+    # A1: does bounding help, and at what cost to conservation? (stiff bounded fields)
+    # A4: conservation on/off at matched backbone width.
+    # A5: perception size at matched head and width.
+    # A7: HOW mass is restored after the bound clip -- the naive uniform offset re-violates
+    #     the bound it just enforced, so this measures what that costs.
     plan = [("A4", ["heat", "nagumo"], ["abl_flux", "abl_residual"]),
-            ("A5", ["heat", "navier_stokes"], ["abl_k3", "abl_k5", "abl_multiscale"])]
+            ("A5", ["heat", "navier_stokes"], ["abl_k3", "abl_k5", "abl_multiscale"]),
+            ("A7", ["cahn_hilliard", "allen_cahn"],
+             ["abl_proj_none", "abl_proj_uniform", "abl_proj_headroom"]),
+            ("A1", ["cahn_hilliard", "allen_cahn"],
+             ["multiscale_flux_nca", "bounded_multiscale_nca"])]
     for tag, pde_list, archs in plan:
         for pde in pde_list:
             C = pdes.REGISTRY[pde].channels
@@ -195,9 +204,12 @@ def run_ablations(seeds, epochs, grid, batch=16, rollout=12, eval_steps=48, forc
             path = os.path.join(RES, f"bench_{pde}_{tag}.json")
             results = {} if force else bench.load_results(path)
             todo = [a for a in archs if a not in results or "error" in results.get(a, {})]
+            # A1 and A7 are about bounds, so they need the measured physical range;
+            # A4 and A5 are unbounded controls and must not get one.
+            bounds = field_bounds(pde, grid) if tag in ("A1", "A7") else None
             for arch in todo:
                 try:
-                    rec, used = run_cell(pde, arch, cfg, seeds, C, None)
+                    rec, used = run_cell(pde, arch, cfg, seeds, C, bounds)
                     results[arch] = rec
                     print(f"  {tag} {pde} {arch:16s} rel-L2 {rec['rel_l2']['mean']:.4e} "
                           f"params {int(rec['params']['mean'])}")
