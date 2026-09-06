@@ -119,10 +119,14 @@ def train_and_eval(cfg: DeepONetConfig):
             "params": metrics.param_count(params)}
 
 
-if __name__ == "__main__":
-    import statistics
+def main():
+    import argparse, statistics
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument("--allow-cpu", action="store_true", help="accepted and ignored")
+    a = ap.parse_args()
     rels = []
-    for s in range(3):
+    for s in range(a.seeds):
         out = train_and_eval(DeepONetConfig(seed=s))
         print(f"seed {s}: rel-L2@T {out['rel_l2_at_T']:.3e} | {out['params']} params | {out['wall_s']:.1f}s")
         rels.append(out["rel_l2_at_T"])

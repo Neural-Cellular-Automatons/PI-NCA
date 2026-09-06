@@ -109,7 +109,7 @@ def main():
                           batch=args.batch)
         bounds = field_bounds3d(pde, args.grid)
         path = os.path.join(RES, f"bench3d_{pde}.json")
-        results = {} if args.force else bench.load_results(path)
+        results = {} if args.force else bench.load_results(path, cfg)
         todo = [a for a in wanted if a not in results or "error" in results.get(a, {})]
         print(f"[bench3d] {pde} (grid {args.grid}^3, C={C}) — {len(todo)} to run, "
               f"{len(wanted) - len(todo)} already done")

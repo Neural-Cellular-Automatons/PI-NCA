@@ -202,16 +202,53 @@ def run_with_oom_backoff(fn, batch, min_batch=2, label=""):
             print(f"    [oom] {label}: retrying at batch {b}")
 
 
-def load_results(path):
-    """Existing results for resume, or an empty dict."""
+def load_results(path, cfg=None):
+    """Existing results for resume, or an empty dict.
+
+    Resume is only legitimate when the stored cells were produced under the *same*
+    conditions as the ones about to run. This repository ships CPU results, so without
+    that check the first GPU run would silently keep every CPU cell and emit a table that
+    is half one backend and half the other -- exactly the failure the drivers refuse to
+    make in every other respect. The same applies to re-running at a larger scale after a
+    smoke run.
+
+    Pass `cfg` (the EmuConfig about to be used) to enable the check; the conditions
+    compared are the backend and the knobs that change what a cell means.
+    """
     if not os.path.exists(path):
         return {}
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f).get("results", {})
+            blob = json.load(f)
     except (json.JSONDecodeError, OSError):
         print(f"  [warn] {os.path.basename(path)} unreadable; starting that file over")
         return {}
+    if cfg is not None:
+        why = _incompatible(blob, cfg)
+        if why:
+            print(f"  [resume] {os.path.basename(path)}: {why}; recomputing this file")
+            return {}
+    return blob.get("results", {})
+
+
+# Knobs that change what a benchmark cell means. Two files differing in any of these are
+# not interchangeable, so one must not be resumed into the other.
+_RESUME_KEYS = ("grid_size", "epochs", "rollout_steps", "eval_steps", "n_eval",
+                "output_clip", "safety_factor", "warmup_epochs", "preseed_steps")
+
+
+def _incompatible(blob, cfg):
+    """Reason the stored file cannot be resumed into this config, or None."""
+    import jax
+    stored_backend = ((blob.get("device") or {}).get("backend"))
+    now = jax.default_backend()
+    if stored_backend and stored_backend != now:
+        return f"stored on '{stored_backend}', now running on '{now}'"
+    old = blob.get("config") or {}
+    for k in _RESUME_KEYS:
+        if k in old and getattr(cfg, k, None) != old[k]:
+            return f"{k} changed {old[k]} -> {getattr(cfg, k, None)}"
+    return None
 
 
 def save_results(path, payload):

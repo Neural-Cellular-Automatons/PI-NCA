@@ -14,10 +14,17 @@ Design notes, all of which exist because this runs unattended for many hours:
 
 * **GPU or nothing.** The run refuses to start on the CPU backend. Mixing CPU and GPU
   measurements inside one table is worse than having no table.
-* **Everything is resumable, at two levels.** Benchmarks checkpoint per (pde,
-  architecture) cell, and the runner additionally skips a whole stage whose outputs are
-  already on disk. Re-running after a crash, a Ctrl-C or a reboot picks up where it
-  stopped instead of repeating a night of compute. `--force` recomputes.
+* **Everything is resumable, at two levels, and resume is condition-aware.** Benchmarks
+  checkpoint per (pde, architecture) cell, and the runner additionally skips a whole stage
+  whose outputs are already on disk. Re-running after a crash, a Ctrl-C or a reboot picks
+  up where it stopped instead of repeating a night of compute.
+
+  Crucially, "already on disk" is not the same as "reusable". A stored result is reused
+  only when its backend and its scale match the run about to happen; otherwise it is
+  recomputed and the reason is printed. Without that, the first GPU run in a checkout that
+  ships CPU results would silently keep them and emit a table that is half one backend and
+  half the other, and a `paper` run after a `smoke` run would inherit the smoke numbers.
+  `--force` recomputes everything regardless.
 * **Only the 2-D matrix is fatal.** Every other stage records its failure and the run
   continues, because a 3-D out-of-memory error must not destroy a completed 2-D sweep.
 * **The paper artifacts are always regenerated**, even if a measurement stage failed
@@ -91,6 +98,8 @@ PROFILES = {
                   viz_grid=12, viz_epochs=25, viz3d_grid=8, viz3d_epochs=15, max_mb=8,
                   headline_seeds=2, n_eval=4, ood_epochs=25, stab_epochs=25,
                   scal_grids="12,16", scal_rollouts="2,3", scal_epochs="15,25",
+                  pinn_grid=12, pinn_iters=150, deeponet_seeds=1,
+                  darcy_seeds=1, darcy_iters=60, darcy_ntrain=32,
                   # A wiring check must still touch every phenomenon -- that is where
                   # shape and channel bugs live -- but it does not need every
                   # architecture, and running all fourteen turns "minutes" into an hour.
@@ -109,6 +118,8 @@ PROFILES = {
                   stab_epochs=800,
                   scal_grids="24,32,48", scal_rollouts="4,8,12",
                   scal_epochs="300,600,1200",
+                  pinn_grid=32, pinn_iters=6000, deeponet_seeds=3,
+                  darcy_seeds=3, darcy_iters=2000, darcy_ntrain=256,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -120,6 +131,8 @@ PROFILES = {
                  stab_epochs=1200,
                  scal_grids="32,48,64", scal_rollouts="4,8,12",
                  scal_epochs="500,1000,2000",
+                 pinn_grid=32, pinn_iters=8000, deeponet_seeds=3,
+                 darcy_seeds=3, darcy_iters=3000, darcy_ntrain=512,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -157,9 +170,10 @@ class Run:
     back before the next stage starts.
     """
 
-    def __init__(self, allow_cpu=False, force=False):
+    def __init__(self, allow_cpu=False, force=False, grid=None):
         self.allow_cpu = allow_cpu
         self.force = force
+        self.grid = grid
         self.manifest = []
         self.failures = []
         self.skipped = []
@@ -181,8 +195,9 @@ class Run:
         not checkpoint internally (OOD, stability, scaling, matched) would otherwise redo
         hours of work every time the run is restarted after a crash further along.
         """
-        if outputs and not self.force and all(os.path.exists(p) for p in outputs):
-            print(f"\n-- {name}: already on disk, skipping (use --force to recompute)")
+        if outputs and not self.force and all(_reusable(p, self.grid) for p in outputs):
+            print(f"\n-- {name}: already on disk from a matching run, skipping "
+                  f"(--force recomputes)")
             self.skipped.append(name)
             self.manifest.append({"stage": name, "seconds": 0.0, "rc": 0, "ok": True,
                                   "skipped": True})
@@ -216,6 +231,36 @@ class Run:
                             "total_seconds": round(total, 1),
                             "failures": self.failures, "skipped": self.skipped,
                             "device": env.provenance("runner")})
+
+
+def _reusable(path, grid=None):
+    """Can this stage output be reused, or must the stage be re-run?
+
+    Existence is not enough. This repository ships CPU results, so a stage that merely
+    checked for the file would let the first GPU run keep them and produce a study that is
+    half one backend and half the other. The stored backend must match the current one,
+    and -- for the studies that record it -- so must the grid, or a `paper` run after a
+    `smoke` run would silently inherit the smoke numbers.
+    """
+    if not os.path.exists(path):
+        return False
+    try:
+        import jax
+        with open(path, encoding="utf-8") as f:
+            blob = json.load(f)
+    except Exception:                                  # noqa: BLE001 - recompute on doubt
+        return False
+    stored = (blob.get("device") or {}).get("backend")
+    if stored and stored != jax.default_backend():
+        print(f"   [resume] {os.path.basename(path)} was produced on '{stored}', now on "
+              f"'{jax.default_backend()}' -- recomputing")
+        return False
+    old_grid = blob.get("grid", (blob.get("config") or {}).get("grid_size"))
+    if grid is not None and old_grid is not None and int(old_grid) != int(grid):
+        print(f"   [resume] {os.path.basename(path)} was produced at grid {old_grid}, "
+              f"now {grid} -- recomputing")
+        return False
+    return True
 
 
 class FatalStage(RuntimeError):
@@ -375,7 +420,7 @@ def main():
     # Fail here, before anything expensive, rather than three hours in.
     env.require_gpu("runner", allow_cpu=args.allow_cpu)
 
-    r = Run(allow_cpu=args.allow_cpu, force=args.force)
+    r = Run(allow_cpu=args.allow_cpu, force=args.force, grid=P["grid"])
     only = set(args.only.split(",")) if args.only else None
     skip = set(args.skip.split(",")) if args.skip else set()
     if args.profile == "bench":
@@ -432,7 +477,8 @@ def main():
                 r.stage(f"OOD generalisation: {pde}", "ood",
                         ["--pde", pde, "--archs", P["ood_archs"], "--grid", P["grid"],
                          "--epochs", P["ood_epochs"], "--eval", P["eval"],
-                         "--n-eval", P["n_eval"], "--seeds", min(3, P["seeds"])],
+                         "--n-eval", P["n_eval"], "--batch", P["batch"],
+                         "--seeds", min(3, P["seeds"])],
                         fatal=False, outputs=res(f"ood_{pde}.json"))
 
         if want("stability"):
@@ -440,7 +486,8 @@ def main():
                 r.stage(f"stability stress (guard OFF): {pde}", "stability",
                         ["--pde", pde, "--archs", P["stab_archs"], "--grid", P["grid"],
                          "--epochs", P["stab_epochs"], "--eval", P["eval"],
-                         "--n-ic", P["n_eval"], "--seeds", min(3, P["seeds"])],
+                         "--n-ic", P["n_eval"], "--batch", P["batch"],
+                         "--seeds", min(3, P["seeds"])],
                         fatal=False, outputs=res(f"stability_{pde}.json"))
 
         if want("scaling"):
@@ -475,14 +522,24 @@ def main():
             r.stage("benchmark plots (interim)", "plots", fatal=False)
 
         if want("baselines"):
-            for mod in ("pinn_heat", "deeponet_heat", "darcy"):
-                r.stage(f"baseline: {mod}", mod, fatal=False)
+            # These three hardcoded their own scale until now, which made the smoke
+            # profile spend minutes on a PINN and gave a paper run no way to buy it a
+            # bigger budget. Their existing config fields are simply exposed.
+            r.stage("baseline: PINN (heat)", "pinn_heat",
+                    ["--grid", P["pinn_grid"], "--steps", P["eval"],
+                     "--iters", P["pinn_iters"]], fatal=False)
+            r.stage("baseline: DeepONet (heat)", "deeponet_heat",
+                    ["--seeds", P["deeponet_seeds"]], fatal=False)
+            r.stage("baseline: Darcy (steady operator)", "darcy",
+                    ["--seeds", P["darcy_seeds"], "--iters", P["darcy_iters"],
+                     "--n-train", P["darcy_ntrain"]], fatal=False)
             # The only PINN-vs-emulator comparison that is well posed: same PDE, same
             # ICs, same horizon, same metric, with both cost structures reported.
             r.stage("matched PINN vs emulator (same task, both cost structures)",
                     "matched",
-                    ["--pde", "heat", "--k", P["n_eval"], "--grid", P["grid"],
-                     "--steps", P["eval"], "--epochs", P["epochs"]],
+                    ["--pde", "heat", "--k", P["n_eval"], "--grid", P["pinn_grid"],
+                     "--steps", P["eval"], "--epochs", P["epochs"],
+                     "--pinn-iters", P["pinn_iters"]],
                     fatal=False, outputs=res("matched_heat.json"))
 
         if want("capture"):

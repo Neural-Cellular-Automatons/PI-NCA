@@ -271,6 +271,9 @@ def main():
     ap.add_argument("--epochs", type=int, default=150)
     ap.add_argument("--eval", type=int, default=48)
     ap.add_argument("--n-eval", type=int, default=16)
+    ap.add_argument("--batch", type=int, default=16,
+                    help="training batch; lower it if the card runs out of memory. Unlike "
+                         "the benchmark matrix, this driver has no automatic OOM backoff.")
     ap.add_argument("--seeds", type=int, default=1)
     ap.add_argument("--allow-cpu", action="store_true")
     args = ap.parse_args()
@@ -278,7 +281,7 @@ def main():
     seeds = (42,) if args.seeds <= 1 else tuple(range(args.seeds))
     archs = [a for a in args.archs.split(",") if a in registry.REGISTRY]
     print(f"[ood] {args.pde}: {len(archs)} archs x {len(IC_SHIFTS) + len(COEFF_SHIFTS) + 2} axes")
-    out = study(args.pde, archs, grid=args.grid, epochs=args.epochs,
+    out = study(args.pde, archs, grid=args.grid, epochs=args.epochs, batch=args.batch,
                 eval_steps=args.eval, n_eval=args.n_eval, seeds=seeds)
     os.makedirs(RES, exist_ok=True)
     base = os.path.join(RES, f"ood_{args.pde}")

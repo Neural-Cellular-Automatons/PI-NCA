@@ -146,10 +146,12 @@ def train_model(name, model_ctor, atr, utr, ate, ute, cfg):
     return {"rel_l2": rel, "params": nparams, "wall_s": wall}
 
 
-def run(seeds=(0, 1)):
+def run(seeds=(0, 1), iters=None, n_train=None):
     out = {"fno": [], "nca_solver": []}
     for s in seeds:
-        cfg = DarcyConfig(seed=s)
+        cfg = DarcyConfig(seed=s,
+                          iters=iters or DarcyConfig.iters,
+                          n_train=n_train or DarcyConfig.n_train)
         atr, utr, ate, ute = make_dataset(cfg)
         print(f"[Darcy seed {s}] dataset {atr.shape} -> {utr.shape}")
         out["fno"].append(train_model(
@@ -165,5 +167,16 @@ def run(seeds=(0, 1)):
     return out
 
 
+def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seeds", type=int, default=2)
+    ap.add_argument("--iters", type=int, default=DarcyConfig.iters)
+    ap.add_argument("--n-train", type=int, default=DarcyConfig.n_train)
+    ap.add_argument("--allow-cpu", action="store_true", help="accepted and ignored")
+    a = ap.parse_args()
+    return run(seeds=tuple(range(a.seeds)), iters=a.iters, n_train=a.n_train)
+
+
 if __name__ == "__main__":
-    run()
+    main()

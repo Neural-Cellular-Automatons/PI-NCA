@@ -150,7 +150,7 @@ def run_phenomena(pdes_list, seeds, epochs, grid, batch=16, rollout=12, eval_ste
         # [-1,1] that would be nonsense for a field with amplitudes of 5-10.
         bounds = field_bounds(pde, grid)
         path = os.path.join(RES, f"bench_{pde}_{tag}.json")
-        results = {} if force else bench.load_results(path)
+        results = {} if force else bench.load_results(path, cfg)
         done = [a for a in wanted if a in results and "error" not in results[a]]
         todo = [a for a in wanted if a not in results or "error" in results.get(a, {})]
         print(f"[bench_all] {pde} (C={C}, bounds={None if bounds is None else tuple(round(b, 2) for b in bounds)})"
@@ -202,7 +202,7 @@ def run_ablations(seeds, epochs, grid, batch=16, rollout=12, eval_steps=48, forc
             C = pdes.REGISTRY[pde].channels
             cfg = _cfg(pde, grid, batch, epochs, rollout, eval_steps)
             path = os.path.join(RES, f"bench_{pde}_{tag}.json")
-            results = {} if force else bench.load_results(path)
+            results = {} if force else bench.load_results(path, cfg)
             todo = [a for a in archs if a not in results or "error" in results.get(a, {})]
             # A1 and A7 are about bounds, so they need the measured physical range;
             # A4 and A5 are unbounded controls and must not get one.

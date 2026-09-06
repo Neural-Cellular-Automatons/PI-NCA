@@ -250,6 +250,9 @@ def main():
     ap.add_argument("--eval", type=int, default=48, help="training-time eval horizon")
     ap.add_argument("--horizon-mult", type=int, default=8, help="stress horizon = eval x this")
     ap.add_argument("--n-ic", type=int, default=16)
+    ap.add_argument("--batch", type=int, default=16,
+                    help="training batch; lower it if the card runs out of memory. Unlike "
+                         "the benchmark matrix, this driver has no automatic OOM backoff.")
     ap.add_argument("--seeds", type=int, default=1)
     ap.add_argument("--allow-cpu", action="store_true")
     args = ap.parse_args()
@@ -259,6 +262,7 @@ def main():
     print(f"[stability] {args.pde}: {len(archs)} archs, horizon "
           f"{args.eval * args.horizon_mult} steps, guard OFF")
     out = study(args.pde, archs, grid=args.grid, epochs=args.epochs,
+                batch=args.batch,
                 train_eval=args.eval, horizon_mult=args.horizon_mult,
                 n_ic=args.n_ic, seeds=seeds)
     os.makedirs(RES, exist_ok=True)
