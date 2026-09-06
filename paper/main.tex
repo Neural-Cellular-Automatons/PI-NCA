@@ -254,9 +254,15 @@ Equation & Best architecture & rel-$L_2$ & 95\% CI & Identity floor & Beats floo
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:regime} is the headline result. Read left to right, it is the decision rule
-of Section~1; read down the ``beats floor'' column, it is a list of the regimes in which
-the question is still open.
+Table~\ref{tab:regime} is the headline result, and it should be read in three passes. Left
+to right, each row is the decision rule of Section~1 applied to one equation. Down the
+``beats floor'' column, any row reading \textbf{no} is an equation on which nothing measured
+here learned anything useful, so the winner named in that row is the ordering of noise and
+must not be quoted as a result. Down the last column, any row flagged as a non-converging
+teacher is an equation whose distillation target is not a converged solution
+(Section~\ref{sec:teacher}), which invalidates the row for the same reason by a different
+route --- and, as Section~\ref{sec:regime} records, that is not hypothetical: it happened
+here, and the affected result was retracted.
 
 \paragraph{Where locality and conservation win.} On smooth local diffusion the best model
 is \bestHeat{} at rel-$L_2$ \bestHeatErr{} (CI \bestHeatCI{}), against an identity floor of

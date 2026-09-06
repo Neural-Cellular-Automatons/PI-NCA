@@ -142,7 +142,40 @@ elsewhere. Detailed tables: `results/bench_{heat,navier_stokes}_A6.md`.
 | Multi-step BPTT training (A3, A6) | stiff / unstable / globally-coupled (CH, NS) | stable local diffusion (cheap insurance) |
 | Spectral global mixing / FNO (A2) | fine-scale, global, non-conservative regimes | local conservative regimes (param-inefficient) |
 
+## Ablation A7 — how mass is restored after the bound clip
+
+The bounded conservative models clip the state to its physical range and then restore the
+total mass. **How** they restore it is a free choice, and the obvious one is wrong:
+
+| variant | registry name | what it does |
+|---|---|---|
+| clip only | `abl_proj_none` | bounded, not conserving |
+| uniform | `abl_proj_uniform` | adds the same offset to every cell — exact mass, but it moves clipped cells back **outside** the bound |
+| headroom | `abl_proj_headroom` | distributes the deficit in proportion to each cell's remaining room to the bound — exact mass **and** inside the bound |
+
+Same backbone, same bounds, one line different. Run with the ablation sweep on
+Cahn–Hilliard and Allen–Cahn; tables land in `results/bench_<pde>_A7.md`.
+
+**What is and is not claimed.** That the uniform composition can leave the box is provable
+and is pinned by a constructed state in
+`tests/test_rigor.py::test_uniform_projection_leaves_the_box`. How *large* the violation is
+in practice depends on the size of the deficit the projection must absorb, and at the
+current scale, against a converging teacher, it is **0.00% of cells** on Cahn–Hilliard
+(`results/stability_cahn_hilliard.md`, out-of-range column). An earlier version of this
+report quoted a few percent; that came from the non-converging `dt=0.5` teacher and is
+retracted — see `docs/research_log.md`. The headroom projection is therefore a correctness
+guarantee that costs nothing, not a measured accuracy win, and the violation it prevents
+grows with the timestep, the rollout length, and how hard the clip binds.
+
+What the same stability run *does* show, and which is unaffected: at 8× the training
+horizon on Cahn–Hilliard every **unbounded** model fails on 100% of initial conditions
+(plain NCA, flux PI-NCA, multi-scale PI-NCA, FNO, ResNet, U-Net) while every **bounded**
+variant survives all of them. Bounding does real work; the argument here is only about what
+happens to mass afterwards.
+
 ## Other planned ablations (infrastructure ready)
+*(A4 and A5 below are now run, above; the list is kept for the remaining item.)*
+
 - **A4 Conservation on/off at fixed backbone** — flux-divergence head vs direct residual
   head, same perceive+MLP (isolated conservation contribution; partially covered by
   plain_nca vs pi_nca but with matched widths).
