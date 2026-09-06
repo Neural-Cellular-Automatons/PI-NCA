@@ -197,8 +197,12 @@ def _as_int(tok):
 def prose_counts(inv=None, paths=None) -> list[dict]:
     """Find count claims in the documents and compare them to the inventory."""
     inv = inv or inventory()
-    paths = paths or (sorted(glob.glob(os.path.join(DOCS, "*.md"))) +
-                      sorted(glob.glob(os.path.join(DOCS, "*.txt"))))
+    # Skip the generated documents. Scanning claims_audit.md makes the audit quote its own
+    # output back at itself, which always agrees and therefore checks nothing.
+    generated = {"claims_audit.md", "bibliography.md"}
+    paths = paths or [p for p in (sorted(glob.glob(os.path.join(DOCS, "*.md"))) +
+                                  sorted(glob.glob(os.path.join(DOCS, "*.txt"))))
+                      if os.path.basename(p) not in generated]
     hits = []
     for path in paths:
         try:
