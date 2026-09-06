@@ -3,7 +3,7 @@
 # benchmark on the CPU backend unless you pass --allow-cpu. For the real run use
 # requirements-gpu.txt (the only difference is the jax wheel).
 #
-# Python 3.12 / 3.13 / 3.14. Verified together by the full test suite (120 tests).
+# Python 3.12 / 3.13 / 3.14. Verified together by the full test suite (205 tests).
 #
 # NOTE on Windows without admin rights: pip fails extracting orbax-checkpoint because
 # its nested test paths exceed the 260-char MAX_PATH limit. Workaround:
@@ -22,6 +22,11 @@ torch>=2.12,<3
 
 # data / viz / io
 numpy
+# scipy provides the exact Wilcoxon signed-rank test used for every paired architecture
+# comparison. pinca_jax.stats falls back to a sign test without it, which is strictly more
+# conservative and would silently weaken the reported significance -- so it is a real
+# dependency, not an optional one.
+scipy
 matplotlib
 imageio
 

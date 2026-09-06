@@ -287,7 +287,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(DOCS, "claims_audit.md"))
     ap.add_argument("--strict", action="store_true",
-                    help="exit non-zero if any prose count disagrees with the results")
+                    help="exit non-zero on a count mismatch OR an unsupported claim")
+    ap.add_argument("--strict-counts", action="store_true",
+                    help="exit non-zero only on a count mismatch. UNSUPPORTED is an honest "
+                         "state -- it means an experiment has not been run yet -- so CI "
+                         "gates on prose disagreeing with the results, not on the results "
+                         "being incomplete.")
     args = ap.parse_args()
     inv = inventory()
     md = to_markdown(inv)
@@ -303,6 +308,8 @@ def main():
         print(f"  MISMATCH {h['file']}:{h['line']} '{h['quoted']}' "
               f"claims {h['claimed']}, measured {h['measured']}")
     if args.strict and (bad or unsupported):
+        raise SystemExit(1)
+    if args.strict_counts and bad:
         raise SystemExit(1)
 
 

@@ -41,8 +41,19 @@ jobs:
           python -m pinca_jax.models.baselines
           python -m pinca_jax.teacher_error --demo
 
-      - name: Pipeline wiring (smoke profile, CPU, numbers meaningless)
-        run: python -m pinca_jax.runner --profile smoke --allow-cpu --no-gate --only bench2d,plots
+      # Two phenomena, not all ten: this proves the driver, the checkpointing, the paired
+      # statistics and the plotting are wired together. Running the whole matrix here would
+      # take ~20 minutes to re-prove what the correctness gate already covers.
+      - name: Pipeline wiring (tiny, CPU, numbers meaningless)
+        run: |
+          python -m pinca_jax.bench_all --pdes heat,cahn_hilliard --archs plain_nca,pi_nca,resnet_iso,identity --seeds 2 --epochs 30 --grid 16 --batch 4 --rollout 4 --eval 8 --force --allow-cpu
+          python -m pinca_jax.teacher_error --grid 16 --steps 8 --allow-cpu
+          python -m pinca_jax.plots
 
-      - name: Claims audit must match the results
-        run: python -m pinca_jax.claims
+      # Regenerate the audit, the paper tables and every quoted number, and fail if any
+      # count in the prose disagrees with what is actually in results/.
+      - name: Documents must agree with the results
+        run: |
+          python -m pinca_jax.claims --strict-counts
+          python -m pinca_jax.paper
+          python -m pytest tests/test_paper.py -q

@@ -1,27 +1,5 @@
 # PI-NCA: Architectures and Results
 
-> ### CORRECTION (supersedes the Cahn-Hilliard results below)
->
-> Every Cahn-Hilliard number in this document was produced against a teacher that was not
-> converging. The equation is fourth order, so the explicit stability limit is
-> `dt <= 2/(|lam_lap| + eps2*lam_lap^2) = 0.231`, and the reference implementation shipped
-> `dt = 0.5`. It did not visibly explode only because the stepper clips the state to
-> [-1,1] every step; without the clip the same configuration reaches NaN. Measured by
-> timestep refinement it showed an **observed order of accuracy of 0.00** -- refining `dt`
-> did not move the solution at all.
->
-> The reported finding, that no architecture beat the do-nothing identity floor
-> (best 0.93 against a floor of 0.93), is **retracted**. It was a property of the solver,
-> not of the models. At a converging timestep (`dt = 0.02`, observed order 0.90-0.95)
-> every architecture beats the floor by roughly an order of magnitude, and the best model
-> is a physics-free CNN.
->
-> Current numbers: `results/bench_cahn_hilliard_headline.md`. How it was found and what it
-> means: `docs/research_log.md` (final entry) and `docs/conservation.md`. The teacher's own
-> error, with a convergence verdict per equation: `results/teacher_error.md`.
-
-
-
 A guide to every model in this study — what it is, how it works, and how it performed.
 Branch: `research/jax-migration`. Code: `src/pinca_jax/`.
 
@@ -143,6 +121,11 @@ a difference in results can be attributed to one component.
 | `fno` | global spectral operator (~5.9e5 params) | 592 897 |
 | `fno_small` | iso-parameter FNO (~NCA budget) — A2 ablation: spectral mixing vs param count | — |
 | `mc_flux_nca` | multi-channel per-field conservative flux NCA (SWE/FHN/GS) | — |
+| `resnet` | autoregressive residual CNN, circular pad (~7.4e4 params) | — |
+| `resnet_iso` | iso-parameter CNN control (~5.4e3, matched to the NCA budget) | — |
+| `unet` | multi-resolution U-Net emulator (~2.7e5 params) | — |
+| `unet_iso` | iso-parameter U-Net control (~7.5e3, matched to the NCA budget) | — |
+| `identity` | do-nothing floor g(x)=x -- any model above this learned worse than nothing | — |
 | `bounded_cons_nca` | flux NCA + clip + mass re-projection (bounded AND conserving) | — |
 | `spectral_flux_nca` | local conservative flux + global FNO spectral correction | 134 225 |
 | `multiscale_flux_nca` | dilated multi-scale perception + conservative flux | 5 520 |
@@ -362,18 +345,18 @@ to the solution — so unlike a PINN it generalises across initial conditions.
 | Allen-Cahn | 0.053 | — | — | — | fno 0.007 |
 | Nagumo | 0.376 | — | — | — | plain_nca 0.073 |
 | Wave | — | — | — | — | plain_nca 0.052 |
-| Cahn-Hilliard | — | **0.725** | 0.790 | — | fno 5.234 |
+| Cahn-Hilliard | — | — | — | — | pi_nca 0.083 |
 | Gray-Scott | — | — | — | — | fno 0.674 |
 | Shallow-water | — | — | — | — | fno 0.024 |
 | FitzHugh-Nagumo | — | — | — | — | plain_nca 0.125 |
-| Navier-Stokes | 0.285 | — | — | — | fno 0.098 |
+| Navier-Stokes | — | — | — | — | pi_nca 0.192 |
 
 rel-L2, lower is better. **Bold** marks the overall winner for that phenomenon across all architectures.
 
 | Hybrid | What it targets | Outcome |
 |---|---|---|
 | `multiscale_flux_nca` | widen the receptive field without an FFT | does not win any phenomenon outright |
-| `bounded_cons_nca` | be bounded AND mass-conserving at once | wins Cahn-Hilliard |
+| `bounded_cons_nca` | be bounded AND mass-conserving at once | does not win any phenomenon outright |
 | `bounded_multiscale_nca` | combine multi-scale reach with bounding | does not win any phenomenon outright |
 | `spectral_flux_nca` | add global spectral reach to a local conservative NCA | wins Heat |
 
@@ -386,7 +369,9 @@ Every table in this section is **generated from `results/*.json`** by
 architectures from the one the benchmarks actually ran. A dash means that cell has not
 been measured yet; re-run `bash run_gpu.sh` and regenerate to fill it in.
 
-*No benchmark results found yet — run `python -m pinca_jax.runner`.*
+Measured on **cpu** (`cpu:0`), JAX 0.10.1, grid 16, batch 8, 150 epochs, train horizon 6 / eval horizon 12, 2 seeds.
+
+Total run time **0.81 h**. Peak device memory 0 MB.
 
 ### 6.1 The regime map — which architecture wins where
 
@@ -397,11 +382,11 @@ been measured yet; re-run `bash run_gpu.sh` and regenerate to fill it in.
 | Allen-Cahn | non-conservative phase separation | **fno** | 0.007 | plain_nca 0.049 | 4 |
 | Nagumo | non-conservative bistable | **plain_nca** | 0.073 | fno 0.081 | 4 |
 | Wave | 2nd-order hyperbolic | **plain_nca** | 0.052 | mc_flux_nca 0.056 | 3 |
-| Cahn-Hilliard | stiff 4th-order, bounded | **bounded_cons_nca** | 0.725 | bounded_multiscale_nca 0.790 | 4 |
+| Cahn-Hilliard | stiff 4th-order, bounded | **pi_nca** | 0.083 | plain_nca 0.083 | 2 |
 | Gray-Scott | reaction-diffusion patterns | **fno** | 0.674 | mc_flux_nca 0.692 | 3 |
 | Shallow-water | conservative, multi-field | **mc_flux_nca** | 0.016 | fno 0.024 | 3 |
 | FitzHugh-Nagumo | non-conservative reaction | **plain_nca** | 0.125 | fno 0.199 | 3 |
-| Navier-Stokes | globally coupled | **fno** | 0.098 | multiscale_flux_nca 0.285 | 4 |
+| Navier-Stokes | globally coupled | **resnet_iso** | 0.190 | pi_nca 0.192 | 4 |
 
 *Figure: `docs/figures/bench/bench_regime_map.png`*
 
@@ -454,14 +439,12 @@ Every architecture on every phenomenon, same list throughout.
 | mc_flux_nca | 5.571e-02 | 40.94 | **1.373e-04** | 10 464 | 2.564e-03 |
 | fno | 5.650e-02 | 40.81 | 5.188e-01 | 592 946 | 4.585e-03 |
 
-**Cahn-Hilliard** — stiff 4th-order, bounded, C=1, grid 24, eval 48 steps
+**Cahn-Hilliard** — stiff 4th-order, bounded, C=1, grid 16, eval 12 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **bounded_cons_nca** | **7.252e-01** | 10.56 | **9.938e-05** | **4 576** | 7.128e-04 |
-| bounded_multiscale_nca | 7.902e-01 | 9.81 | 2.203e-04 | 5 520 | 7.343e-04 |
-| fno | 5.234e+00 | -6.61 | 3.349e+02 | 592 897 | 3.960e-03 |
-| plain_nca | 3.588e+01 | -23.33 | 1.808e+02 | 6 784 | 6.279e-04 |
+| **pi_nca** | **8.294e-02 ± 4.272e-03** | 36.68 | **1.673e-06** | **4 576** | 6.055e-04 |
+| plain_nca | 8.324e-02 ± 1.926e-03 | 36.64 | 1.712e-01 | 6 784 | 6.109e-04 |
 
 **Gray-Scott** — reaction-diffusion patterns, C=2, grid 24, eval 48 steps
 
@@ -487,14 +470,14 @@ Every architecture on every phenomenon, same list throughout.
 | fno | 1.986e-01 | 22.44 | 8.621e+01 | 592 946 | 1.051e-02 |
 | mc_flux_nca | 9.986e-01 | 8.41 | **1.668e-06** | 10 464 | 1.097e-03 |
 
-**Navier-Stokes** — globally coupled, C=1, grid 24, eval 48 steps
+**Navier-Stokes** — globally coupled, C=1, grid 16, eval 12 steps
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **fno** | **9.841e-02** | 39.29 | 2.404e+00 | 592 897 | 5.251e-03 |
-| multiscale_flux_nca | 2.850e-01 | 30.05 | 7.946e-05 | 5 520 | 3.342e-03 |
-| pi_nca | 5.232e-01 | 24.78 | **2.965e-05** | **4 576** | 1.823e-03 |
-| plain_nca | 5.308e-01 | 24.65 | 6.192e+00 | 6 784 | 9.574e-04 |
+| **resnet_iso** | **1.902e-01 ± 3.953e-02** | 34.48 | 7.337e-01 | 5 364 | 1.029e-03 |
+| pi_nca | 1.918e-01 ± 3.887e-02 | 34.40 | 6.020e-06 | 4 576 | 1.841e-04 |
+| identity | 1.970e-01 ± 3.667e-02 | 34.16 | **0.000e+00** | **1** | 5.775e-06 |
+| plain_nca | 1.983e-01 ± 3.743e-02 | 34.10 | 1.235e+00 | 6 784 | 2.521e-04 |
 
 Full 20-metric tables per phenomenon: `results/bench_<pde>_full.md`.
 
@@ -506,8 +489,8 @@ Same backbone, same widths; only the head differs (flux vs residual). The cleane
 
 | PDE | variant 1 | variant 2 |
 |---|---|---|
-| Heat | **0.028** (abl_flux) | 0.173 (abl_residual) |
-| Nagumo | 0.378 (abl_flux) | **0.127** (abl_residual) |
+| Heat | **0.024** (abl_flux) | 0.046 (abl_residual) |
+| Nagumo | 0.110 (abl_flux) | **0.014** (abl_residual) |
 
 **A5 — perception / receptive-field size**
 
@@ -515,8 +498,8 @@ Same head, same widths; only the perception differs (3x3, 5x5, dilated 1/2/4).
 
 | PDE | variant 1 | variant 2 | variant 3 |
 |---|---|---|---|
-| Heat | **0.028** (abl_k3) | 0.110 (abl_k5) | 0.037 (abl_multiscale) |
-| Navier-Stokes | 0.558 (abl_k3) | 1.370 (abl_k5) | **0.284** (abl_multiscale) |
+| Heat | **0.024** (abl_k3) | 0.050 (abl_k5) | 0.037 (abl_multiscale) |
+| Navier-Stokes | 0.172 (abl_k3) | 0.139 (abl_k5) | **0.110** (abl_multiscale) |
 
 *Figures: `docs/figures/bench/bench_ablation_A4.png`, `bench_ablation_A5.png`*
 
