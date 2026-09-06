@@ -1,5 +1,27 @@
 # Master Results — Every Experiment, Tabulated
 
+> ### CORRECTION (supersedes the Cahn-Hilliard results below)
+>
+> Every Cahn-Hilliard number in this document was produced against a teacher that was not
+> converging. The equation is fourth order, so the explicit stability limit is
+> `dt <= 2/(|lam_lap| + eps2*lam_lap^2) = 0.231`, and the reference implementation shipped
+> `dt = 0.5`. It did not visibly explode only because the stepper clips the state to
+> [-1,1] every step; without the clip the same configuration reaches NaN. Measured by
+> timestep refinement it showed an **observed order of accuracy of 0.00** -- refining `dt`
+> did not move the solution at all.
+>
+> The reported finding, that no architecture beat the do-nothing identity floor
+> (best 0.93 against a floor of 0.93), is **retracted**. It was a property of the solver,
+> not of the models. At a converging timestep (`dt = 0.02`, observed order 0.90-0.95)
+> every architecture beats the floor by roughly an order of magnitude, and the best model
+> is a physics-free CNN.
+>
+> Current numbers: `results/bench_cahn_hilliard_headline.md`. How it was found and what it
+> means: `docs/research_log.md` (final entry) and `docs/conservation.md`. The teacher's own
+> error, with a convergence verdict per equation: `results/teacher_error.md`.
+
+
+
 One-stop index of all benchmarks (reduced-scale CPU, mean ± std over seeds). Detailed
 analysis in `docs/experimental_report.md`; efficiency in `docs/efficiency_comparison.md`;
 ablations in `docs/ablation_report.md`. **Bold** = best in column. rel-L2 lower is better.

@@ -301,13 +301,35 @@ Architecture & Params & rel-$L_2$ & 95\% CI & Median & $p$ (Holm) & vs.\ best \\
 \end{tabular}
 \end{table}
 
-\paragraph{Where nothing wins, and why we say so.} On the stiff fourth-order equation the
-best architecture in Table~\ref{tab:regime} is \bestCahnHilliard{} at
-\bestCahnHilliardErr{}, and the ``beats floor'' entry reads \beatsFloorCahnHilliard{}.
-Table~\ref{tab:pairedch} gives the ranking. We report this prominently rather than in a
-footnote because it is the single most informative row in the paper: a comparison of
-architectures on an equation where none of them beats predicting no change is a
-comparison of noise, and any ranking read off it would be an artifact.
+\paragraph{Where the physics-free control wins, and a result we had to retract.} On the
+stiff fourth-order equation the best architecture in Table~\ref{tab:regime} is
+\bestCahnHilliard{} at \bestCahnHilliardErr{} (CI \bestCahnHilliardCI{}) against a floor of
+\floorCahnHilliard{}; the ``beats floor'' entry reads \beatsFloorCahnHilliard{}, and
+Table~\ref{tab:pairedch} gives the ranking with paired verdicts. Two things about this row
+are worth more than the ranking itself.
+
+First, the winner here is a physics-free convolutional network, with the spectral models
+statistically tied to it and the conservative local models measurably worse. That is a
+direct counterexample to clause (i) of the hypothesis on this equation, and it is a finding
+that exists only because the physics-free controls are in the table; without them the same
+data would have shown a conservative PI-NCA ``winning'' a field of PI-NCAs.
+
+Second, an earlier version of this comparison reported that \emph{no} architecture beat the
+identity floor here, and wrote that up as a property of the models. It was a property of
+the teacher. Cahn--Hilliard is fourth order, so the explicit stability limit is
+$\Delta t \le 2/(|\lambda_{\text{lap}}| + \varepsilon^2\lambda_{\text{lap}}^2) = 0.231$,
+and the reference implementation shipped $\Delta t = 0.5$. It never visibly exploded only
+because the stepper clips the state to $[-1,1]$ every step; remove the clip and the same
+configuration reaches NaN. Measured by timestep refinement (Section~\ref{sec:teacher}) it
+had an observed order of accuracy of \emph{zero} --- refining $\Delta t$ did not move the
+solution at all, because the clip rather than the discretisation was determining the
+trajectory. Every architecture ranking distilled from it was ranking models against solver
+noise. At a converging timestep the entire picture inverts and every architecture beats the
+floor by roughly an order of magnitude. We report this because the failure mode generalises:
+the correctness gate had asserted that the JAX solver equalled the PyTorch reference, which
+it did, faithfully reproducing the instability. Equality with a reference implementation is
+not the same property as being a converged discretisation, and nothing checked the second
+one until the teacher-error analysis existed.
 
 \begin{table}[t]
 \centering

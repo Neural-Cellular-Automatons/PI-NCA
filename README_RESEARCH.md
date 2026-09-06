@@ -1,4 +1,12 @@
-# PI-NCA Research Program — NCA vs PINN vs Operator Learning for PDEs
+# PI-NCA Research Program — status and provenance
+
+> **Start at [README.md](README.md).** That is the entry point: what the project claims,
+> how to run it, and how to read the results. This document is the research-programme
+> record — deliverable status, the branch trail, and the scope of the compute — kept
+> because the programme was specified as a list of deliverables and the list should stay
+> auditable.
+
+## NCA vs PINN vs Operator Learning for PDEs
 
 A rigorous, JAX-based comparison of Physics-Informed NCAs against PINNs and neural operators
 for PDE-governed physical systems. The objective is **not** to prove NCAs superior, but to
@@ -7,19 +15,30 @@ characterize **the regimes where PINNs, NCAs, operators, and hybrids each win.**
 ## Deliverables (status)
 | # | Deliverable | File(s) | Status |
 |---|---|---|---|
-| 1 | Migration report | `docs/migration/` (4 docs) | ✅ done (gate 36/36) |
-| 2 | Literature review | `docs/literature_review.md` | ✅ done |
-| 3 | Architecture report | `docs/architecture_report.md` | ✅ done |
-| 4 | Experimental report | `docs/experimental_report.md` | ✅ heat + CH (more queued) |
-| 5 | Ablation report | `docs/ablation_report.md` | ✅ A1 (A2–A6 queued) |
-| 6 | Performance benchmarks | `results/bench_*.{json,md}` | ✅ heat, CH, CH-ablation |
-| 7 | Reproducibility guide | `docs/reproducibility.md` + `environment.md` | ✅ done |
-| 8 | Final paper-style summary | `docs/final_summary.md` | ✅ done |
-| — | Running research log | `docs/research_log.md` | ✅ live |
-| + | Master results (all tables) | `docs/master_results.md` | ✅ done |
-| + | Efficiency comparison | `docs/efficiency_comparison.md` | ✅ done |
-| + | Visual gallery (analytic/model/error) | `docs/figures.md` + `docs/figures/*.png` | ✅ 8 phenomena |
-| + | CAX accelerator evaluation | `docs/cax_evaluation.md` | ✅ done |
+| 1 | Migration report | `docs/migration/` | done; asserted by the gate |
+| 2 | Literature review | `docs/literature_review.md` | done (background) |
+| 2b | **Related work + novelty positioning** | `docs/related_work.md` | done; every citation arXiv-verified |
+| 3 | Architecture report | `docs/architecture_report.md`, `architecture_diagrams.md` | done |
+| 4 | Experimental report | `docs/experimental_report.md` | done at the released scale |
+| 5 | Ablation report | `docs/ablation_report.md` | A1/A2/A4/A5/A7 wired; A6 protocol documented |
+| 6 | Performance benchmarks | `results/*.{json,md}` | uniform matrix, all phenomena |
+| 7 | Reproducibility guide | `docs/reproducibility.md`, `environment.md`, `gpu_runbook.md` | done |
+| 8 | Final paper-style summary | `docs/final_summary.md` | done |
+| 9 | **Submission paper source** | `paper/main.tex` (+ generated tables) | done; every number generated |
+| — | Running research log | `docs/research_log.md` | live |
+| + | **Claims audit (generated)** | `docs/claims_audit.md` | live; `python -m pinca_jax.claims` |
+| + | **Bibliography (arXiv-verified)** | `docs/bibliography.md`, `paper/refs.bib` | 52/52 resolve |
+| + | **Conservation taxonomy** | `docs/conservation.md` | done |
+| + | **Legacy script defects** | `docs/legacy_pytorch.md` | done, line-referenced |
+| + | Master results (all tables) | `docs/master_results.md` | done |
+| + | Efficiency comparison | `docs/efficiency_comparison.md` | superseded by the budget-class table |
+| + | Visual gallery | `docs/figures.md` + `docs/figures/*.png` | 10 2-D + 6 3-D |
+| + | CAX accelerator evaluation | `docs/cax_evaluation.md` | done; measured slower on both backends |
+
+**Do not read the status column as a claim that the evidence is sufficient.**
+`docs/claims_audit.md` is generated from `results/` and is the authority on what the
+released numbers actually support; at the time of writing it correctly reports the seed
+count, the backend and rank stability as unsupported.
 
 **Phenomena benchmarked (2-D):** heat, Cahn–Hilliard, Allen–Cahn, shallow-water, Gray–Scott,
 FitzHugh–Nagumo, Nagumo, advection–diffusion, wave, Navier–Stokes (emulators); Darcy (steady
@@ -50,14 +69,23 @@ research/jax-migration     foundation: lit review, JAX core (src/pinca_jax/), mi
 ```
 
 ## Equation suite (shared across all architectures)
-Heat / heterogeneous heat · Gray–Scott · Shallow-Water · FitzHugh–Nagumo · Cahn–Hilliard.
-See `docs/literature_review.md §0` for formulations and per-branch provenance.
+Heat · advection–diffusion · wave · Allen–Cahn · Cahn–Hilliard · Gray–Scott · shallow water ·
+FitzHugh–Nagumo · Nagumo · Navier–Stokes (2-D); six of them repeated in 3-D. Formulations,
+parameters and the two documented stability overrides (Gray–Scott `dt=2.0`, Cahn–Hilliard
+`dt=0.5` — both above their explicit limits) are in `paper/appendix.tex` §B and
+`src/pinca_jax/equations/pdes.py`.
 
 ## Compute scope
-The published tables were produced on a **CPU-only host** ⇒ reduced-scale configs (small
-grids/steps/seeds) for an end-to-end, reproducible methodology demonstration. Configs re-run
-unchanged on GPU — only numeric fields change. `pmap`/sharding are implemented but no-ops on
-one device. See `docs/environment.md`.
+Most published tables were produced on a **CPU-only host** ⇒ reduced-scale configs (small
+grids, short horizons, few seeds) for an end-to-end, reproducible methodology demonstration.
+Configs re-run unchanged on GPU — only the numeric fields change. `pmap`/sharding are
+implemented but no-ops on one device. See `docs/environment.md`.
+
+This is a real limitation, not a formality, and two of the pipeline's own checks exist to
+keep it visible: `pinca_jax.claims` marks the GPU and seed-count claims UNSUPPORTED until a
+full run exists, and `pinca_jax.scaling` reports whether the ranking even survives a change
+of grid and horizon (on heat it currently does not, so no ranking here should be quoted
+without its operating point).
 
 ## Quickstart
 
@@ -127,6 +155,13 @@ python -m pinca_jax.viz3d_volume --npz results/traj/heat_3d.npz
 `--max-mb` (default 64/phenomenon) strides the time axis to bound file size. See
 `docs/gpu_runbook.md` §4b.
 
-## Metrics (every architecture, multi-seed mean ± std)
-L2 error · relative error · residual loss · BC satisfaction · generalization · stability ·
-wall-clock train time · inference speed · memory · parameter count · FLOPs.
+## Metrics (every architecture, multi-seed, with intervals and paired tests)
+Per-IC relative L2 with bootstrap CIs · MSE / RMSE / MAE / L∞ / PSNR / SSIM · high-frequency
+error fraction · error-growth profile · per-channel mass conservation and its drift curve ·
+periodic-BC residual · gradient energy · out-of-distribution degradation on seven held-out
+axes · long-horizon failure rate with the divergence guard off · perturbation amplification ·
+timestep sensitivity · rank stability under scale · parameter count, train wall-clock,
+inference latency, throughput and peak memory.
+
+Comparisons are **paired** (same seeds, same evaluation ICs, same order), tested with
+Wilcoxon signed-rank and Holm–Bonferroni correction. `tie` is a reported outcome.

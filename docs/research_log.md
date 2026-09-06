@@ -165,3 +165,69 @@ Three finding-motivated hybrids (`models/hybrids.py`), benchmarked vs baselines:
 - **PINN** full 3-seed sweep running.
 - All branch refs created: baseline-pinn, ablation-studies, nca-fno-hybrid, operator-nca-hybrid,
   final-comparison. Remaining: PINN/DeepONet sweep tables, optional A4-A6.
+
+---
+
+## Update — the Cahn–Hilliard finding was an artifact of an unstable teacher
+
+**What was reported before.** Across every architecture, nothing beat the do-nothing
+identity floor on Cahn–Hilliard: the best model sat at rel-L2 0.928 against a floor of
+0.928. This had been written up as a property of the *models* — "all simple emulators
+diverge on the stiff fourth-order equation until an explicit output-bounding step is
+added."
+
+**What was actually wrong.** The teacher. Cahn–Hilliard is fourth order, so linearising
+`u_t = lap(u^3 - u - eps2*lap(u))` bounds the explicit timestep at
+
+```
+dt <= 2 / (|lambda_lap| + eps2 * lambda_lap^2) = 2 / (8 + 0.01*64) = 0.231
+```
+
+The notebook ships `dt = 0.5`, more than twice that limit. It never visibly exploded
+because `cahn_hilliard_step` clips the state to [-1,1] on every step; removing the clip and
+rerunning the identical configuration reaches NaN. The clip, not the discretisation, was
+determining the trajectory.
+
+**How it was caught.** Not by inspection — by `pinca_jax.teacher_error`, which was written
+to answer the reviewer's question "the emulator imitates a solver and is then scored
+against that solver, so what does a low error actually mean?". Refining the timestep and
+measuring the Cauchy differences gave an **observed order of accuracy of 0.00** and a
+self-difference of 0.56: refining `dt` did not move the solution at all. A scheme that does
+not change when you refine it is not converging to anything, so every architecture
+comparison distilled from it was ranking models against solver noise.
+
+**The fix.** `pdes.STABLE["cahn_hilliard"]` now uses `dt = 0.02`, where the scheme
+converges at the expected first order (observed 0.90–0.95, self-difference 2.4e-2) and the
+clip stops binding. `REGISTRY` keeps the verbatim `dt = 0.5` so the migration gate still
+compares against the original — the same treatment Gray–Scott's `dt = 2.0` already had.
+
+**What changed in the results.** Re-running the Cahn–Hilliard matrix against the corrected
+teacher (grid 16, 2 seeds, 150 epochs, 14 architectures):
+
+| | before (unstable teacher) | after (converging teacher) |
+|---|---|---|
+| best architecture | identity floor | `resnet` at 4.35e-2 |
+| identity floor | 0.928 | 0.412 |
+| does anything beat the floor? | **no** | yes, by roughly 10x |
+
+So the headline claim was inverted by a numerical-methods bug, not by a modelling insight.
+The "nothing learns on Cahn–Hilliard" result is retracted.
+
+**Two things worth keeping from the correction.**
+
+1. The new winner is `resnet` — a physics-free CNN — with `spectral_flux_nca` and `fno`
+   statistically tied to it, and the conservative PI-NCAs measurably worse. That finding
+   only exists because the physics-free controls were added; without them the table would
+   have shown a PI-NCA "winning" its own subgroup.
+2. `teacher_error` now classifies every teacher as `converging`, `round-off limited` or
+   `NOT CONVERGING`, prints the verdict in the generated table, and refuses to let a
+   ranking on a non-converging teacher be read as a result. Three tests pin it:
+   every stable teacher must converge, the verbatim Cahn–Hilliard timestep must diverge
+   without the clip, and the `STABLE` overrides must not touch the verbatim registry.
+
+**The general lesson.** This is the same class of failure as the NHWC Laplacian bug earlier
+in the log: a gate that did not test the thing the pipeline actually depended on. The
+correctness gate asserted the JAX solver equalled the PyTorch solver — which it did,
+faithfully, including the instability. Equality with a reference implementation is not the
+same property as being a converged discretisation, and until `teacher_error` existed
+nothing in the project checked the second one.

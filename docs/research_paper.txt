@@ -1,3 +1,24 @@
+% RETRACTION NOTICE -- read before citing anything in this file.
+%
+% This is the long-form draft. It is SUPERSEDED by paper/main.tex, which is the ICLR
+% submission source and in which every number is generated from results/ rather than typed.
+%
+% Its Cahn-Hilliard section is retracted. Those numbers came from a teacher that was not
+% converging: the equation is fourth order, the explicit stability limit is
+% dt <= 2/(|lam_lap| + eps2*lam_lap^2) = 0.231, and the reference implementation shipped
+% dt = 0.5. It avoided visible blow-up only because the stepper clips to [-1,1] each step;
+% without the clip the same configuration reaches NaN. Timestep refinement gives an
+% observed order of accuracy of 0.00. The claim that no architecture beat the identity
+% floor is therefore a property of the solver, not of the models -- at dt = 0.02 every
+% architecture beats the floor by roughly an order of magnitude and the best model is a
+% physics-free CNN. See docs/research_log.md (final entry) and results/teacher_error.md.
+%
+% The abstract's "the 2-D regime ordering reproduces in full 3-D, indicating that the
+% dependence of architecture performance on PDE structure is dimension-independent" also
+% overstates the evidence: two dimensionalities at one reduced resolution and one seed are
+% not independent samples of the same population. paper/main.tex states the weaker,
+% supportable version.
+
 \documentclass[11pt]{article}
 
 % ============================================================

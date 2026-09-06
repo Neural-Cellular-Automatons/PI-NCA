@@ -121,12 +121,17 @@ def _summary(rec):
 
 
 # --------------------------------------------------------------- the tables ---
-def table_regime_map(tag="full"):
-    """One row per phenomenon: the best architecture, the floor, and the teacher error."""
+def table_regime_map(tag="headline"):
+    """One row per phenomenon: the best architecture, the floor, and the teacher error.
+
+    Prefers the higher-seed `headline` file where one exists and falls back to the breadth
+    matrix, which is the same precedence `table_paired` uses -- so a phenomenon cannot show
+    one winner in the regime map and a different one in its own paired table.
+    """
     te = (load("teacher_error") or {}).get("results", {})
     lines = []
     for pde in sorted(PDE_LABEL):
-        d = load(f"bench_{pde}_{tag}")
+        d = load(f"bench_{pde}_{tag}") or load(f"bench_{pde}_full")
         ok, _ = _rows(d)
         if not ok:
             continue

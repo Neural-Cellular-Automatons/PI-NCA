@@ -1,24 +1,34 @@
-### navier_stokes  (grid=24, train_steps=12, eval_steps=48, epochs=150, seeds=1, clip=None)
+### navier_stokes  (grid=16, train_steps=6, eval_steps=12, epochs=150, seeds=2, clip=None)
 
-| metric | abl_k3 | abl_k5 | abl_multiscale |
-|---|---|---|---|
-| rel-L2 ↓ | 5.576e-01±0.0e+00 | 1.370e+00±0.0e+00 | **2.844e-01±0.0e+00** |
-| MSE ↓ | 8.360e-02±0.0e+00 | 5.044e-01±0.0e+00 | **2.175e-02±0.0e+00** |
-| RMSE ↓ | 2.891e-01±0.0e+00 | 7.102e-01±0.0e+00 | **1.475e-01±0.0e+00** |
-| MAE ↓ | 1.746e-01±0.0e+00 | 4.417e-01±0.0e+00 | **9.887e-02±0.0e+00** |
-| L∞ ↓ | 1.579e+00±0.0e+00 | 6.234e+00±0.0e+00 | **9.440e-01±0.0e+00** |
-| PSNR(dB) ↑ | 24.2±0 | 16.4±0 | **30.1±0** |
-| SSIM ↑ | 0.84±0 | 0.488±0 | **0.96±0** |
-| hi-freq err frac ↓ | 2.129e-01±0.0e+00 | 9.001e-01±0.0e+00 | **1.189e-01±0.0e+00** |
-| rel-L2 @T/4 ↓ | 1.552e-01±0.0e+00 | 1.268e-01±0.0e+00 | **9.621e-02±0.0e+00** |
-| rel-L2 @T/2 ↓ | 2.945e-01±0.0e+00 | 2.685e-01±0.0e+00 | **1.640e-01±0.0e+00** |
-| rel-L2 @3T/4 ↓ | 4.278e-01±0.0e+00 | 6.339e-01±0.0e+00 | **2.256e-01±0.0e+00** |
-| rel-L2 @T ↓ | 5.576e-01±0.0e+00 | 1.370e+00±0.0e+00 | **2.844e-01±0.0e+00** |
-| err-growth T/(T/4) ↓ | 3.59±0 | 10.8±0 | **2.96±0** |
-| mass-cons err ↓ | **1.647e-05±0.0e+00** | 2.660e-05±0.0e+00 | 1.883e-05±0.0e+00 |
-| periodic-BC res ↓ | 1.476e-01±0.0e+00 | 5.806e-01±0.0e+00 | **1.164e-01±0.0e+00** |
-| grad-energy | 5.352e-02±0.0e+00 | 5.545e-01±0.0e+00 | 5.157e-02±0.0e+00 |
-| params ↓ | **4576** | 5088 | 9312 |
-| train wall(s) ↓ | **46.8±0** | 48.5±0 | 75.2±0 |
-| infer s/step ↓ | 7.459e-04±0.0e+00 | **6.914e-04±0.0e+00** | 9.068e-04±0.0e+00 |
-| throughput cells/s ↑ | 6.18e+06 | **6.66e+06** | 5.08e+06 |
+| metric | abl_k3 |
+|---|---|
+| rel-L2 ↓ | **1.716e-01±3.7e-02** |
+| MSE ↓ | **9.565e-03±5.0e-03** |
+| RMSE ↓ | **9.602e-02±2.6e-02** |
+| MAE ↓ | **5.012e-02±7.8e-03** |
+| L∞ ↓ | **7.243e-01±2.5e-01** |
+| PSNR(dB) ↑ | **35.4±0.12** |
+| SSIM ↑ | **0.985±0.0065** |
+| hi-freq err frac ↓ | **9.909e-02±1.2e-02** |
+| rel-L2 @T/4 ↓ | **4.379e-02±8.9e-03** |
+| rel-L2 @T/2 ↓ | **8.669e-02±1.8e-02** |
+| rel-L2 @3T/4 ↓ | **1.291e-01±2.7e-02** |
+| rel-L2 @T ↓ | **1.716e-01±3.7e-02** |
+| err-growth T/(T/4) ↓ | **3.91±0.064** |
+| mass-cons err ↓ | **8.205e-06±1.6e-06** |
+| periodic-BC res ↓ | **1.769e-01±1.8e-02** |
+| grad-energy | 1.115e-01±1.6e-02 |
+| params ↓ | **4576** |
+| train wall(s) ↓ | **10.5±2.2** |
+| infer s/step ↓ | **4.737e-04±6.6e-05** |
+| throughput cells/s ↑ | **4.37e+06** |
+
+### navier_stokes - rel-L2 with uncertainty and paired tests
+
+n = 16 paired evaluations (2 seed(s) x 8 held-out initial conditions). CIs are 10,000-sample percentile bootstraps. The paired column tests each architecture against **abl_k3** (best mean) on the SAME initial conditions, using Wilcoxon signed-rank with Holm-Bonferroni across the 0 comparisons in this table; `tie` means the difference is not resolvable at this sample size, not that the means are equal.
+
+Note: the mean here is the unweighted mean of per-IC relative errors, while the ranking table above reports the batch-reduced ratio of norms (which weights high-energy initial conditions more heavily). The two are different estimators of the same quantity and will not print equal numbers; the paired tests need the per-IC form, so it is the one reported with uncertainty.
+
+| architecture | rel-L2 mean | 95% CI | median | vs abl_k3 (mean diff) | p (Holm) | verdict |
+|---|---|---|---|---|---|---|
+| abl_k3 | 1.4430e-01 | [1.212e-01, 1.674e-01] | 1.3816e-01 | - | - | **reference** |

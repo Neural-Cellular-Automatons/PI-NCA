@@ -23,14 +23,14 @@
    "grid": 16,
    "kind": "vs_analytic",
    "reliability": "converging",
-   "solver_s_per_step": 1.1249998351559043e-05,
+   "solver_s_per_step": 4.0399987483397126e-05,
    "emulator_s_per_step": {
-    "plain_nca": 0.00040794999222271144,
-    "fno": 0.002729000014369376
+    "plain_nca": 0.0008847500139381737,
+    "fno": 0.003326199992443435
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.027576905352262992,
-    "fno": 0.004122388526273545
+    "plain_nca": 0.045662601640329196,
+    "fno": 0.012145988684695175
    }
   },
   "wave": {
@@ -53,14 +53,14 @@
    "grid": 16,
    "kind": "vs_analytic",
    "reliability": "converging",
-   "solver_s_per_step": 1.3950004358775914e-05,
+   "solver_s_per_step": 2.469999890308827e-05,
    "emulator_s_per_step": {
-    "plain_nca": 0.00041614999645389616,
-    "fno": 0.0030236000166041777
+    "plain_nca": 0.0006169500120449811,
+    "fno": 0.003734700003406033
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.03352157742190395,
-    "fno": 0.004613706931325373
+    "plain_nca": 0.040035656667191645,
+    "fno": 0.006613650058625408
    }
   },
   "adv_diff": {
@@ -83,14 +83,14 @@
    "grid": 16,
    "kind": "vs_analytic",
    "reliability": "converging",
-   "solver_s_per_step": 1.1899988749064505e-05,
+   "solver_s_per_step": 7.795001147314906e-05,
    "emulator_s_per_step": {
-    "plain_nca": 0.0004309000069042668,
-    "fno": 0.002863500005332753
+    "plain_nca": 0.0006345000001601875,
+    "fno": 0.00915845000417903
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.02761658976740685,
-    "fno": 0.00415574951030109
+    "plain_nca": 0.12285265773146879,
+    "fno": 0.008511266800503245
    }
   },
   "allen_cahn": {
@@ -108,14 +108,14 @@
    "reference_finite": true,
    "kind": "self_convergence",
    "reliability": "converging",
-   "solver_s_per_step": 3.8999991375021636e-05,
+   "solver_s_per_step": 3.460000152699649e-05,
    "emulator_s_per_step": {
-    "plain_nca": 0.00036279999767430127,
-    "fno": 0.002736499984166585
+    "plain_nca": 0.000946150001254864,
+    "fno": 0.013520749998860992
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.10749722027985271,
-    "fno": 0.0142517783981086
+    "plain_nca": 0.03656925587331585,
+    "fno": 0.002559029752591551
    }
   },
   "gray_scott": {
@@ -133,14 +133,14 @@
    "reference_finite": true,
    "kind": "self_convergence",
    "reliability": "converging",
-   "solver_s_per_step": 1.1049996828660369e-05,
+   "solver_s_per_step": 0.00010755000403150916,
    "emulator_s_per_step": {
-    "plain_nca": 0.0004233999934513122,
-    "fno": 0.002580499989562668
+    "plain_nca": 0.0008785999962128699,
+    "fno": 0.006598499996471219
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.026098245095586642,
-    "fno": 0.004282114655714825
+    "plain_nca": 0.1224106582889638,
+    "fno": 0.016299159516969943
    }
   },
   "shallow_water": {
@@ -158,39 +158,39 @@
    "reference_finite": true,
    "kind": "self_convergence",
    "reliability": "round-off limited",
-   "solver_s_per_step": 7.280000136233866e-05,
+   "solver_s_per_step": 0.00016480000340379775,
    "emulator_s_per_step": {
-    "plain_nca": 0.0003616500034695491,
-    "fno": 0.0027351000026101246
+    "plain_nca": 0.0005260000034468248,
+    "fno": 0.00462189999234397
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.2012996003390577,
-    "fno": 0.026616943170724355
+    "plain_nca": 0.31330798861325476,
+    "fno": 0.03565633259939145
    }
   },
   "cahn_hilliard": {
-   "rel_l2": 0.5603475570678711,
+   "rel_l2": 0.022869324311614037,
    "cauchy_diffs": {
-    "1": 0.5603475570678711,
-    "2": 0.4494020342826843,
-    "4": 0.27635249495506287
+    "1": 0.022869324311614037,
+    "2": 0.010257309302687645,
+    "4": 0.0035014774184674025
    },
-   "observed_order": -0.05926699266386202,
+   "observed_order": 0.900822896364888,
    "reference_refinement": 8,
-   "t_final": 6.0,
+   "t_final": 0.24,
    "steps": 12,
    "grid": 16,
    "reference_finite": true,
    "kind": "self_convergence",
-   "reliability": "NOT CONVERGING",
-   "solver_s_per_step": 3.505000495351851e-05,
+   "reliability": "converging",
+   "solver_s_per_step": 8.964999869931489e-05,
    "emulator_s_per_step": {
-    "plain_nca": 0.0004157000075792894,
-    "fno": 0.002810200006933883
+    "plain_nca": 0.0007229000038933009,
+    "fno": 0.0050315999978920445
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.08431562239632039,
-    "fno": 0.012472423619160117
+    "plain_nca": 0.12401438386011232,
+    "fno": 0.017817393814900977
    }
   },
   "fitzhugh_nagumo": {
@@ -208,14 +208,14 @@
    "reference_finite": true,
    "kind": "self_convergence",
    "reliability": "converging",
-   "solver_s_per_step": 1.585000427439809e-05,
+   "solver_s_per_step": 5.330001295078546e-05,
    "emulator_s_per_step": {
-    "plain_nca": 0.00046120000479277223,
-    "fno": 0.0026922499964712188
+    "plain_nca": 0.0007722500013187528,
+    "fno": 0.004857600011746399
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.03436687787363095,
-    "fno": 0.005887270606104823
+    "plain_nca": 0.06901911659533466,
+    "fno": 0.010972499343487648
    }
   },
   "nagumo": {
@@ -233,14 +233,14 @@
    "reference_finite": true,
    "kind": "self_convergence",
    "reliability": "converging",
-   "solver_s_per_step": 1.3800003216601908e-05,
+   "solver_s_per_step": 1.5400000847876072e-05,
    "emulator_s_per_step": {
-    "plain_nca": 0.00036404999264050275,
-    "fno": 0.0031388500065077096
+    "plain_nca": 0.0007771499949740246,
+    "fno": 0.00805850001052022
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.03790689042074076,
-    "fno": 0.004396515661339071
+    "plain_nca": 0.019815995531949793,
+    "fno": 0.001911025727599508
    }
   },
   "navier_stokes": {
@@ -258,14 +258,14 @@
    "reference_finite": true,
    "kind": "self_convergence",
    "reliability": "converging",
-   "solver_s_per_step": 0.00020049999875482172,
+   "solver_s_per_step": 0.00024929999199230224,
    "emulator_s_per_step": {
-    "plain_nca": 0.00039739999920129776,
-    "fno": 0.004426950006745756
+    "plain_nca": 0.0007915500027593225,
+    "fno": 0.00794210001186002
    },
    "speedup_vs_solver": {
-    "plain_nca": 0.5045294379800228,
-    "fno": 0.045290775455790196
+    "plain_nca": 0.31495166547697223,
+    "fno": 0.031389681770391996
    }
   }
  },
