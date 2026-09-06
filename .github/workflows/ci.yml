@@ -41,14 +41,18 @@ jobs:
           python -m pinca_jax.models.baselines
           python -m pinca_jax.teacher_error --demo
 
-      # Two phenomena, not all ten: this proves the driver, the checkpointing, the paired
-      # statistics and the plotting are wired together. Running the whole matrix here would
-      # take ~20 minutes to re-prove what the correctness gate already covers.
-      - name: Pipeline wiring (tiny, CPU, numbers meaningless)
+      # Exercise the ACTUAL one command a user runs, not a hand-rolled approximation of
+      # it. This is what catches a launcher that has drifted from the pipeline -- which
+      # had already happened once in this repository. Two phenomena and four
+      # architectures keep it to a few minutes; the numbers are meaningless by design and
+      # every driver says so in its own output.
+      - name: The one command (tiny, CPU, numbers meaningless)
+        run: bash run_paper.sh --profile smoke --allow-cpu --no-gate --only bench2d,teacher,plots,claims
+
+      - name: Launcher aliases and stage list still resolve
         run: |
-          python -m pinca_jax.bench_all --pdes heat,cahn_hilliard --archs plain_nca,pi_nca,resnet_iso,identity --seeds 2 --epochs 30 --grid 16 --batch 4 --rollout 4 --eval 8 --force --allow-cpu
-          python -m pinca_jax.teacher_error --grid 16 --steps 8 --allow-cpu
-          python -m pinca_jax.plots
+          bash run_gpu.sh --list-stages
+          bash run_paper.sh --list-stages
 
       # Regenerate the audit, the paper tables and every quoted number, and fail if any
       # count in the prose disagrees with what is actually in results/.

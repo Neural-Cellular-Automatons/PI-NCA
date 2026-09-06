@@ -1,44 +1,56 @@
-"""Single entry point for the full benchmark run.
+"""One command produces every number, table and figure in the paper.
 
     python -m pinca_jax.runner
 
-That is the whole command. It runs, in order: the correctness gate, the uniform 2-D
-matrix, the ablations, the multi-seed headline comparison, the out-of-distribution
-study, the stability stress test, the teacher-error study, the uniform 3-D matrix, the
-resolution study, the continuous baselines, trajectory capture, the field figures, the
-benchmark plots, the claims audit, and finally regenerates the report (Markdown + PDF)
-from whatever results exist.
+That is the whole thing. On a GPU box it runs the correctness gate, the uniform 2-D
+matrix, the ablations, the multi-seed headline comparison, the teacher-error study, the
+out-of-distribution study, the stability stress test, the scaling / rank-stability study,
+the uniform 3-D matrix, the resolution study, the continuous and matched baselines,
+trajectory capture, the field figures, the benchmark plots, the claims audit, the
+bibliography check, the generated paper tables, the Markdown report and -- if a LaTeX
+toolchain is present -- the paper PDF.
 
-Design notes, all of which exist because this runs unattended for hours:
+Design notes, all of which exist because this runs unattended for many hours:
 
 * **GPU or nothing.** The run refuses to start on the CPU backend. Mixing CPU and GPU
   measurements inside one table is worse than having no table.
-* **Every stage is resumable.** Benchmarks checkpoint per (pde, architecture) cell, so
-  re-running after a crash or a Ctrl-C picks up where it stopped.
-* **Only the measurement stages are fatal.** Figures, baselines and the report cannot
-  destroy hours of completed benchmarking; their failures are collected and reported.
-* **Timings and failures are written to results/run_manifest.json**, so the run can be
+* **Everything is resumable, at two levels.** Benchmarks checkpoint per (pde,
+  architecture) cell, and the runner additionally skips a whole stage whose outputs are
+  already on disk. Re-running after a crash, a Ctrl-C or a reboot picks up where it
+  stopped instead of repeating a night of compute. `--force` recomputes.
+* **Only the 2-D matrix is fatal.** Every other stage records its failure and the run
+  continues, because a 3-D out-of-memory error must not destroy a completed 2-D sweep.
+* **The paper artifacts are always regenerated**, even if a measurement stage failed
+  earlier, so what is on disk always reflects what was actually measured. That happens in
+  a `finally` block.
+* **Timings, failures and provenance go to results/run_manifest.json**, so the run can be
   audited afterwards without scrolling the log.
 
-Useful flags:
-    --profile smoke|bench|full   scale preset (default full)
+Know the cost before starting it:
 
-Cost, so the choice is informed rather than discovered three hours in. The 2-D matrix is
-14 architectures x 10 phenomena x `seeds` trainings; the headline stage adds
-14 x 3 x `headline_seeds`. At the `full` preset that is 700 + 420 trainings, which is an
-overnight run on a single mid-range GPU, not a coffee break. `--profile bench` skips the
-figure stages; `--only`/`--skip` select stages; every stage checkpoints per cell, so an
-interrupted run resumes rather than restarting.
-    --only bench2d,plots         run just these stages
-    --skip figures               skip stages
-    --force                      recompute cells already on disk
-    --allow-cpu                  development escape hatch; NOT for real numbers
+    python -m pinca_jax.runner --estimate
+
+That trains two real cells at the chosen profile, one cheap architecture and one
+expensive, and projects the wall-clock per stage from the measured rate. It is the honest
+way to find out whether a preset is an overnight run or a three-day one on *your* card.
+
+Flags:
+    --profile paper|full|bench|smoke   scale preset (default: paper)
+    --estimate                         measure and project the cost, then exit
+    --list-stages                      print the stage names --only/--skip accept
+    --only bench2d,plots               run just these stages
+    --skip figures                     skip stages
+    --force                            recompute finished cells and stages
+    --allow-cpu                        development escape hatch; NOT for real numbers
+    --no-gate                          skip the correctness suite (do not, for real runs)
 """
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -47,39 +59,94 @@ from . import bench, env
 
 RES = bench.RESULTS_DIR
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-
-# grid / batch / epochs per scale preset.
-PROFILES = {
-    # ~2 minutes end to end: proves every stage wires up, numbers are meaningless.
-    "smoke": dict(seeds=1, epochs=40, grid=16, batch=8, rollout=4, eval=12,
-                  grid3d=8, epochs3d=20, batch3d=2, res_epochs=20,
-                  viz_grid=16, viz_epochs=40, viz3d_grid=8, viz3d_epochs=20, max_mb=8,
-                  headline_seeds=2, n_eval=8, ood_epochs=40, stab_epochs=40),
-    # measurements only, no field figures.
-    "bench": dict(seeds=5, epochs=2000, grid=64, batch=64, rollout=12, eval=48,
-                  grid3d=32, epochs3d=800, batch3d=16, res_epochs=600,
-                  viz_grid=48, viz_epochs=400, viz3d_grid=16, viz3d_epochs=200,
-                  max_mb=64, headline_seeds=10, n_eval=32, ood_epochs=1000,
-                  stab_epochs=1000),
-    "full": dict(seeds=5, epochs=2000, grid=64, batch=64, rollout=12, eval=48,
-                 grid3d=32, epochs3d=800, batch3d=16, res_epochs=600,
-                 viz_grid=48, viz_epochs=400, viz3d_grid=16, viz3d_epochs=200,
-                 max_mb=64, headline_seeds=10, n_eval=32, ood_epochs=1000,
-                 stab_epochs=1000),
-}
+PAPER_DIR = os.path.join(ROOT, "paper")
+REPORT_MD = os.path.join(ROOT, "docs", "PI-NCA_Architectures_and_Results.md")
 
 # The three regimes the regime map distinguishes: smooth diffusive, stiff bounded
-# phase-separating, and advective/turbulent. The expensive high-seed-count studies run
-# on these rather than on all ten, because a 10-seed x 14-architecture sweep over the
-# whole suite costs more than the rest of the pipeline combined and buys resolution on
-# phenomena whose ranking the 5-seed matrix already settles.
+# phase-separating, and advective/turbulent. The expensive high-seed-count studies run on
+# these rather than on all ten, because a 10-seed x 14-architecture sweep over the whole
+# suite costs more than the rest of the pipeline combined and buys resolution on phenomena
+# whose ranking the 5-seed matrix already settles.
 HEADLINE_PDES = "heat,cahn_hilliard,navier_stokes"
 
 VIZ_2D = ["heat", "allen_cahn", "nagumo", "adv_diff", "gray_scott", "shallow_water",
           "fitzhugh_nagumo", "wave", "cahn_hilliard", "navier_stokes"]
 VIZ_3D = ["heat", "adv_diff", "allen_cahn", "nagumo", "gray_scott", "fitzhugh_nagumo"]
 
-REPORT_MD = os.path.join(ROOT, "docs", "PI-NCA_Architectures_and_Results.md")
+# Architecture subsets for the studies that would otherwise dominate the run. Each spans
+# the three families under test -- unconstrained local, conservative local, global
+# spectral -- plus a physics-free control, so the subset can still answer the question the
+# study exists to ask.
+OOD_ARCHS = "plain_nca,pi_nca,multiscale_flux_nca,fno,resnet,unet"
+STAB_ARCHS = ("plain_nca,pi_nca,multiscale_flux_nca,bounded_multiscale_nca,"
+              "abl_proj_uniform,abl_proj_headroom,fno,resnet,unet,identity")
+SCALING_ARCHS = "plain_nca,pi_nca,multiscale_flux_nca,fno,resnet_iso,identity"
+
+# grid / batch / epochs per scale preset.
+PROFILES = {
+    # Minutes end to end: proves every stage wires up. The numbers are meaningless and
+    # every driver says so in its own output.
+    "smoke": dict(seeds=1, epochs=25, grid=12, batch=4, rollout=3, eval=8,
+                  grid3d=8, epochs3d=15, batch3d=2, res_epochs=15,
+                  viz_grid=12, viz_epochs=25, viz3d_grid=8, viz3d_epochs=15, max_mb=8,
+                  headline_seeds=2, n_eval=4, ood_epochs=25, stab_epochs=25,
+                  scal_grids="12,16", scal_rollouts="2,3", scal_epochs="15,25",
+                  # A wiring check must still touch every phenomenon -- that is where
+                  # shape and channel bugs live -- but it does not need every
+                  # architecture, and running all fourteen turns "minutes" into an hour.
+                  archs="plain_nca,pi_nca,resnet_iso,identity",
+                  ood_archs="plain_nca,fno,identity",
+                  stab_archs="plain_nca,bounded_multiscale_nca,identity",
+                  scal_archs="plain_nca,fno,identity",
+                  res_archs="plain_nca,fno"),
+    # The intended preset for producing the paper. Sized so the whole pipeline finishes
+    # overnight on one mid-range GPU rather than over a long weekend; --estimate will tell
+    # you what it actually costs on your card before you commit to it.
+    "paper": dict(seeds=5, epochs=1200, grid=48, batch=32, rollout=12, eval=48,
+                  grid3d=24, epochs3d=600, batch3d=8, res_epochs=500,
+                  viz_grid=48, viz_epochs=400, viz3d_grid=16, viz3d_epochs=200,
+                  max_mb=64, headline_seeds=10, n_eval=32, ood_epochs=800,
+                  stab_epochs=800,
+                  scal_grids="24,32,48", scal_rollouts="4,8,12",
+                  scal_epochs="300,600,1200",
+                  archs=None, ood_archs=OOD_ARCHS,
+                  stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
+                  res_archs=None),
+    # Everything at the largest scale attempted. Expect multiple days on one GPU.
+    "full": dict(seeds=5, epochs=2000, grid=64, batch=64, rollout=12, eval=48,
+                 grid3d=32, epochs3d=800, batch3d=16, res_epochs=600,
+                 viz_grid=48, viz_epochs=400, viz3d_grid=16, viz3d_epochs=200,
+                 max_mb=64, headline_seeds=10, n_eval=32, ood_epochs=1200,
+                 stab_epochs=1200,
+                 scal_grids="32,48,64", scal_rollouts="4,8,12",
+                 scal_epochs="500,1000,2000",
+                  archs=None, ood_archs=OOD_ARCHS,
+                  stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
+                  res_archs=None),
+}
+# `bench` is `paper` without the field figures, for when only the measurements are wanted.
+PROFILES["bench"] = dict(PROFILES["paper"])
+
+# Ordered, with the one-line description printed by --list-stages.
+STAGES = [
+    ("gate", "correctness suite (205 tests) -- fatal, nothing downstream is trustworthy without it"),
+    ("bench2d", "uniform 2-D matrix + ablations A1/A4/A5/A7 -- the only other fatal stage"),
+    ("headline", "high-seed-count paired comparison on the three regime representatives"),
+    ("teacher", "the reference solver's own error, and whether it converges at all"),
+    ("ood", "held-out initial-condition families, PDE coefficients and horizons"),
+    ("stability", "long-horizon failure rates with the divergence guard DISABLED"),
+    ("scaling", "does the ranking survive a change of grid, horizon and training budget?"),
+    ("bench3d", "the same comparison in three dimensions"),
+    ("resolution", "train at one grid, evaluate at every other"),
+    ("baselines", "PINN, DeepONet, Darcy, and the matched PINN-vs-emulator comparison"),
+    ("capture", "train once per phenomenon and archive raw trajectories for the figures"),
+    ("figures", "field montages and 3-D volume renders, from the captured trajectories"),
+    ("plots", "benchmark plots (runs twice: once early, once at the end)"),
+    ("claims", "claims audit, bibliography verification, generated paper tables"),
+    ("report", "architecture diagrams + the Markdown/PDF architectures-and-results report"),
+    ("pdf", "compile paper/main.tex, if a LaTeX toolchain is installed"),
+]
+FINALISATION = {"plots", "claims", "report", "pdf"}
 
 
 class Run:
@@ -95,6 +162,7 @@ class Run:
         self.force = force
         self.manifest = []
         self.failures = []
+        self.skipped = []
 
     def _cmd(self, module, args):
         cmd = [sys.executable, "-u", "-m", f"pinca_jax.{module}"] + [str(a) for a in args]
@@ -106,11 +174,23 @@ class Run:
             cmd.append("--allow-cpu")
         return cmd
 
-    def stage(self, name, module, args=(), fatal=True, raw=None):
+    def stage(self, name, module, args=(), fatal=True, raw=None, outputs=()):
+        """Run one stage. `outputs` are files whose presence means it is already done.
+
+        Stage-level resume matters as much as cell-level resume here: the studies that do
+        not checkpoint internally (OOD, stability, scaling, matched) would otherwise redo
+        hours of work every time the run is restarted after a crash further along.
+        """
+        if outputs and not self.force and all(os.path.exists(p) for p in outputs):
+            print(f"\n-- {name}: already on disk, skipping (use --force to recompute)")
+            self.skipped.append(name)
+            self.manifest.append({"stage": name, "seconds": 0.0, "rc": 0, "ok": True,
+                                  "skipped": True})
+            return True
         cmd = raw or self._cmd(module, args)
         print(f"\n{'=' * 72}\n== {name}\n{'=' * 72}", flush=True)
         t0 = time.time()
-        # A child writing to a pipe is block-buffered, so `bash run_gpu.sh | tee log`
+        # A child writing to a pipe is block-buffered, so `bash run_paper.sh | tee log`
         # would show nothing for hours. Force line-by-line output so progress is live.
         child_env = dict(os.environ, PYTHONUNBUFFERED="1")
         rc = subprocess.call(cmd, cwd=ROOT, env=child_env)
@@ -122,9 +202,8 @@ class Run:
             self.failures.append(name)
             if fatal:
                 print(f"\n!! {name} failed (exit {rc}) and is required. Stopping.")
-                self.write_manifest()
-                sys.exit(rc)
-            print(f"!! {name} failed (exit {rc}); continuing — later stages do not "
+                raise FatalStage(name)
+            print(f"!! {name} failed (exit {rc}); continuing -- later stages do not "
                   f"depend on it.")
         else:
             print(f"-- {name} finished in {dt / 60:.1f} min")
@@ -135,23 +214,164 @@ class Run:
         bench.save_results(os.path.join(RES, "run_manifest.json"),
                            {"results": {}, "stages": self.manifest,
                             "total_seconds": round(total, 1),
-                            "failures": self.failures,
+                            "failures": self.failures, "skipped": self.skipped,
                             "device": env.provenance("runner")})
 
 
+class FatalStage(RuntimeError):
+    """A required stage failed. Finalisation still runs; the run then exits non-zero."""
+
+
+# ----------------------------------------------------------------- estimation ---
+def _n_archs():
+    from .models import registry
+    return len(registry.BENCH_ARCHS)
+
+
+def _n(spec, default):
+    """Size of an architecture subset, or the full matrix when the profile sets none."""
+    return len(spec.split(",")) if spec else default
+
+
+def cell_counts(P):
+    """Training runs per stage, so the estimate is arithmetic rather than a guess."""
+    from .equations import pdes
+    n_arch = _n(P.get("archs"), _n_archs())
+    n_pde = len(pdes.REGISTRY)
+    n_head = len(HEADLINE_PDES.split(","))
+    seeds, hseeds = P["seeds"], P["headline_seeds"]
+    small = min(3, seeds)
+    n_scal = (len(P["scal_grids"].split(",")) + len(P["scal_rollouts"].split(","))
+              + len(P["scal_epochs"].split(",")))
+    return {
+        "bench2d": n_pde * n_arch * seeds,
+        # A4 2x2 + A5 2x3 + A7 2x3 + A1 2x2 = 20 cells, run by the same stage
+        "ablations": 20 * seeds,
+        "headline": n_head * n_arch * hseeds,
+        "ood": n_head * _n(P.get("ood_archs"), 6) * small,
+        "stability": n_head * _n(P.get("stab_archs"), 10) * small,
+        "scaling": n_head * n_scal * _n(P.get("scal_archs"), 6),
+        "bench3d": 6 * n_arch,
+        "resolution": 3 * 4 * _n(P.get("res_archs"), 4),
+        "capture": len(VIZ_2D) + len(VIZ_3D),
+        "matched (PINN runs)": P["n_eval"] + 1,
+    }
+
+
+def measure_rate(P, allow_cpu=False):
+    """Time one cheap and one expensive training at this profile's settings.
+
+    Two architectures rather than one because the spread between a 5e3-parameter cellular
+    automaton and a 5.9e5-parameter spectral operator is the dominant uncertainty in any
+    projection, and quoting a single number would hide it.
+    """
+    from .harness import EmuConfig, train_emulator
+    from .models import registry
+    import jax
+    out = {}
+    for arch in ("plain_nca", "fno"):
+        cfg = EmuConfig(pde="heat", grid_size=P["grid"], batch=P["batch"],
+                        rollout_steps=P["rollout"], eval_steps=P["eval"],
+                        epochs=P["epochs"], warmup_epochs=min(30, P["epochs"] // 4))
+        t0 = time.time()
+        tr = train_emulator(registry.REGISTRY[arch].make(1), cfg)
+        jax.block_until_ready(tr["params"])
+        out[arch] = time.time() - t0
+        print(f"  {arch:12s} {out[arch]:7.1f} s / training "
+              f"(grid {P['grid']}, {P['epochs']} epochs, batch {P['batch']})")
+    return out
+
+
+def estimate(profile, allow_cpu=False):
+    P = PROFILES[profile]
+    print(f"[estimate] profile '{profile}': grid {P['grid']}, {P['epochs']} epochs, "
+          f"batch {P['batch']}, {P['seeds']} seeds "
+          f"({P['headline_seeds']} for the headline stage)")
+    print(f"[estimate] backend {env.provenance('estimate')['backend']}; "
+          f"timing two real trainings...")
+    rate = measure_rate(P, allow_cpu)
+    lo, hi = min(rate.values()), max(rate.values())
+    counts = cell_counts(P)
+    total_cells = sum(counts.values())
+    print(f"\n{'stage':<28}{'trainings':>10}{'low (h)':>10}{'high (h)':>10}")
+    print("-" * 58)
+    for k, v in counts.items():
+        mark = "  (runs inside bench2d)" if k == "ablations" else ""
+        print(f"{k:<28}{v:>10}{v * lo / 3600:>10.1f}{v * hi / 3600:>10.1f}{mark}")
+    print("-" * 58)
+    print(f"{'TOTAL':<28}{total_cells:>10}{total_cells * lo / 3600:>10.1f}"
+          f"{total_cells * hi / 3600:>10.1f}")
+    print(f"\nThe two columns are the cheapest and the most expensive architecture in the\n"
+          f"matrix; the truth is between them and nearer the low end, because most of the\n"
+          f"architectures are small. Figures, plots, the report and the audit add minutes,\n"
+          f"not hours.\n"
+          f"\nIf that is too long: --profile bench drops the field figures, and\n"
+          f"--skip scaling,resolution,bench3d removes the three least central studies.\n"
+          f"Every stage resumes, so starting it and stopping it later is safe.")
+
+
+# ---------------------------------------------------------------------- paper ---
+def build_pdf(r: Run):
+    """Compile paper/main.tex if a LaTeX toolchain is installed; say so clearly if not."""
+    tex = shutil.which("pdflatex") or shutil.which("xelatex")
+    if not tex:
+        print("\n-- pdf: no pdflatex/xelatex on PATH; skipping the PDF build.\n"
+              "   Everything it needs is already generated:\n"
+              "     paper/main.tex, paper/appendix.tex, paper/refs.bib,\n"
+              "     paper/generated/*.tex  (all tables and every quoted number)\n"
+              "   Compile anywhere with:  cd paper && pdflatex main && bibtex main && "
+              "pdflatex main && pdflatex main")
+        r.skipped.append("pdf (no LaTeX toolchain)")
+        return False
+    name = os.path.basename(tex)
+    steps = [[tex, "-interaction=nonstopmode", "-halt-on-error", "main.tex"]]
+    if shutil.which("bibtex"):
+        steps.append(["bibtex", "main"])
+        steps.append([tex, "-interaction=nonstopmode", "-halt-on-error", "main.tex"])
+    steps.append([tex, "-interaction=nonstopmode", "-halt-on-error", "main.tex"])
+    for i, cmd in enumerate(steps, 1):
+        rc = subprocess.call(cmd, cwd=PAPER_DIR,
+                             stdout=subprocess.DEVNULL if i < len(steps) else None)
+        if rc != 0 and cmd[0] != "bibtex":   # bibtex warns noisily on a first pass
+            print(f"!! pdf: {name} pass {i} failed (exit {rc}); see paper/main.log")
+            r.failures.append("pdf")
+            return False
+    print(f"-- pdf: wrote {os.path.join('paper', 'main.pdf')}")
+    return True
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Run the whole PI-NCA benchmark suite.")
-    ap.add_argument("--profile", default="full", choices=list(PROFILES))
+    ap = argparse.ArgumentParser(
+        description="Run the whole PI-NCA study and produce every paper artifact.")
+    ap.add_argument("--profile", default="paper", choices=list(PROFILES))
+    ap.add_argument("--estimate", action="store_true",
+                    help="measure two real trainings and project the cost, then exit")
+    ap.add_argument("--list-stages", action="store_true")
     ap.add_argument("--only", default=None, help="comma-separated stage names")
     ap.add_argument("--skip", default=None, help="comma-separated stage names")
-    ap.add_argument("--force", action="store_true", help="recompute finished cells")
+    ap.add_argument("--force", action="store_true",
+                    help="recompute finished cells and finished stages")
     ap.add_argument("--allow-cpu", action="store_true",
                     help="development only; the numbers are not comparable to a GPU run")
     ap.add_argument("--no-gate", action="store_true", help="skip the test suite")
     args = ap.parse_args()
 
+    if args.list_stages:
+        print("Stage names accepted by --only and --skip, in execution order:\n")
+        for n, d in STAGES:
+            print(f"  {n:<12} {d}")
+        print("\nThe last four always run, even after a failure, so the paper artifacts\n"
+              "on disk always reflect what was actually measured.")
+        return
+
     env.configure_memory()
     P = PROFILES[args.profile]
+
+    if args.estimate:
+        env.require_gpu("estimate", allow_cpu=args.allow_cpu)
+        estimate(args.profile, args.allow_cpu)
+        return
+
     # Fail here, before anything expensive, rather than three hours in.
     env.require_gpu("runner", allow_cpu=args.allow_cpu)
 
@@ -160,141 +380,194 @@ def main():
     skip = set(args.skip.split(",")) if args.skip else set()
     if args.profile == "bench":
         skip |= {"capture", "figures"}
+    known = {n for n, _ in STAGES}
+    for s in (only or set()) | skip:
+        if s not in known:
+            raise SystemExit(f"unknown stage {s!r}. Run --list-stages for the list.")
 
     def want(name):
         return (only is None or name in only) and name not in skip
 
+    def res(*names):
+        return [os.path.join(RES, n) for n in names]
+
     t_start = time.time()
+    fatal_failure = None
 
-    if want("gate") and not args.no_gate:
-        r.stage("gate: correctness tests", None, fatal=True,
-                raw=[sys.executable, "-u", "-m", "pytest", "tests/", "-q"])
+    try:
+        if want("gate") and not args.no_gate:
+            r.stage("gate: correctness tests", None, fatal=True,
+                    raw=[sys.executable, "-u", "-m", "pytest", "tests/", "-q"])
 
-    if want("bench2d"):
-        r.stage("2-D matrix: every architecture x every phenomenon", "bench_all",
-                ["--group", "all", "--seeds", P["seeds"], "--epochs", P["epochs"],
-                 "--grid", P["grid"], "--batch", P["batch"], "--rollout", P["rollout"],
-                 "--eval", P["eval"]], fatal=True)
+        arch_arg = ["--archs", P["archs"]] if P.get("archs") else []
 
-    if want("headline"):
-        # Same matrix, more seeds, on the three regime representatives. This is the
-        # table the paired statistics and the headline sentences come from; the 5-seed
-        # full matrix is the breadth result.
-        r.stage(f"headline: {P['headline_seeds']} seeds on {HEADLINE_PDES}", "bench_all",
-                ["--group", "all", "--seeds", P["headline_seeds"], "--epochs", P["epochs"],
-                 "--grid", P["grid"], "--batch", P["batch"], "--rollout", P["rollout"],
-                 "--eval", P["eval"], "--pdes", HEADLINE_PDES, "--tag", "headline"],
-                fatal=False)
+        if want("bench2d"):
+            r.stage("2-D matrix: every architecture x every phenomenon, + ablations",
+                    "bench_all",
+                    ["--group", "all", "--seeds", P["seeds"], "--epochs", P["epochs"],
+                     "--grid", P["grid"], "--batch", P["batch"], "--rollout", P["rollout"],
+                     "--eval", P["eval"]] + arch_arg, fatal=True)
 
-    if want("teacher"):
-        # Cheap and it gates the interpretation of every accuracy number, so it runs
-        # early rather than as an afterthought.
-        r.stage("teacher error: what the distillation target itself gets wrong",
-                "teacher_error", ["--grid", P["grid"], "--steps", P["eval"]], fatal=False)
+        if want("headline"):
+            # Same matrix, more seeds, on the three regime representatives. This is the
+            # table the paired statistics and the headline sentences come from; the
+            # 5-seed full matrix is the breadth result.
+            r.stage(f"headline: {P['headline_seeds']} seeds on {HEADLINE_PDES}",
+                    "bench_all",
+                    ["--group", "all", "--seeds", P["headline_seeds"],
+                     "--epochs", P["epochs"], "--grid", P["grid"], "--batch", P["batch"],
+                     "--rollout", P["rollout"], "--eval", P["eval"],
+                     "--pdes", HEADLINE_PDES, "--tag", "headline"] + arch_arg,
+                    fatal=False)
 
-    if want("ood"):
-        for pde in HEADLINE_PDES.split(","):
-            r.stage(f"OOD generalisation: {pde}", "ood",
-                    ["--pde", pde, "--grid", P["grid"], "--epochs", P["ood_epochs"],
-                     "--eval", P["eval"], "--n-eval", P["n_eval"],
-                     "--seeds", min(3, P["seeds"])], fatal=False)
+        if want("teacher"):
+            # Cheap, and it decides whether any ranking is meaningful at all, so it runs
+            # early rather than as an afterthought.
+            r.stage("teacher error: what the distillation target itself gets wrong",
+                    "teacher_error", ["--grid", P["grid"], "--steps", P["eval"]],
+                    fatal=False, outputs=res("teacher_error.json"))
 
-    if want("stability"):
-        for pde in HEADLINE_PDES.split(","):
-            r.stage(f"stability stress (guard OFF): {pde}", "stability",
-                    ["--pde", pde, "--grid", P["grid"], "--epochs", P["stab_epochs"],
-                     "--eval", P["eval"], "--n-ic", P["n_eval"],
-                     "--seeds", min(3, P["seeds"])], fatal=False)
+        if want("ood"):
+            for pde in HEADLINE_PDES.split(","):
+                r.stage(f"OOD generalisation: {pde}", "ood",
+                        ["--pde", pde, "--archs", P["ood_archs"], "--grid", P["grid"],
+                         "--epochs", P["ood_epochs"], "--eval", P["eval"],
+                         "--n-eval", P["n_eval"], "--seeds", min(3, P["seeds"])],
+                        fatal=False, outputs=res(f"ood_{pde}.json"))
 
-    if want("bench3d"):
-        r.stage("3-D matrix: every architecture x every phenomenon", "bench3d",
-                ["--grid", P["grid3d"], "--epochs", P["epochs3d"],
-                 "--batch", P["batch3d"]], fatal=True)
+        if want("stability"):
+            for pde in HEADLINE_PDES.split(","):
+                r.stage(f"stability stress (guard OFF): {pde}", "stability",
+                        ["--pde", pde, "--archs", P["stab_archs"], "--grid", P["grid"],
+                         "--epochs", P["stab_epochs"], "--eval", P["eval"],
+                         "--n-ic", P["n_eval"], "--seeds", min(3, P["seeds"])],
+                        fatal=False, outputs=res(f"stability_{pde}.json"))
 
-    if want("scaling"):
-        # Does the ranking survive a change of scale? A headline ordering measured at one
-        # operating point is only quotable if this says it is stable.
-        for pde in HEADLINE_PDES.split(","):
-            r.stage(f"scaling: does the ranking survive scale? ({pde})", "scaling",
-                    ["--pde", pde, "--grid", P["grid"], "--rollout", P["rollout"],
-                     "--epochs", P["epochs"], "--eval", P["eval"],
-                     "--batch", P["batch"], "--n-eval", P["n_eval"]], fatal=False)
+        if want("scaling"):
+            for pde in HEADLINE_PDES.split(","):
+                r.stage(f"scaling: does the ranking survive scale? ({pde})", "scaling",
+                        ["--pde", pde, "--archs", P["scal_archs"],
+                         "--grids", P["scal_grids"], "--rollouts", P["scal_rollouts"],
+                         "--epochs-sweep", P["scal_epochs"],
+                         "--grid", P["grid"], "--rollout", P["rollout"],
+                         "--epochs", P["epochs"], "--eval", P["eval"],
+                         "--batch", P["batch"], "--n-eval", P["n_eval"]],
+                        fatal=False, outputs=res(f"scaling_{pde}.json"))
 
-    if want("resolution"):
-        r.stage("resolution transfer study", "res_study",
-                ["--pdes", "heat,allen_cahn,navier_stokes",
-                 "--epochs", P["res_epochs"]], fatal=False)
+        if want("bench3d"):
+            # Non-fatal on purpose: a 3-D out-of-memory error must not discard a completed
+            # 2-D sweep that may have taken most of a night.
+            r.stage("3-D matrix: every architecture x every phenomenon", "bench3d",
+                    ["--grid", P["grid3d"], "--epochs", P["epochs3d"],
+                     "--batch", P["batch3d"]], fatal=False)
 
-    # Plot as soon as measurements exist, so a later crash still leaves figures.
-    if want("plots"):
-        r.stage("benchmark plots (interim)", "plots", fatal=False)
+        if want("resolution"):
+            res_arch = ["--archs", P["res_archs"]] if P.get("res_archs") else []
+            r.stage("resolution transfer study", "res_study",
+                    ["--pdes", "heat,allen_cahn,navier_stokes",
+                     "--epochs", P["res_epochs"]] + res_arch, fatal=False,
+                    outputs=res("bench_resolution_heat.json",
+                                "bench_resolution_allen_cahn.json",
+                                "bench_resolution_navier_stokes.json"))
 
-    if want("baselines"):
-        for mod in ("pinn_heat", "deeponet_heat", "darcy"):
-            r.stage(f"baseline: {mod}", mod, fatal=False)
-        # The only PINN-vs-emulator comparison that is well posed: same PDE, same ICs,
-        # same horizon, same metric, with both cost structures reported.
-        r.stage("matched PINN vs emulator (same task, both cost structures)", "matched",
-                ["--pde", "heat", "--k", P["n_eval"], "--grid", P["grid"],
-                 "--steps", P["eval"], "--epochs", P["epochs"]], fatal=False)
+        # Plot as soon as measurements exist, so a later crash still leaves figures.
+        if want("plots"):
+            r.stage("benchmark plots (interim)", "plots", fatal=False)
 
-    if want("capture"):
-        r.stage("capture trajectories for figures", "capture",
-                ["--dims", "both", "--grid", P["viz_grid"], "--epochs", P["viz_epochs"],
-                 "--grid3d", P["viz3d_grid"], "--epochs3d", P["viz3d_epochs"],
-                 "--max-mb", P["max_mb"]], fatal=False)
+        if want("baselines"):
+            for mod in ("pinn_heat", "deeponet_heat", "darcy"):
+                r.stage(f"baseline: {mod}", mod, fatal=False)
+            # The only PINN-vs-emulator comparison that is well posed: same PDE, same
+            # ICs, same horizon, same metric, with both cost structures reported.
+            r.stage("matched PINN vs emulator (same task, both cost structures)",
+                    "matched",
+                    ["--pde", "heat", "--k", P["n_eval"], "--grid", P["grid"],
+                     "--steps", P["eval"], "--epochs", P["epochs"]],
+                    fatal=False, outputs=res("matched_heat.json"))
 
-    if want("figures"):
-        traj = os.path.join(RES, "traj")
-        for pde in VIZ_2D:
-            f = os.path.join(traj, f"{pde}_2d.npz")
-            if os.path.exists(f):
-                r.stage(f"figure: {pde} (2-D)", "viz", ["--npz", f], fatal=False)
-        for pde in VIZ_3D:
-            f = os.path.join(traj, f"{pde}_3d.npz")
-            if os.path.exists(f):
-                r.stage(f"figure: {pde} (3-D slice)", "viz3d", ["--npz", f], fatal=False)
-                r.stage(f"figure: {pde} (3-D volume)", "viz3d_volume", ["--npz", f],
-                        fatal=False)
+        if want("capture"):
+            r.stage("capture trajectories for figures", "capture",
+                    ["--dims", "both", "--grid", P["viz_grid"],
+                     "--epochs", P["viz_epochs"], "--grid3d", P["viz3d_grid"],
+                     "--epochs3d", P["viz3d_epochs"], "--max-mb", P["max_mb"]],
+                    fatal=False)
+
+        if want("figures"):
+            traj = os.path.join(RES, "traj")
+            for pde in VIZ_2D:
+                f = os.path.join(traj, f"{pde}_2d.npz")
+                if os.path.exists(f):
+                    r.stage(f"figure: {pde} (2-D)", "viz", ["--npz", f], fatal=False)
+            for pde in VIZ_3D:
+                f = os.path.join(traj, f"{pde}_3d.npz")
+                if os.path.exists(f):
+                    r.stage(f"figure: {pde} (3-D slice)", "viz3d", ["--npz", f],
+                            fatal=False)
+                    r.stage(f"figure: {pde} (3-D volume)", "viz3d_volume", ["--npz", f],
+                            fatal=False)
+    except FatalStage as exc:
+        fatal_failure = str(exc)
+
+    # ---- Finalisation. Always runs, so the artifacts on disk match what was measured. --
+    print(f"\n{'#' * 72}\n# finalising: audit, tables, report"
+          + ("  (after a fatal failure -- these describe what DID complete)"
+             if fatal_failure else "") + f"\n{'#' * 72}")
 
     if want("plots"):
         r.stage("benchmark plots (final)", "plots", fatal=False)
-
     if want("claims"):
-        # Audit before the report, so the report is written against a checked inventory.
         r.stage("claims audit: prose vs measured inventory", "claims", fatal=False)
-        r.stage("bibliography: re-verify every citation against arXiv", "bib", fatal=False)
-        r.stage("paper: regenerate every table and quoted number", "paper", fatal=False)
-
+        r.stage("bibliography: re-verify every citation against arXiv", "bib",
+                fatal=False)
+        r.stage("paper: regenerate every table and every quoted number", "paper",
+                fatal=False)
     if want("report"):
         r.stage("architecture diagrams", "arch_figs", fatal=False)
         r.stage("report: regenerate Markdown from results", "report", fatal=False)
         r.stage("report: render PDF", "md2pdf", [REPORT_MD], fatal=False)
+    if want("pdf"):
+        build_pdf(r)
 
     r.write_manifest()
     total = time.time() - t_start
     print(f"\n{'=' * 72}")
-    print(f"RUN COMPLETE in {total / 3600:.2f} h ({total / 60:.0f} min)")
+    print(f"RUN {'INCOMPLETE' if fatal_failure else 'COMPLETE'} in "
+          f"{total / 3600:.2f} h ({total / 60:.0f} min)")
     print(f"  backend        {env.provenance('runner')['backend']}  "
           f"peak {env.peak_mem_mb():.0f} MB")
-    print(f"  tables         results/*.md")
-    print(f"  plots          docs/figures/bench/*.png")
-    print(f"  report         docs/PI-NCA_Architectures_and_Results.{{md,pdf}}")
-    print(f"  raw data       results/traj/*.npz")
-    print(f"  audit          results/run_manifest.json + docs/claims_audit.md")
+    print("\n  PAPER ARTIFACTS")
+    print("    paper/main.tex + paper/generated/*.tex   every table and quoted number")
+    print("    paper/main.pdf                           if a LaTeX toolchain was present")
+    print("    docs/claims_audit.md                     what the results actually support")
+    print("    docs/bibliography.md                     every citation verified vs arXiv")
+    print("\n  SUPPORTING")
+    print("    results/*.md                             human-readable tables")
+    print("    results/*.json                           raw, with device + config stamps")
+    print("    docs/figures/bench/*.png                 benchmark plots")
+    print("    docs/figures/*.png                       field montages and 3-D renders")
+    print("    docs/PI-NCA_Architectures_and_Results.{md,pdf}")
+    print("    results/run_manifest.json                per-stage timings and failures")
+    if r.skipped:
+        print(f"\n  {len(r.skipped)} stage(s) skipped as already complete "
+              f"(--force to redo): {', '.join(r.skipped[:6])}"
+              + (" ..." if len(r.skipped) > 6 else ""))
     if r.failures:
-        print(f"\n  {len(r.failures)} non-fatal stage(s) failed:")
+        print(f"\n  {len(r.failures)} stage(s) failed:")
         for f in r.failures:
             print(f"    - {f}")
-        print("  The benchmark tables above are unaffected.")
     else:
         print("\n  No failures.")
     _summarise_cells()
+    print("\n  Next: read docs/claims_audit.md. It is generated from results/ and is the\n"
+          "  authority on which claims the run actually supports.")
+    if fatal_failure:
+        print(f"\n  A required stage failed ({fatal_failure}). Fix it and re-run the same\n"
+              "  command: finished cells and stages are skipped automatically.")
+        sys.exit(1)
 
 
 def _summarise_cells():
     """Count completed vs failed matrix cells across every results file."""
-    import glob
     ok = failed = 0
     bad = []
     for path in glob.glob(os.path.join(RES, "bench*_*.json")):

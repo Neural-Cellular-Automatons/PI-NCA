@@ -1,21 +1,40 @@
-# GPU Runbook — the benchmark run on an RTX 4090 (headless, no IDE)
+# GPU Runbook — producing the paper on one NVIDIA GPU (headless, no IDE)
 
-Terminal only. Nothing here needs a display, a notebook, or an editor. Output lands in
-`results/` (tables + JSON), `docs/figures/` (plots and figures), and
-`docs/PI-NCA_Architectures_and_Results.pdf` (the report, regenerated from the results).
+Terminal only. Nothing here needs a display, a notebook, or an editor.
 
 ---
 
 ## The one command
 
 ```bash
-bash run_gpu.sh
+bash run_paper.sh
 ```
 
-That is the whole run: correctness gate → uniform 2-D matrix → ablations → uniform 3-D
-matrix → resolution study → baselines → trajectory capture → field figures → plots →
-report. It is resumable, tolerates a model running out of memory, and refuses to
-produce CPU numbers.
+That produces **every artifact the paper needs**, in order: correctness gate → 2-D matrix
++ ablations → multi-seed headline comparison → teacher-error study → out-of-distribution
+study → stability stress test → scaling / rank-stability study → 3-D matrix → resolution
+study → baselines (including the matched PINN comparison) → trajectory capture → field
+figures → plots → claims audit → bibliography verification → generated LaTeX tables →
+Markdown report → paper PDF (if a LaTeX toolchain is installed).
+
+Nothing else has to be run afterwards. `run_gpu.sh` is kept as an alias for the same thing.
+
+**Find out the cost on your card before committing to it.** This trains two real cells,
+one cheap architecture and one expensive, and projects the wall-clock per stage:
+
+```bash
+bash run_paper.sh --estimate
+```
+
+**It is safe to interrupt.** Benchmarks checkpoint after every (PDE, architecture) cell,
+and the runner skips whole stages whose outputs are already on disk. Re-running the same
+command after a crash, a Ctrl-C or a reboot continues where it stopped. `--force`
+recomputes.
+
+**Only two stages are fatal** — the correctness gate and the 2-D matrix. Everything else
+records its failure and the run continues, and the paper tables, claims audit and report
+are regenerated at the end *even if a stage failed*, so what is on disk always describes
+what actually completed.
 
 Everything below is context for when something goes wrong.
 
@@ -124,7 +143,7 @@ not install, and the benchmark drivers will refuse to run anyway (see below).
 ## 3. Run it
 
 ```bash
-bash run_gpu.sh
+bash run_paper.sh
 ```
 
 Over SSH, keep it alive and logged:
@@ -134,8 +153,10 @@ tmux new -s bench
 ```
 
 ```bash
-bash run_gpu.sh 2>&1 | tee run_gpu.log
+bash run_paper.sh
 ```
+
+(the script already tees to `run_paper.log`; `tmux` is for surviving a dropped SSH session)
 
 Detach with `Ctrl-b` then `d`; reattach with `tmux attach -t bench`. Watch the card from
 a second shell with `watch -n2 nvidia-smi`.
@@ -143,35 +164,47 @@ a second shell with `watch -n2 nvidia-smi`.
 ### Scale presets
 
 ```bash
-bash run_gpu.sh --profile smoke   # ~2 min, tiny scale, proves every stage wires up
-bash run_gpu.sh --profile bench   # measurements + plots, no field figures
-bash run_gpu.sh                   # full (default)
+bash run_paper.sh --profile smoke   # minutes; every stage, tiny scale, meaningless numbers
+bash run_paper.sh --profile bench   # measurements + plots, no field figures
+bash run_paper.sh                   # paper (default)
+bash run_paper.sh --profile full    # largest scale attempted; expect multiple days
 ```
 
-| Knob | smoke | bench / full |
-|---|---|---|
-| seeds | 1 | 3 |
-| epochs (2-D) | 40 | 2000 |
-| grid (2-D) | 16 | 64 |
-| batch | 8 | 64 |
-| grid (3-D) | 8³ | 32³ |
-| epochs (3-D) | 20 | 800 |
+| Knob | smoke | paper / bench | full |
+|---|---|---|---|
+| seeds (matrix) | 1 | 5 | 5 |
+| seeds (headline) | 2 | 10 | 10 |
+| epochs (2-D) | 25 | 1200 | 2000 |
+| grid (2-D) | 12 | 48 | 64 |
+| batch | 4 | 32 | 64 |
+| grid (3-D) | 8³ | 24³ | 32³ |
+| epochs (3-D) | 15 | 600 | 800 |
+| architectures | 4 | all 14 | all 14 |
+| trainings, total | ~225 | ~1700 | ~1700 (each slower) |
 
-Run `--profile smoke` once first and time it. The full run scales roughly with
-`epochs × grid² × seeds`, so your own smoke time is a far better predictor than any
-estimate here.
+`smoke` still touches every phenomenon — that is where shape and channel bugs live — but
+only four architectures, so it stays a wiring check rather than a short benchmark.
+
+Do not guess the cost of `paper` from the smoke time. Run `--estimate`: it measures the
+real per-training rate on your card and multiplies by the exact cell counts above.
 
 ### Other flags
 
 Anything you pass is forwarded to the runner:
 
 ```bash
-bash run_gpu.sh --only bench2d,plots      # just these stages
-bash run_gpu.sh --skip figures,baselines  # everything except these
-bash run_gpu.sh --force                   # recompute cells already on disk
-bash run_gpu.sh --no-gate                 # skip the test suite
-DETERMINISTIC=1 bash run_gpu.sh           # deterministic XLA ops (slower)
+bash run_paper.sh --list-stages             # the stage names --only/--skip accept
+bash run_paper.sh --only bench2d,plots      # just these stages
+bash run_paper.sh --skip scaling,bench3d    # everything except these
+bash run_paper.sh --force                   # recompute finished cells AND finished stages
+bash run_paper.sh --no-gate                 # skip the test suite (not for a real run)
+DETERMINISTIC=1 bash run_paper.sh           # deterministic XLA ops (slower)
 ```
+
+If the estimate is longer than you have, `--skip scaling,resolution,bench3d` removes the
+three least central studies and roughly a fifth of the trainings. The claims audit will
+then correctly report the corresponding claims as NOT_YET_MEASURED rather than pretending
+they were.
 
 ---
 

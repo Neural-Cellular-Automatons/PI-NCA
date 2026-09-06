@@ -13,27 +13,52 @@ is not stable under changes of grid and horizon, so it is always quoted with its
 point. Every statement above is produced by a script here and checked against the raw
 results by `python -m pinca_jax.claims`.
 
-## Quick start
+## One command
+
+On a machine with an NVIDIA GPU (Linux or WSL2 — JAX has no native-Windows CUDA):
 
 ```bash
-python -m pip install -r requirements-jax.txt   # CPU
-python -m pip install -e .
+bash run_paper.sh
+```
+
+That produces **every number, table and figure in the paper**: the correctness gate, the
+2-D matrix, the ablations, the multi-seed headline comparison, the teacher-error study,
+the out-of-distribution study, the stability stress test, the scaling study, the 3-D
+matrix, the resolution study, the baselines, the field figures, the plots, the claims
+audit, the verified bibliography, the generated LaTeX tables, and the paper PDF if a LaTeX
+toolchain is installed. Nothing else needs running afterwards.
+
+Find out what it costs on your card first — it trains two real cells and projects:
+
+```bash
+bash run_paper.sh --estimate
+```
+
+It is safe to interrupt. Benchmarks checkpoint per (PDE, architecture) cell and whole
+stages are skipped when their outputs already exist, so re-running the same command after
+a crash, a Ctrl-C or a reboot continues instead of starting over. `--force` recomputes.
+`--list-stages` prints the stage names that `--only` and `--skip` accept.
+
+Windows without WSL2, or no GPU: `run_paper.bat`, and add `--allow-cpu` to get a run whose
+numbers are explicitly not comparable with GPU numbers.
+
+## Setup
+
+```bash
+python -m pip install -r requirements-gpu.txt   # GPU (CUDA build of JAX); or requirements-jax.txt for CPU
 python -m pytest tests/ -q                      # correctness gate; must be green first
 ```
 
-One command runs everything:
+`pip install -e .` is optional — the launchers put `src/` on `PYTHONPATH` themselves, so a
+fresh clone runs without it. `bash setup_gpu.sh` does the whole setup; see
+[docs/gpu_runbook.md](docs/gpu_runbook.md).
+
+A minutes-long wiring check that touches every stage and every phenomenon, whose numbers
+are meaningless by design:
 
 ```bash
-python -m pinca_jax.runner --profile smoke --allow-cpu   # ~minutes, wiring check only
+bash run_paper.sh --profile smoke --allow-cpu
 ```
-
-```bash
-python -m pinca_jax.runner --profile full                # GPU, overnight, the real numbers
-```
-
-`--profile smoke` exists to prove every stage is wired up; its numbers are meaningless.
-Real numbers need a GPU, and the runner refuses to start on CPU without `--allow-cpu`
-precisely so a CPU run cannot be mistaken for one. See [docs/gpu_runbook.md](docs/gpu_runbook.md).
 
 ## What is measured
 

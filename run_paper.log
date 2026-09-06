@@ -1,0 +1,55 @@
+[runner] jax 0.10.1 | backend=cpu | devices=[CpuDevice(id=0)]
+[runner] WARNING: CPU backend. For the GPU run install requirements-gpu.txt (jax[cuda12]); results will be reduced-scale/slow otherwise.
+[runner] proceeding on cpu because --allow-cpu was passed; these numbers are NOT comparable to a GPU run.
+
+========================================================================
+== 2-D matrix: every architecture x every phenomenon, + ablations
+========================================================================
+[bench_all] jax 0.10.1 | backend=cpu | devices=[CpuDevice(id=0)]
+[bench_all] WARNING: CPU backend. For the GPU run install requirements-gpu.txt (jax[cuda12]); results will be reduced-scale/slow otherwise.
+[bench_all] proceeding on cpu because --allow-cpu was passed; these numbers are NOT comparable to a GPU run.
+[bench_all] heat (C=1, bounds=(-0.48, 10.05))  2 to run, 2 already done
+    resnet_iso               rel-L2 2.2388e-01  params    5364  batch 4  13s
+    identity                 rel-L2 3.6079e-01  params       1  batch 4  10s
+  wrote results/bench_heat_full.md
+[bench_all] allen_cahn (C=1, bounds=(-1.27, 1.28))  2 to run, 2 already done
+    resnet_iso               rel-L2 2.6416e-02  params    5364  batch 4  12s
+    identity                 rel-L2 2.6632e-02  params       1  batch 4  6s
+  wrote results/bench_allen_cahn_full.md
+[bench_all] nagumo (C=1, bounds=(0.11, 1.03))  2 to run, 2 already done
+    resnet_iso               rel-L2 2.2035e-02  params    5364  batch 4  11s
+    identity                 rel-L2 8.0428e-02  params       1  batch 4  8s
+  wrote results/bench_nagumo_full.md
+[bench_all] adv_diff (C=1, bounds=(-0.54, 10.64))  2 to run, 2 already done
+    resnet_iso               rel-L2 7.1848e-02  params    5364  batch 4  11s
+    identity                 rel-L2 1.3507e-01  params       1  batch 4  10s
+  wrote results/bench_adv_diff_full.md
+[bench_all] wave (C=2, bounds=(-2.33, 5.83))  3 to run, 1 already done
+    pi_nca                   rel-L2 4.2432e-02  params    4928  batch 4  10s
+[estimate] jax 0.10.1 | backend=cpu | devices=[CpuDevice(id=0)]
+[estimate] WARNING: CPU backend. For the GPU run install requirements-gpu.txt (jax[cuda12]); results will be reduced-scale/slow otherwise.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\tharu\OneDrive\Desktop\PI-NCA\src\pinca_jax\runner.py", line 591, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\tharu\OneDrive\Desktop\PI-NCA\src\pinca_jax\runner.py", line 371, in main
+    env.require_gpu("estimate", allow_cpu=args.allow_cpu)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tharu\OneDrive\Desktop\PI-NCA\src\pinca_jax\env.py", line 58, in require_gpu
+    raise NotOnGPU(
+    ...<6 lines>...
+    )
+pinca_jax.env.NotOnGPU: [estimate] refusing to benchmark on the 'cpu' backend.
+  Install the CUDA build:  pip install -r requirements-gpu.txt
+  Then check:              python -c "import jax; print(jax.devices())"
+  Expected:                [CudaDevice(id=0)]
+  Native Windows cannot reach the GPU at all - use WSL2.
+  To measure on CPU anyway (not comparable), pass --allow-cpu.
+    resnet_iso               rel-L2 4.8402e-02  params    5484  batch 4  16s
+    identity                 rel-L2 7.5501e-02  params       1  batch 4  10s
+  wrote results/bench_wave_full.md
+[bench_all] gray_scott (C=2, bounds=(-0.05, 1.05))  3 to run, 1 already done
+    pi_nca                   rel-L2 4.1028e-01  params    4928  batch 4  9s
+    resnet_iso               rel-L2 2.1268e-01  params    5484  batch 4  15s

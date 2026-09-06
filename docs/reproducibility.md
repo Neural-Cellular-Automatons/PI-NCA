@@ -7,14 +7,26 @@ for exact package versions and the Windows long-path workaround, and
 ## 0. The short version
 
 ```bash
-python -m pip install -r requirements-jax.txt && python -m pip install -e .
-python -m pytest tests/ -q                 # correctness gate; must be green first
-python -m pinca_jax.runner --profile full  # everything, GPU, overnight
+python -m pip install -r requirements-gpu.txt   # CUDA build of JAX; requirements-jax.txt for CPU
+bash run_paper.sh --estimate                    # what it costs on your card
+bash run_paper.sh                               # every number, table and figure in the paper
 ```
 
-`--profile smoke --allow-cpu` runs every stage in minutes to prove the wiring; its numbers
-are meaningless and the runner says so. The runner refuses to start on CPU without
+That is the whole thing. `run_paper.sh` puts `src/` on `PYTHONPATH` itself, so
+`pip install -e .` is optional. It refuses to start on the CPU backend without
 `--allow-cpu`, because CPU and GPU numbers in one table are worse than no table.
+
+It is safe to interrupt: benchmarks checkpoint per (PDE, architecture) cell, and whole
+stages are skipped when their outputs already exist, so re-running the same command
+continues rather than restarting. `--force` recomputes; `--list-stages` prints the names
+`--only` and `--skip` accept.
+
+A minutes-long wiring check that touches every stage and every phenomenon and whose
+numbers are meaningless by design:
+
+```bash
+bash run_paper.sh --profile smoke --allow-cpu
+```
 
 ## 1. Install
 
@@ -42,8 +54,8 @@ anything.**
 
 ## 3. The pipeline, stage by stage
 
-`python -m pinca_jax.runner` runs all of it in order and is resumable per matrix cell.
-Each stage is also runnable alone (`--only bench2d`, or the module directly):
+`bash run_paper.sh` runs all of it in order. Each stage is also runnable alone
+(`bash run_paper.sh --only bench2d`, or the module directly):
 
 | Stage | Command | Writes |
 |---|---|---|
@@ -113,10 +125,14 @@ failures are counted.
 
 `EmuConfig` fields (`grid_size`, `rollout_steps`, `eval_steps`, `epochs`, `batch`, seeds)
 are the only difference between the reduced-scale CPU presets and the full-scale GPU
-presets; the code is identical. The runner's `--profile` sets them all at once. Cost at the
-`full` preset: the 2-D matrix is 14 architectures × 10 phenomena × 5 seeds, and the
-headline stage adds 14 × 3 × 10 — an overnight run on one mid-range GPU. Every stage
-checkpoints per cell, so an interrupted run resumes.
+presets; the code is identical. The runner's `--profile` sets them all at once.
+
+Cost at the `paper` preset: ~1700 trainings — the 2-D matrix is 14 architectures × 10
+phenomena × 5 seeds, the headline stage adds 14 × 3 × 10, and the ablations, OOD,
+stability, scaling, 3-D, resolution and figure stages make up the rest. Do not guess how
+long that takes on your hardware; `bash run_paper.sh --estimate` trains two real cells
+(the cheapest and the most expensive architecture) and multiplies by the exact per-stage
+cell counts. Every stage checkpoints, so an interrupted run resumes.
 
 Every driver stamps `{jax, backend, devices, peak_mem_mb}` and the exact config into its
 results JSON under `"device"`, so a GPU run can be told from a CPU one after the fact.
