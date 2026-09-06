@@ -52,7 +52,7 @@ def inventory() -> dict:
            "files": 0, "ood_pdes": set(), "stability_pdes": set(),
            "resolution_pdes": set(), "ablations": set(), "has_teacher_error": False,
            "n_eval_ics": set(), "has_matched": False, "scaling_pdes": set(),
-           "unstable_rank_axes": [],
+           "unstable_rank_axes": [], "by_backend": {},
            "teacher_all_converging": None, "teacher_not_converging": []}
     for path in sorted(glob.glob(os.path.join(RES, "*.json"))):
         d = _load(path)
@@ -63,6 +63,7 @@ def inventory() -> dict:
         dev = d.get("device") or {}
         if dev.get("backend"):
             inv["backends"].add(dev["backend"])
+            inv["by_backend"].setdefault(dev["backend"], []).append(name)
         cfg = d.get("config") or {}
         if cfg.get("grid_size"):
             inv["grids"].add(int(cfg["grid_size"]))
@@ -261,6 +262,19 @@ def to_markdown(inv=None) -> str:
          + ("" if not inv["unstable_rank_axes"] else
             "  **ranking NOT stable along: " + ", ".join(inv["unstable_rank_axes"]) + "**"),
          f"- Result files scanned: {inv['files']}", ""]
+    if len(inv["backends"]) > 1:
+        # This repository ships CPU results, so the first GPU run leaves a mixture on
+        # disk: files the run regenerated, and files it never touched. Which is which is
+        # not something a reader should have to work out from timestamps.
+        L += ["> **Results from more than one backend are present on disk.** A table must "
+              "not mix them. The GPU run regenerates every file it covers; anything still "
+              "listed under another backend below was not produced by it, and is either a "
+              "stage that was skipped or a leftover that should be deleted before the "
+              "numbers are quoted.", ""]
+        for b in sorted(inv["by_backend"]):
+            files = inv["by_backend"][b]
+            L += [f"- **{b}** ({len(files)}): " + ", ".join(f"`{f}`" for f in sorted(files))]
+        L += [""]
     if inv["single_seed_files"]:
         L += ["> **Single-seed tables still present** (a headline number must not come "
               "from these): " + ", ".join(f"`{f}`" for f in inv["single_seed_files"]), ""]
