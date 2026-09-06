@@ -19,9 +19,9 @@
 | periodic-BC res ↓ | **4.433e-01±1.3e-02** | 4.470e-01±1.3e-02 |
 | grad-energy | 8.024e-01±1.6e-01 | 8.489e-01±1.6e-01 |
 | params ↓ | 4576 | **4544** |
-| train wall(s) ↓ | **7.02±0.4** | 13.4±0.71 |
-| infer s/step ↓ | **4.297e-04±7.6e-05** | 7.104e-04±1.7e-05 |
-| throughput cells/s ↑ | **4.84e+06** | 2.88e+06 |
+| train wall(s) ↓ | 9.56±2.6 | **8.25±0.93** |
+| infer s/step ↓ | **4.677e-04±2.6e-05** | 4.775e-04±1.3e-04 |
+| throughput cells/s ↑ | 4.39e+06 | **4.46e+06** |
 
 ### heat - rel-L2 with uncertainty and paired tests
 

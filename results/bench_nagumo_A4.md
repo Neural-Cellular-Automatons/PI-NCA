@@ -19,9 +19,9 @@
 | periodic-BC res ↓ | **7.232e-02±6.4e-03** | 7.385e-02±5.7e-03 |
 | grad-energy | 1.037e-02±1.0e-04 | 1.066e-02±3.5e-04 |
 | params ↓ | 4576 | **4544** |
-| train wall(s) ↓ | **13.7±0.25** | 13.7±1.6 |
-| infer s/step ↓ | 7.087e-04±1.1e-04 | **5.861e-04±1.2e-04** |
-| throughput cells/s ↑ | 2.93e+06 | **3.56e+06** |
+| train wall(s) ↓ | 9.95±0.49 | **9.21±0.39** |
+| infer s/step ↓ | **5.124e-04±2.0e-04** | 6.272e-04±8.7e-05 |
+| throughput cells/s ↑ | **4.31e+06** | 3.30e+06 |
 
 ### nagumo - rel-L2 with uncertainty and paired tests
 

@@ -293,6 +293,37 @@ def table_matched(pde="heat"):
     return "\n".join(lines) + "\n"
 
 
+def table_ablation_pair(tag, pdes_labelled, archs):
+    """One ablation, run on two phenomena of opposite structure, in one table.
+
+    The point of these ablations is not that a prior helps, it is that whether it helps is
+    determined by the equation. Showing one phenomenon per ablation cannot demonstrate
+    that, so each block here carries both and the reader can read the reversal directly.
+    """
+    lines = []
+    for pde, note in pdes_labelled:
+        d = load(f"bench_{pde}_{tag}")
+        ok, _ = _rows(d)
+        rows = [a for a in archs if a in ok]
+        lines.append("\\multicolumn{5}{l}{\\emph{" + label(pde) + " (" + tex(note) +
+                     ")}} \\\\")
+        if not rows:
+            lines.append("\\quad " + _missing(
+                f"{tag} on {pde}",
+                "python -m pinca_jax.bench_all --group ablation --seeds 5").strip())
+            continue
+        best = min(rows, key=lambda a: _summary(ok[a]).mean)
+        for a in rows:
+            s = _summary(ok[a])
+            name = label(a)
+            if a == best:
+                name = "\\textbf{" + name + "}"
+            lines.append(
+                f"\\quad {name} & {int(_mean(ok[a], 'params', 0))} & {num(s.mean)} & "
+                f"{ci(s)} & {num(_mean(ok[a], 'conservation_err'), '.2g')} \\\\")
+    return "\n".join(lines) + "\n"
+
+
 def table_efficiency(pde="heat", tag="headline"):
     """Accuracy grouped by parameter budget class, not across it.
 
@@ -475,12 +506,19 @@ def write_all(out=OUT):
         "tab_paired_heat": table_paired("heat"),
         "tab_paired_ch": table_paired("cahn_hilliard"),
         "tab_paired_ns": table_paired("navier_stokes"),
-        "tab_ablation_a4": table_ablation("A4", "heat", ["abl_flux", "abl_residual"]),
-        "tab_ablation_a5": table_ablation("A5", "heat",
-                                          ["abl_k3", "abl_k5", "abl_multiscale"]),
-        "tab_ablation_a7": table_ablation("A7", "cahn_hilliard",
-                                          ["abl_proj_none", "abl_proj_uniform",
-                                           "abl_proj_headroom"]),
+        # A4 and A5 are only interesting across two phenomena with opposite structure --
+        # one conservative and one not, one local and one globally coupled -- because the
+        # claim being tested is that the right prior depends on the equation. A single-PDE
+        # ablation cannot show that at all.
+        "tab_ablation_a4": table_ablation_pair(
+            "A4", [("heat", "conservative"), ("nagumo", "non-conservative")],
+            ["abl_flux", "abl_residual"]),
+        "tab_ablation_a5": table_ablation_pair(
+            "A5", [("heat", "local diffusion"), ("navier_stokes", "globally coupled")],
+            ["abl_k3", "abl_k5", "abl_multiscale"]),
+        "tab_ablation_a7": table_ablation_pair(
+            "A7", [("cahn_hilliard", "stiff bounded"), ("allen_cahn", "bounded")],
+            ["abl_proj_none", "abl_proj_uniform", "abl_proj_headroom"]),
         "tab_ood": ood_table,
         "tab_stability": table_stability(),
         "tab_teacher": table_teacher(),

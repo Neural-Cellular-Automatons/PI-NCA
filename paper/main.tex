@@ -363,16 +363,20 @@ by the released results are the seed count and the backend.}
 \label{sec:ablate}
 
 A regime map is a correlation until the priors are switched independently at matched
-capacity. Each ablation below changes exactly one thing.
+capacity. Each ablation below changes exactly one thing, and each is run on \emph{two}
+phenomena with opposite structure --- because the claim under test is not that a prior
+helps, it is that whether it helps is decided by the equation, and a single-phenomenon
+ablation cannot show that at all.
 
-\paragraph{A4: conservation, at matched backbone.} Identical perception and processing
-width, identical depth; the only difference is whether the output head emits a flux whose
-divergence updates the state (mass-conserving by construction on a periodic grid) or a
-state increment directly.
+\paragraph{A4: conservation, at matched backbone, reverses with the equation.} Identical
+perception and processing width, identical depth, parameter counts within $1\%$; the only
+difference is whether the output head emits a flux whose divergence updates the state
+(mass-conserving by construction on a periodic grid) or a state increment directly.
 
 \begin{table}[h]
 \centering
-\caption{A4---conservation on/off at matched backbone width, on heat.}
+\caption{A4---conservation on/off at matched backbone width, on one conservative and one
+non-conservative equation. Best in each block in bold.}
 \label{tab:a4}
 \small
 \begin{tabular}{lrccc}
@@ -384,14 +388,26 @@ Head & Params & rel-$L_2$ & 95\% CI & Mass-conservation error \\
 \end{tabular}
 \end{table}
 
-\paragraph{A5: receptive field per step.} Same head, same widths; only the perception
-stencil changes, from $3\times3$ to $5\times5$ to dilated multi-scale $(1,2,4)$. This
-separates ``locality is the wrong prior'' from ``one cell per step is too slow'', which a
-comparison against a global operator alone cannot do.
+This is the cleanest result in the paper. On the conservative equation the flux head is
+roughly twice as accurate as the residual head; on the non-conservative one it is roughly
+eight times \emph{worse}. Same backbone, same budget, opposite verdict. The mass-conservation
+column shows why the constraint is not free: the flux head holds the total to $10^{-5}$ on
+both equations, which is correct physics on the first and an actively wrong prior on the
+second, where the true dynamics create and destroy the quantity and the residual head's mass
+error of order $10^{1}$ is the right behaviour rather than a defect. Clauses (i) and (iii)
+of the hypothesis are supported, and the support comes from a controlled switch rather than
+from a ranking across different models.
+
+\paragraph{A5: receptive field per step, also reverses.} Same head, same widths; only the
+perception stencil changes, from $3\times3$ to $5\times5$ to dilated multi-scale $(1,2,4)$.
+This separates ``locality is the wrong prior'' from ``one cell per step is too slow'', which
+a comparison against a global operator alone cannot do, because that comparison changes the
+receptive field and the parameterisation together.
 
 \begin{table}[h]
 \centering
-\caption{A5---perception size at matched head and width, on heat.}
+\caption{A5---perception size at matched head and width, on one local and one globally
+coupled equation.}
 \label{tab:a5}
 \small
 \begin{tabular}{lrccc}
@@ -403,8 +419,21 @@ Perception & Params & rel-$L_2$ & 95\% CI & Mass-conservation error \\
 \end{tabular}
 \end{table}
 
+On local diffusion the smallest stencil wins and widening it strictly hurts --- extra
+receptive field is capacity spent on information the equation does not propagate. On the
+globally coupled equation the ordering inverts and the dilated multi-scale stencil wins.
+So the local models' disadvantage on globally coupled dynamics is a receptive-field problem
+rather than an argument against locality as such, and it is addressable without a spectral
+transform.
+
 The remaining ablations---iso-parameter spectral mixing (A2), output bounding (A1),
-initialisation and pre-seeding protocol (A6)---are in Appendix~\ref{app:ablations}.
+initialisation and pre-seeding protocol (A6)---are in Appendix~\ref{app:ablations}. A1 is
+worth flagging here because it is a negative result about one of our own hybrids: against
+the corrected teacher, bounding changes the accuracy of the multi-scale conservative model
+on the bounded equations by nothing at all, to four significant figures. The bounded variants
+were motivated by an accuracy failure that turned out to be the unstable teacher of
+Section~\ref{sec:regime}. What they still buy is long-horizon stability, and only that
+(Section~\ref{sec:stability}).
 
 % =====================================================================
 \section{Bounded and conserving: a defect and a fix}
@@ -460,8 +489,8 @@ of the naive choice rather than asserting it.
 
 \begin{table}[h]
 \centering
-\caption{A7---how mass is restored after the bound clip, on Cahn--Hilliard. Same backbone,
-same bounds, one line different.}
+\caption{A7---how mass is restored after the bound clip, on both bounded equations. Same
+backbone, same bounds, one line different.}
 \label{tab:a7}
 \small
 \begin{tabular}{lrccc}
@@ -472,6 +501,16 @@ Projection & Params & rel-$L_2$ & 95\% CI & Mass-conservation error \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+The measured answer is that at this scale the choice makes no difference: all three variants
+agree to four significant figures on both equations, and their mass errors are all at
+round-off. That is consistent with the out-of-range column of Table~\ref{tab:stability}
+being zero --- against a converging teacher the field does not reach the bound often enough
+for the clip to bind, so none of the three branches does any work. We report this rather
+than quietly dropping the ablation, because it is the honest outcome for a fix whose
+justification is a guarantee rather than a measured gain, and because it locates where the
+guarantee would begin to matter: larger timesteps, longer rollouts and stiffer fields, where
+the deficit the projection must absorb grows.
 
 % =====================================================================
 \section{Stability: failures counted, not clamped}

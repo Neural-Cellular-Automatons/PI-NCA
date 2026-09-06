@@ -21,6 +21,58 @@
 > error, with a convergence verdict per equation: `results/teacher_error.md`.
 
 
+## Headline: the two ablations that carry the paper
+
+Both are run at **matched backbone width and parameter count**, on **two phenomena with
+opposite structure**, because the claim under test is not "this prior helps" but "whether
+this prior helps is decided by the equation". A single-phenomenon ablation cannot show that.
+Numbers below are 2 seeds x 8 held-out ICs at grid 16, epochs 150; the generated tables in
+`results/bench_<pde>_A4.md` and `_A5.md` are the source.
+
+### A4 — conservation on/off, and it reverses
+
+| equation | flux head (conserving) | residual head (unconstrained) | winner |
+|---|---|---|---|
+| heat (conservative) | **rel-L2 0.0243**, mass err 9.6e-5 | rel-L2 0.0463, mass err 4.0 | flux, ~2x better |
+| Nagumo (non-conservative) | rel-L2 0.109, mass err 3.1e-5 | **rel-L2 0.0139**, mass err 16 | residual, ~8x better |
+
+Same backbone, parameter counts within 1% (4576 vs 4544), opposite verdict. The
+mass-conservation column shows why the constraint is not free: the flux head holds the total
+to 1e-5 on *both* equations, which is correct physics on the first and an actively wrong
+prior on the second, where the real dynamics create and destroy the quantity — the residual
+head's mass error of order 1e1 is the right behaviour there, not a defect.
+
+### A5 — receptive field per step, and it also reverses
+
+| equation | 3x3 | 5x5 | dilated (1,2,4) | winner |
+|---|---|---|---|---|
+| heat (local diffusion) | **0.0243** | 0.0501 | 0.0378 | smallest stencil |
+| Navier–Stokes (globally coupled) | 0.144 | 0.122 | **0.0961** | widest stencil |
+
+On local diffusion, widening the stencil strictly hurts: extra receptive field is capacity
+spent on information the equation does not propagate. On globally coupled dynamics the
+ordering inverts. So the local models' disadvantage on globally coupled problems is a
+**receptive-field** problem, not an argument against locality as such, and it is addressable
+without a spectral transform.
+
+### A1 — output bounding: a negative result about one of our own hybrids
+
+| equation | multiscale flux NCA | bounded multiscale flux NCA |
+|---|---|---|
+| Cahn–Hilliard | rel-L2 0.0878 | rel-L2 0.0878 |
+| Allen–Cahn | rel-L2 0.0329 | rel-L2 0.0329 |
+
+Identical to four significant figures. Against a **converging** teacher, bounding buys no
+accuracy on either bounded equation. The bounded variants were motivated by an accuracy
+failure that turned out to be the unstable `dt = 0.5` Cahn–Hilliard teacher (see
+`docs/research_log.md`). What they still buy — and it is substantial — is long-horizon
+stability: at 8x the training horizon every unbounded model fails on 100% of initial
+conditions while every bounded variant survives all of them
+(`results/stability_cahn_hilliard.md`).
+
+---
+
+
 
 Controlled ablations isolating which components drive emulator performance.
 Numbers are reduced-scale CPU, mean ± std over seeds.

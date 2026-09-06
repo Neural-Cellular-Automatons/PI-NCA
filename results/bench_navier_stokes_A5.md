@@ -19,9 +19,9 @@
 | periodic-BC res ↓ | **1.769e-01±1.8e-02** | 1.808e-01±1.5e-02 | 1.806e-01±1.8e-02 |
 | grad-energy | 1.115e-01±1.6e-02 | 1.131e-01±1.6e-02 | 1.138e-01±1.6e-02 |
 | params ↓ | **4576** | 5088 | 9312 |
-| train wall(s) ↓ | **10.5±2.2** | 14.4±2.2 | 20.3±1.3 |
-| infer s/step ↓ | **4.737e-04±6.6e-05** | 5.995e-04±3.5e-05 | 1.842e-03±2.1e-04 |
-| throughput cells/s ↑ | **4.37e+06** | 3.42e+06 | 1.12e+06 |
+| train wall(s) ↓ | **7.9±1.5** | 9±0.3 | 12.5±0.34 |
+| infer s/step ↓ | 5.350e-04±1.7e-04 | **4.687e-04±1.7e-04** | 7.399e-04±9.8e-05 |
+| throughput cells/s ↑ | 4.03e+06 | **4.66e+06** | 2.79e+06 |
 
 ### navier_stokes - rel-L2 with uncertainty and paired tests
 

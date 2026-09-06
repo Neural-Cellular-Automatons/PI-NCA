@@ -212,19 +212,33 @@ Measured results: §6.2 and §5.
 
 ### D. BoundedConsFluxNCA — `models/hybrids.py` *(hybrid)*
 
-**The problem it solves.** On Cahn–Hilliard — a stiff equation whose field is physically
-stuck in [-1, 1] — every emulator blew up, reaching rel-L2 of 13–18 when simply predicting
-"nothing changes" would have scored 0.93.
+**The problem it solves.** On stiff equations whose field is physically stuck in a range,
+unbounded network outputs drift outside that range and then explode. Ablation A1 measures
+it: clipping each step to the field's measured physical range fixes the blow-up but
+*destroys* conservation, because clipping arbitrarily adds and removes material. Stability
+and conservation are in direct conflict, and this model exists to resolve it.
 
-Ablation A1 diagnosed it: unbounded network outputs drift outside the physical range and
-then explode. Clipping each step to [-1, 1] fixed the blow-up — a **24–27× improvement** —
-but *destroyed* conservation, because clipping arbitrarily adds and removes material
-(3.3e-5 → 7.6).
-
-So stability and conservation were in direct conflict.
+> **A retracted motivating result.** This section previously motivated the model with
+> Cahn–Hilliard numbers — every emulator blowing up to rel-L2 13–18 where predicting "nothing
+> changes" scored 0.93. Those came from a teacher that was not converging: Cahn–Hilliard is
+> fourth order, its explicit stability limit is `dt <= 0.231`, the reference shipped
+> `dt = 0.5`, and it avoided visible blow-up only because the stepper clips to [-1,1] every
+> step. Timestep refinement gives an observed order of accuracy of 0.00. At a converging
+> `dt = 0.02` every architecture beats the identity floor by roughly an order of magnitude.
+> See `docs/research_log.md` (final entry) and `results/teacher_error.md`.
+>
+> The *conflict* between bounding and conservation is unaffected by that correction — it is
+> a property of the update rule, not of the teacher — and is measured directly by ablation
+> A7 below and by the out-of-range column of `results/stability_*.md`.
 
 **The fix.** Record the total mass before the update. Do the conservative flux update. Clip.
-Then re-project the total mass back to the recorded value. Bounded *and* conserving.
+Then restore the total mass. **How** it is restored matters, and the obvious choice is
+wrong: adding a uniform offset to every cell moves the clipped cells straight back outside
+the bound the clip just enforced, so the model ends up neither bounded nor usefully both.
+`physics.conserve_energy_bounded` instead distributes the deficit in proportion to each
+cell's remaining headroom, which restores mass exactly and cannot cross the bound. Ablation
+**A7** (`abl_proj_none` / `abl_proj_uniform` / `abl_proj_headroom`) measures what the naive
+choice costs rather than asserting the fix is free.
 
 ![BoundedConsFluxNCA](figures/arch/arch_bounded_cons_nca.png)
 
@@ -345,7 +359,7 @@ to the solution — so unlike a PINN it generalises across initial conditions.
 | Allen-Cahn | 0.053 | — | — | — | fno 0.007 |
 | Nagumo | 0.376 | — | — | — | plain_nca 0.073 |
 | Wave | — | — | — | — | plain_nca 0.052 |
-| Cahn-Hilliard | — | — | — | — | pi_nca 0.083 |
+| Cahn-Hilliard | 0.088 | 0.083 | 0.088 | 0.046 | fno 0.051 |
 | Gray-Scott | — | — | — | — | fno 0.674 |
 | Shallow-water | — | — | — | — | fno 0.024 |
 | FitzHugh-Nagumo | — | — | — | — | plain_nca 0.125 |
@@ -382,7 +396,7 @@ Total run time **0.81 h**. Peak device memory 0 MB.
 | Allen-Cahn | non-conservative phase separation | **fno** | 0.007 | plain_nca 0.049 | 4 |
 | Nagumo | non-conservative bistable | **plain_nca** | 0.073 | fno 0.081 | 4 |
 | Wave | 2nd-order hyperbolic | **plain_nca** | 0.052 | mc_flux_nca 0.056 | 3 |
-| Cahn-Hilliard | stiff 4th-order, bounded | **pi_nca** | 0.083 | plain_nca 0.083 | 2 |
+| Cahn-Hilliard | stiff 4th-order, bounded | **resnet** | 0.044 | spectral_flux_nca 0.046 | 14 |
 | Gray-Scott | reaction-diffusion patterns | **fno** | 0.674 | mc_flux_nca 0.692 | 3 |
 | Shallow-water | conservative, multi-field | **mc_flux_nca** | 0.016 | fno 0.024 | 3 |
 | FitzHugh-Nagumo | non-conservative reaction | **plain_nca** | 0.125 | fno 0.199 | 3 |
@@ -443,8 +457,20 @@ Every architecture on every phenomenon, same list throughout.
 
 | Model | rel-L2 ↓ | PSNR ↑ | Mass drift ↓ | Params ↓ | Infer s/step ↓ |
 |---|---|---|---|---|---|
-| **pi_nca** | **8.294e-02 ± 4.272e-03** | 36.68 | **1.673e-06** | **4 576** | 6.055e-04 |
+| **resnet** | **4.409e-02 ± 2.382e-05** | 42.16 | 5.678e-02 | 74 336 | 3.203e-03 |
+| spectral_flux_nca | 4.592e-02 ± 1.944e-03 | 41.81 | 1.069e-05 | 134 225 | 1.400e-03 |
+| fno | 5.078e-02 ± 1.738e-03 | 40.94 | 2.513e-01 | 592 897 | 6.200e-03 |
+| unet | 5.138e-02 ± 2.609e-03 | 40.84 | 5.708e-02 | 265 104 | 4.012e-03 |
+| mc_flux_nca | 6.938e-02 ± 4.533e-03 | 38.23 | 1.766e-06 | 9 936 | 1.442e-03 |
+| resnet_iso | 7.253e-02 ± 2.939e-03 | 37.84 | 1.264e-01 | 5 364 | 1.827e-03 |
+| pi_nca | 8.294e-02 ± 4.272e-03 | 36.68 | 1.673e-06 | 4 576 | 6.055e-04 |
+| bounded_cons_nca | 8.294e-02 ± 4.273e-03 | 36.68 | 2.477e-06 | 4 576 | 3.004e-04 |
 | plain_nca | 8.324e-02 ± 1.926e-03 | 36.64 | 1.712e-01 | 6 784 | 6.109e-04 |
+| bounded_multiscale_nca | 8.782e-02 ± 1.954e-03 | 36.18 | 2.034e-06 | 5 520 | 7.244e-04 |
+| multiscale_flux_nca | 8.782e-02 ± 1.954e-03 | 36.18 | 2.831e-06 | 5 520 | 5.786e-04 |
+| fno_small | 1.510e-01 ± 9.795e-03 | 31.48 | 2.171e-01 | 8 433 | 7.293e-04 |
+| unet_iso | 1.632e-01 ± 3.003e-03 | 30.80 | 3.571e-01 | 7 464 | 1.460e-03 |
+| identity | 4.104e-01 ± 7.468e-03 | 22.79 | **0.000e+00** | **1** | 1.185e-05 |
 
 **Gray-Scott** — reaction-diffusion patterns, C=2, grid 24, eval 48 steps
 
