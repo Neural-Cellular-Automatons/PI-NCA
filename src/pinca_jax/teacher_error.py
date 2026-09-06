@@ -152,11 +152,37 @@ def self_convergence(pde: str, grid: int, steps: int, batch: int = 8, seed: int 
             "reference_finite": finite, "kind": "self_convergence"}
 
 
+def reliability(rec: dict) -> str:
+    """Is this teacher trustworthy enough to rank architectures against?
+
+    A distillation target that is not converging is not a target. Three verdicts:
+
+    * ``converging`` -- the closed form is available, or the observed order is within a
+      plausible band of the scheme's design order. Rankings against it are meaningful.
+    * ``round-off limited`` -- the Cauchy differences have fallen to machine precision, so
+      the observed order is numerically undefined. The teacher is fine; the *order
+      estimate* is not, and reporting it as a failure would be wrong.
+    * ``NOT CONVERGING`` -- refining the timestep does not reduce the difference. Any
+      architecture comparison on this equation is measuring the solver's own instability,
+      and this module says so rather than letting a ranking be read off it.
+    """
+    if rec.get("kind") == "vs_analytic":
+        return "converging"
+    err = rec.get("rel_l2", float("nan"))
+    order = rec.get("observed_order", float("nan"))
+    if err < 1e-6:
+        return "round-off limited"
+    if order != order or not (0.5 <= order <= 2.5):
+        return "NOT CONVERGING"
+    return "converging"
+
+
 def teacher_error(pde: str, grid: int, steps: int, batch: int = 8, seed: int = 0):
     """Best available estimate of the teacher's own error over the evaluation horizon."""
-    if pde in ANALYTIC:
-        return solver_vs_analytic(pde, grid, steps, batch, seed)
-    return self_convergence(pde, grid, steps, batch, seed)
+    rec = (solver_vs_analytic(pde, grid, steps, batch, seed) if pde in ANALYTIC
+           else self_convergence(pde, grid, steps, batch, seed))
+    rec["reliability"] = reliability(rec)
+    return rec
 
 
 # ------------------------------------------------------------------- cost ---
@@ -207,26 +233,55 @@ def to_markdown(out, grid, steps):
              "production dt and a dt/8 reference over the same physical time; the "
              "observed order should match the scheme's design order.", "",
              "| PDE | estimate | teacher rel-L2 | spatial | temporal | observed order | "
-             "solver ms/step | fastest emulator ms/step | speedup |",
-             "|---|---|---|---|---|---|---|---|---|"]
+             "verdict | solver ms/step | fastest emulator ms/step | emulator vs solver |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
+    unreliable, slower = [], []
     for pde, r in out.items():
         order = r.get("observed_order", float("nan"))
         order_s = "-" if order != order else f"{order:.2f}"
         fastest = min(r["emulator_s_per_step"], key=r["emulator_s_per_step"].get)
         sp = r.get("rel_l2_spatial"); tp = r.get("rel_l2_temporal")
+        verdict = r.get("reliability", reliability(r))
+        if verdict == "NOT CONVERGING":
+            unreliable.append(pde)
+            verdict = "**NOT CONVERGING**"
+        ratio = r["speedup_vs_solver"][fastest]
+        if ratio < 1.0:
+            slower.append(pde)
+        # The ratio is solver-time / emulator-time, so <1 means the emulator is SLOWER.
+        # Printing "0.02x speedup" invites the opposite reading, so say which it is.
+        cost = (f"{ratio:.2f}x faster" if ratio >= 1.0 else f"**{1 / ratio:.0f}x slower**")
         lines.append(
             f"| {pde} | {r['kind']} | {r['rel_l2']:.3e} | "
             f"{'-' if sp is None else f'{sp:.3e}'} | {'-' if tp is None else f'{tp:.3e}'} | "
-            f"{order_s} | {r['solver_s_per_step'] * 1e3:.3f} | "
-            f"{r['emulator_s_per_step'][fastest] * 1e3:.3f} ({fastest}) | "
-            f"{r['speedup_vs_solver'][fastest]:.2f}x |")
+            f"{order_s} | {verdict} | {r['solver_s_per_step'] * 1e3:.3f} | "
+            f"{r['emulator_s_per_step'][fastest] * 1e3:.3f} ({fastest}) | {cost} |")
     lines += ["",
               "**How to read an emulator's rel-L2 against this table.** An emulator error "
               "far above the teacher error is limited by learning: the target is not the "
               "binding constraint and architecture comparisons are meaningful. An "
               "emulator error approaching the teacher error has saturated the target, and "
               "further ranking there measures the teacher's own discretisation error "
-              "rather than model quality."]
+              "rather than model quality.", "",
+              "`round-off limited` means the Cauchy differences reached machine precision, "
+              "so the order estimate is undefined -- the teacher is fine, the estimator is "
+              "not. `NOT CONVERGING` means refining the timestep did not reduce the "
+              "difference at all."]
+    if unreliable:
+        lines += ["", "> **Teacher does not converge on: " + ", ".join(unreliable) +
+                  ".** Refining the timestep does not reduce the solver's own change, so "
+                  "the distillation target on these equations is not a converged solution. "
+                  "Any architecture ranking on them is measuring the solver's instability "
+                  "rather than model quality, and should not be reported as a result. This "
+                  "is the most likely explanation wherever no architecture beats the "
+                  "do-nothing identity floor."]
+    if slower:
+        lines += ["", "> **The reference solver is faster than every emulator on: " +
+                  ", ".join(slower) + ".** At this grid size a learned surrogate is not a "
+                  "deployment case on these equations; it is a measurement harness. "
+                  "Surrogates pay off where the solver does not fit -- much larger grids, "
+                  "much longer horizons, stiff timestep restrictions, or differentiability "
+                  "through an entire rollout."]
     return "\n".join(lines) + "\n"
 
 

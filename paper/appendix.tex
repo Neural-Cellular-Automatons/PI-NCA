@@ -1,0 +1,167 @@
+% Appendices. Engineering detail lives here; the main paper carries the evidence.
+% Generated tables are pulled in by \input, never retyped.
+
+% =====================================================================
+\section{Related work: full positioning table}\label{app:related}
+
+Locality: does the update read a bounded neighbourhood per step? Conservation: enforced
+structurally (\textbf{S}), by projection (\textbf{P}), by penalty (\textbf{L}), or not at
+all. The full discussion, including the scope limits this work does not attempt, is in
+\code{docs/related\_work.md}.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llllll}
+\toprule
+Work & Locality & Conservation & Supervision & Suite & Dims \\
+\midrule
+Growing NCA (Mordvintsev et al., 2020) & local CA rule & -- & target image & n/a & 2-D \\
+NCA time-stepping \citep{saha2026nca} & local CA rule & -- & solver traj. & 5 PDEs & 1/2-D \\
+Spatio-temporal NCA \citep{richardson2023nca} & local CA rule & symmetry & traj., images & Turing & 2-D \\
+NoiseNCA \citep{pajouheshgar2024noisenca} & local CA rule & -- & texture & n/a & 2-D \\
+FINN \citep{praditia2021finn,karlbauer2022composing} & FV stencil & \textbf{S} & data + physics & transport & 1/2-D \\
+Neural Conservation Laws \citep{richterpowell2022ncl} & global forms & \textbf{S} & data & fluids & 2/3-D \\
+PDE-Net \citep{long2018pdenet,long2019pdenet2} & local filters & -- & trajectories & canonical & 2-D \\
+FNO \citep{li2021fno} & \textbf{global} & -- & input--output & canonical & 2/3-D \\
+PINO \citep{li2021pino} & global & \textbf{L} & data + residual & canonical & 2-D \\
+DeepONet \citep{lu2021deeponet} & global & -- & operator samples & canonical & 1/2-D \\
+MP-PDE \citep{brandstetter2022mppde} & message passing & -- & trajectories & canonical & 1/2-D \\
+MeshGraphNets \citep{pfaff2021meshgraphnets} & mesh & -- & trajectories & meshes & 2/3-D \\
+GNS \citep{sanchez2020gns} & graph & -- & trajectories & particles & 2/3-D \\
+Clifford layers \citep{brandstetter2023clifford} & local & geometric & trajectories & fluid/EM & 2/3-D \\
+PDE-Refiner \citep{lippe2023refiner} & global & -- & trajectories & canonical & 1/2-D \\
+PINN \citep{raissi2019pinn} & coordinate MLP & \textbf{L} & residual only & per-IVP & any \\
+PDEBench \citep{takamoto2022pdebench} & n/a & n/a & benchmark & broad & 1--3D \\
+APEBench \citep{koehler2024apebench} & n/a & n/a & benchmark & broad & 1--3D \\
+\midrule
+\textbf{This work} & local CA rule & \textbf{S} flux, \textbf{P} headroom & distillation
+  & \NpdesTwoD{}\,+\,\NpdesThreeD{} & 2/3-D \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{PDE suite: equations, parameters, stability limits}\label{app:suite}
+
+All equations are posed on a periodic grid with unit spacing, so the domain is $[0,N)^d$
+and the physical wavenumber of index $k$ is $2\pi k/N$. Spatial derivatives use the
+5-point Laplacian and central differences in 2-D and the 7-point Laplacian in 3-D; time
+integration is forward Euler except for shallow water (RK4) and Navier--Stokes
+(pseudo-spectral vorticity form, integrating factor for viscosity, FFT Poisson solve for
+the stream function).
+
+Two parameter choices deserve stating rather than burying. Gray--Scott ships in the source
+notebook with $\Delta t = 2.0$, which exceeds the explicit-diffusion stability bound
+$\Delta t \le \Delta x^2 / (4 D_u) = 1.25$ and diverges on sharp initial conditions by
+step 12. The verbatim parameters are retained in the registry so the migration tests can
+assert equality against the original, and a separate stable configuration is used for
+every experiment ($\Delta t = 1.0$; $0.5$ in 3-D, where the bound is $\Delta x^2/(6D_u)$).
+That divergence is itself asserted by a test, so the finding cannot silently regress.
+
+Initial conditions are per-equation: periodic sums of Gaussian blobs (heat,
+advection--diffusion, wave, shallow water, Navier--Stokes), smoothed noise (Cahn--Hilliard,
+Nagumo), sign fields with noise (Allen--Cahn), random square seeds (Gray--Scott), and small
+perturbations of the rest state (FitzHugh--Nagumo). Full generators are in
+\code{src/pinca\_jax/ic.py}. The held-out variants used in Section~\ref{sec:ood} live in a
+separate module, \code{src/pinca\_jax/ood.py}, so the correctness-gated generators stay
+untouched.
+
+% =====================================================================
+\section{Architectures: update equations}\label{app:arch}
+
+Let $u \in \mathbb{R}^{H\times W\times C}$ be the state, $P_\theta$ a perception stage
+(circularly padded convolution) and $F_\theta$ a pointwise processing stage.
+
+\paragraph{Unconstrained NCA.} $u' = u + W_{\text{out}} F_\theta(P_\theta(u))$ with
+$W_{\text{out}}$ zero-initialised, so the model begins as the identity. No conservation.
+
+\paragraph{Conservative flux PI-NCA.} The head emits a flux field
+$f \in \mathbb{R}^{H\times W\times 2C}$ and the update is its discrete divergence,
+\begin{equation}
+u'_c = u_c + \big(\mathrm{roll}(f^x_c, 1, W) - f^x_c\big)
+           + \big(\mathrm{roll}(f^y_c, 1, H) - f^y_c\big),
+\end{equation}
+which telescopes to exactly zero when summed over a periodic grid, so $\sum u'_c = \sum
+u_c$ per channel up to floating-point error. \emph{Per channel} is the operative phrase: a
+single lumped total would let one field's deficit be paid out of another's, which is wrong
+for any multi-field system.
+
+\paragraph{Multi-scale variant.} The perception stage becomes concatenated dilated
+convolutions at dilations $(1,2,4)$, widening the per-step receptive field from $\pm1$ to
+$\pm4$ cells without an FFT and without a large parameter increase.
+
+\paragraph{Spectral variant.} A truncated-Fourier global stream is added to the local
+conservative stream and the sum is mass-projected. This is the ``global operator plus
+local conservation'' hypothesis, tested directly rather than argued.
+
+\paragraph{Bounded variants.} As above, followed by a clip to the equation's measured
+physical range and then the mass projection of Section~\ref{sec:proj}.
+
+\paragraph{Physics-free controls.} A residual CNN (circular padding, no resolution change,
+receptive field $1 + 4\,\text{depth}$ cells per step) and a U-Net (mean-pool down,
+nearest-neighbour up, circular padding, skip connections). Both carry zero-initialised
+heads, so they also begin as the identity, and both are additionally instantiated at
+parameter counts matched to the NCAs.
+
+\paragraph{Bounds are measured, not assumed.} The bounded variants take their range from a
+short reference-solver rollout rather than a hardcoded $[-1,1]$. Hardcoding is correct for
+Cahn--Hilliard and Allen--Cahn and destroys a field whose amplitudes run 5--10, which is
+why bounding could previously be evaluated only on the two equations it was tuned for.
+
+% =====================================================================
+\section{Remaining ablations}\label{app:ablations}
+
+\textbf{A1 (output bounding)} switches the clip on and off on the stiff bounded equations.
+\textbf{A2 (iso-parameter spectral mixing)} compares the full FNO against one reduced to
+the NCA parameter budget, separating ``spectral mixing helps'' from ``more parameters
+help''; both appear in the main tables, as \code{fno} and \code{fno\_small}. \textbf{A6
+(initialisation and pre-seeding)} varies the training protocol: He initialisation,
+zero-initialised heads, learning-rate warm-up, and pre-evolving the training initial
+conditions so the model sees developed states rather than only early ones. Pre-seeding
+helps on most equations and measurably hurts on Cahn--Hilliard, whose solutions coarsen
+rapidly from fresh initial conditions so that developed states mismatch the evaluation
+distribution. It is therefore disabled for that equation, and the exception is recorded in
+the configuration rather than applied silently.
+
+% =====================================================================
+\section{Spectral error diagnostic}\label{app:spectral}
+
+For each model we compute the fraction of squared error energy in the upper half of the
+2-D spatial spectrum. The local models concentrate their residual error at fine scales
+while the spectral operator's error is closer to broadband-flat. This is the mechanism
+behind the regime split in Table~\ref{tab:regime}: it predicts an advantage for the global
+operator on exactly the equations whose solutions carry sharp interfaces, and it does so
+from a quantity independent of the ranking it explains.
+
+% =====================================================================
+\section{Resolution transfer}\label{app:resolution}
+
+Convolutional NCAs and spectral operators are both size-agnostic, so a model trained at one
+grid can be evaluated at another with no retraining. We train at each grid in the study and
+evaluate at every grid, giving a transfer matrix whose diagonal is same-grid accuracy and
+whose off-diagonal entries are zero-shot coarse-to-fine (super-resolution) and
+fine-to-coarse transfer. Raw tables are in \code{results/bench\_resolution\_*.md}.
+
+% =====================================================================
+\section{Migration and the correctness gate}\label{app:migration}
+
+Every solver and model in this study was migrated from a PyTorch original and asserted
+equal to a verbatim reference to tolerance \emph{before} any experiment was run. The gate
+is \Ntests{} tests, and it is the reason a surprising result in this paper can be
+attributed to the science rather than to a bug.
+
+It earned its keep. The periodic Laplacian originally differenced the last two axes, which
+is correct for the NCHW layout the unit test used and wrong for the NHWC arrays the
+training path actually passes, so the teacher was a degenerate one-dimensional Laplacian
+while the test still passed. The fix was to difference explicit spatial axes and to add an
+isotropy regression test exercising the real data path. We record it because the lesson
+generalises: a correctness gate that does not test the layout the pipeline uses can pass
+while the pipeline is wrong.
+
+The original PyTorch script is retained at the repository root for provenance only, with
+its defects documented at line level in \code{docs/legacy\_pytorch.md} --- most
+consequentially a plotted training curve that can be identically zero, because the
+accumulated loss is read after the truncation branch has reset it, and a validation loop
+that omits the conservation projection which training and the final test both apply, so it
+scores a different model. No number in this paper comes from running it.

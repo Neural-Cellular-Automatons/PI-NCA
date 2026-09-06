@@ -165,6 +165,21 @@ def override_params(name: str, **overrides) -> PDESpec:
 # the verbatim notebook params; see research log "Phase 2 / Gray-Scott stability").
 STABLE = {
     "gray_scott": override_params("gray_scott", dt=1.0),
+    # Cahn-Hilliard is fourth order, so the explicit stability limit is far tighter than
+    # the second-order equations': linearising u_t = lap(u^3 - u - eps2*lap(u)) gives
+    # |lambda| <= |lambda_lap| + eps2*lambda_lap^2 = 8 + 0.01*64 = 8.64, hence
+    # dt <= 2/8.64 = 0.231. The notebook ships dt=0.5, which is over that limit by more
+    # than 2x. It does not visibly explode only because cahn_hilliard_step clips the state
+    # to [-1,1] every step -- remove the clip and dt=0.5 goes to NaN.
+    #
+    # That mattered more than a stability footnote. A clip-stabilised unstable scheme is
+    # not a converged solution of anything: measured by dt-refinement it showed an observed
+    # order of 0.00 and a self-difference of 0.56, i.e. refining the timestep did not move
+    # it at all. Every architecture comparison distilled from that teacher was ranking
+    # models against solver noise, which is the most likely reason no architecture beat the
+    # do-nothing identity floor on this equation. At dt=0.02 the scheme converges at the
+    # expected first order (observed 0.90-0.95) and the clip stops binding.
+    "cahn_hilliard": override_params("cahn_hilliard", dt=0.02),
 }
 
 

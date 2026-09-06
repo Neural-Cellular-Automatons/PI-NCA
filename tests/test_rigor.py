@@ -248,3 +248,48 @@ def test_every_registry_arch_has_a_budget_class():
     """An efficiency claim needs a budget class; a new arch must not silently escape one."""
     missing = [k for k in registry.REGISTRY if k not in registry.BUDGET_CLASS]
     assert missing == []
+
+
+# ------------------------------------- teacher stability of the whole suite ---
+@pytest.mark.parametrize("pde", list(pdes.REGISTRY))
+def test_every_stable_teacher_actually_converges(pde):
+    """A distillation target that does not converge is not a target.
+
+    This is the test that would have caught the Cahn-Hilliard problem: the shipped
+    dt=0.5 exceeds the fourth-order explicit limit (~0.23) and only avoided visible
+    blow-up because the stepper clips to [-1,1] every step. Measured by dt-refinement it
+    showed an observed order of 0.00 -- refining the timestep did not move the solution
+    at all -- so every architecture ranking distilled from it was ranking solver noise.
+    """
+    r = teacher_error.teacher_error(pde, 16, 12, batch=4)
+    assert r["reliability"] != "NOT CONVERGING", (
+        f"{pde}: teacher does not converge (order {r.get('observed_order')}, "
+        f"self-difference {r['rel_l2']:.3e}). Add a STABLE override in pdes.py.")
+
+
+def test_cahn_hilliard_is_unstable_at_the_verbatim_timestep():
+    """The finding itself, pinned: the notebook's dt=0.5 diverges without the clip.
+
+    The clip is retained in the stepper for fidelity to the original, so this asserts
+    the underlying instability directly rather than through it.
+    """
+    from pinca_jax.equations.operators import laplacian
+
+    def unclipped(s, p):
+        mu = s ** 3 - s - p["eps2"] * laplacian(s)
+        return s + p["dt"] * laplacian(mu)
+
+    base = pdes.REGISTRY["cahn_hilliard"]
+    x0 = ic.make_state(jax.random.PRNGKey(0), "cahn_hilliard", 2, 16)
+    verbatim = pdes.PDESpec("ch", 1, unclipped, base.params, True)
+    assert not bool(jnp.all(jnp.isfinite(pdes.rollout(verbatim, x0, 120))))
+    stable = pdes.PDESpec("ch", 1, unclipped, {**base.params, "dt": 0.02}, True)
+    assert bool(jnp.all(jnp.isfinite(pdes.rollout(stable, x0, 120))))
+
+
+def test_stable_overrides_do_not_touch_the_verbatim_registry():
+    """The migration gate compares against the original, so REGISTRY must stay verbatim."""
+    assert pdes.REGISTRY["cahn_hilliard"].params["dt"] == 0.5
+    assert pdes.REGISTRY["gray_scott"].params["dt"] == 2.0
+    assert pdes.STABLE["cahn_hilliard"].params["dt"] < 0.231   # the linear stability bound
+    assert pdes.STABLE["gray_scott"].params["dt"] <= 1.25

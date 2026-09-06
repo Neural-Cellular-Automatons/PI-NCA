@@ -1,0 +1,281 @@
+{
+ "grid": 16,
+ "steps": 12,
+ "batch": 8,
+ "results": {
+  "heat": {
+   "rel_l2": 0.01343951653689146,
+   "rel_l2_temporal": 0.007197523023933172,
+   "rel_l2_spatial": 0.020335271954536438,
+   "per_ic_rel_l2": [
+    0.016040844842791557,
+    0.014433776028454304,
+    0.012815654277801514,
+    0.009976109489798546,
+    0.015067527070641518,
+    0.013209639117121696,
+    0.015523288398981094,
+    0.013675532303750515
+   ],
+   "max_abs_err": 0.17627334594726562,
+   "t_final": 1.2000000000000002,
+   "steps": 12,
+   "grid": 16,
+   "kind": "vs_analytic",
+   "reliability": "converging",
+   "solver_s_per_step": 1.1249998351559043e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.00040794999222271144,
+    "fno": 0.002729000014369376
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.027576905352262992,
+    "fno": 0.004122388526273545
+   }
+  },
+  "wave": {
+   "rel_l2": 0.00567998131737113,
+   "rel_l2_temporal": 0.0016345762414857745,
+   "rel_l2_spatial": 0.005865614861249924,
+   "per_ic_rel_l2": [
+    0.006678109988570213,
+    0.006190065760165453,
+    0.005586730781942606,
+    0.00435350276529789,
+    0.006306991446763277,
+    0.0054969885386526585,
+    0.006582018453627825,
+    0.005782388150691986
+   ],
+   "max_abs_err": 0.060719311237335205,
+   "t_final": 0.6000000000000001,
+   "steps": 12,
+   "grid": 16,
+   "kind": "vs_analytic",
+   "reliability": "converging",
+   "solver_s_per_step": 1.3950004358775914e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.00041614999645389616,
+    "fno": 0.0030236000166041777
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.03352157742190395,
+    "fno": 0.004613706931325373
+   }
+  },
+  "adv_diff": {
+   "rel_l2": 0.02645985037088394,
+   "rel_l2_temporal": 0.00179942580871284,
+   "rel_l2_spatial": 0.027274172753095627,
+   "per_ic_rel_l2": [
+    0.03009139746427536,
+    0.029546353965997696,
+    0.026921849697828293,
+    0.02074330858886242,
+    0.02775636315345764,
+    0.02466774918138981,
+    0.029987631365656853,
+    0.028207017108798027
+   ],
+   "max_abs_err": 0.4493827819824219,
+   "t_final": 0.96,
+   "steps": 12,
+   "grid": 16,
+   "kind": "vs_analytic",
+   "reliability": "converging",
+   "solver_s_per_step": 1.1899988749064505e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.0004309000069042668,
+    "fno": 0.002863500005332753
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.02761658976740685,
+    "fno": 0.00415574951030109
+   }
+  },
+  "allen_cahn": {
+   "rel_l2": 0.0007999796653166413,
+   "cauchy_diffs": {
+    "1": 0.0007999796653166413,
+    "2": 0.0003365289303474128,
+    "4": 0.00011115481902379543
+   },
+   "observed_order": 1.040095117776431,
+   "reference_refinement": 8,
+   "t_final": 0.48,
+   "steps": 12,
+   "grid": 16,
+   "reference_finite": true,
+   "kind": "self_convergence",
+   "reliability": "converging",
+   "solver_s_per_step": 3.8999991375021636e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.00036279999767430127,
+    "fno": 0.002736499984166585
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.10749722027985271,
+    "fno": 0.0142517783981086
+   }
+  },
+  "gray_scott": {
+   "rel_l2": 0.011222239583730698,
+   "cauchy_diffs": {
+    "1": 0.011222239583730698,
+    "2": 0.004762765020132065,
+    "4": 0.0015819139080122113
+   },
+   "observed_order": 1.0235218849690932,
+   "reference_refinement": 8,
+   "t_final": 12.0,
+   "steps": 12,
+   "grid": 16,
+   "reference_finite": true,
+   "kind": "self_convergence",
+   "reliability": "converging",
+   "solver_s_per_step": 1.1049996828660369e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.0004233999934513122,
+    "fno": 0.002580499989562668
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.026098245095586642,
+    "fno": 0.004282114655714825
+   }
+  },
+  "shallow_water": {
+   "rel_l2": 3.466250007022609e-07,
+   "cauchy_diffs": {
+    "1": 3.466250007022609e-07,
+    "2": 3.6502018474493525e-07,
+    "4": 4.002640991984663e-07
+   },
+   "observed_order": -0.5584687432344129,
+   "reference_refinement": 8,
+   "t_final": 0.6000000000000001,
+   "steps": 12,
+   "grid": 16,
+   "reference_finite": true,
+   "kind": "self_convergence",
+   "reliability": "round-off limited",
+   "solver_s_per_step": 7.280000136233866e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.0003616500034695491,
+    "fno": 0.0027351000026101246
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.2012996003390577,
+    "fno": 0.026616943170724355
+   }
+  },
+  "cahn_hilliard": {
+   "rel_l2": 0.5603475570678711,
+   "cauchy_diffs": {
+    "1": 0.5603475570678711,
+    "2": 0.4494020342826843,
+    "4": 0.27635249495506287
+   },
+   "observed_order": -0.05926699266386202,
+   "reference_refinement": 8,
+   "t_final": 6.0,
+   "steps": 12,
+   "grid": 16,
+   "reference_finite": true,
+   "kind": "self_convergence",
+   "reliability": "NOT CONVERGING",
+   "solver_s_per_step": 3.505000495351851e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.0004157000075792894,
+    "fno": 0.002810200006933883
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.08431562239632039,
+    "fno": 0.012472423619160117
+   }
+  },
+  "fitzhugh_nagumo": {
+   "rel_l2": 0.018495986238121986,
+   "cauchy_diffs": {
+    "1": 0.018495986238121986,
+    "2": 0.007909401319921017,
+    "4": 0.002632490359246731
+   },
+   "observed_order": 1.0049609873283047,
+   "reference_refinement": 8,
+   "t_final": 1.2000000000000002,
+   "steps": 12,
+   "grid": 16,
+   "reference_finite": true,
+   "kind": "self_convergence",
+   "reliability": "converging",
+   "solver_s_per_step": 1.585000427439809e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.00046120000479277223,
+    "fno": 0.0026922499964712188
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.03436687787363095,
+    "fno": 0.005887270606104823
+   }
+  },
+  "nagumo": {
+   "rel_l2": 0.0010250265477225184,
+   "cauchy_diffs": {
+    "1": 0.0010250265477225184,
+    "2": 0.00044145461288280785,
+    "4": 0.00014751132403034717
+   },
+   "observed_order": 0.9893894499023476,
+   "reference_refinement": 8,
+   "t_final": 1.2000000000000002,
+   "steps": 12,
+   "grid": 16,
+   "reference_finite": true,
+   "kind": "self_convergence",
+   "reliability": "converging",
+   "solver_s_per_step": 1.3800003216601908e-05,
+   "emulator_s_per_step": {
+    "plain_nca": 0.00036404999264050275,
+    "fno": 0.0031388500065077096
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.03790689042074076,
+    "fno": 0.004396515661339071
+   }
+  },
+  "navier_stokes": {
+   "rel_l2": 0.010374502278864384,
+   "cauchy_diffs": {
+    "1": 0.010374502278864384,
+    "2": 0.004169018939137459,
+    "4": 0.0013449115213006735
+   },
+   "observed_order": 1.1471851204036836,
+   "reference_refinement": 8,
+   "t_final": 0.6000000000000001,
+   "steps": 12,
+   "grid": 16,
+   "reference_finite": true,
+   "kind": "self_convergence",
+   "reliability": "converging",
+   "solver_s_per_step": 0.00020049999875482172,
+   "emulator_s_per_step": {
+    "plain_nca": 0.00039739999920129776,
+    "fno": 0.004426950006745756
+   },
+   "speedup_vs_solver": {
+    "plain_nca": 0.5045294379800228,
+    "fno": 0.045290775455790196
+   }
+  }
+ },
+ "device": {
+  "tag": "teacher_error",
+  "jax": "0.10.1",
+  "backend": "cpu",
+  "devices": [
+   "cpu:0"
+  ],
+  "peak_mem_mb": 0.0
+ }
+}

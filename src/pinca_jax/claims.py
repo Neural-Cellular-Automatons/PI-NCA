@@ -51,7 +51,8 @@ def inventory() -> dict:
            "seeds": {}, "grids": set(), "backends": set(), "failed_cells": [],
            "files": 0, "ood_pdes": set(), "stability_pdes": set(),
            "resolution_pdes": set(), "ablations": set(), "has_teacher_error": False,
-           "n_eval_ics": set()}
+           "n_eval_ics": set(), "has_matched": False,
+           "teacher_all_converging": None, "teacher_not_converging": []}
     for path in sorted(glob.glob(os.path.join(RES, "*.json"))):
         d = _load(path)
         if not isinstance(d, dict):
@@ -69,6 +70,12 @@ def inventory() -> dict:
 
         if name == "teacher_error":
             inv["has_teacher_error"] = True
+            bad = [k for k, v in (d.get("results") or {}).items()
+                   if v.get("reliability") == "NOT CONVERGING"]
+            inv["teacher_not_converging"] = sorted(bad)
+            inv["teacher_all_converging"] = not bad
+        elif name.startswith("matched_"):
+            inv["has_matched"] = True
         elif name.startswith("ood_"):
             inv["ood_pdes"].add(name[4:])
         elif name.startswith("stability_"):
@@ -81,11 +88,11 @@ def inventory() -> dict:
             _collect(d, inv, "archs_3d", pde, name)
         elif name.startswith("bench_"):
             rest = name[len("bench_"):]
-            m = re.match(r"^(.*)_(full|main|hybrid|unified|mc|a2|A\d)$", rest)
+            m = re.match(r"^(.*)_(full|headline|main|hybrid|unified|mc|a2|A\d)$", rest)
             pde, tag = (m.group(1), m.group(2)) if m else (rest, "")
             if tag.startswith("A") or tag == "a2":
                 inv["ablations"].add(tag.upper())
-            if tag in ("full", "main", ""):
+            if tag in ("full", "headline", "main", ""):
                 inv["pdes_2d"].add(pde)
                 _collect(d, inv, "archs_2d", pde, name)
         if d.get("seeds"):
@@ -141,6 +148,11 @@ CLAIMS = [
      lambda i: i["n_pdes_3d"] >= 3 or None),
     ("C12", "No benchmark cell is silently missing: every failure is recorded.",
      lambda i: True),
+    ("C13", "Every distillation target converges under timestep refinement, so no "
+            "architecture ranking is measuring solver noise.",
+     lambda i: i["teacher_all_converging"] if i["has_teacher_error"] else None),
+    ("C14", "A matched PINN-vs-emulator comparison is reported with both cost structures.",
+     lambda i: i["has_matched"] or None),
 ]
 
 
@@ -226,7 +238,11 @@ def to_markdown(inv=None) -> str:
          f"- Stability studies: {', '.join(inv['stability_pdes']) or 'none'}",
          f"- Resolution studies: {', '.join(inv['resolution_pdes']) or 'none'}",
          f"- Ablation tags present: {', '.join(inv['ablations']) or 'none'}",
-         f"- Teacher-error study: {'yes' if inv['has_teacher_error'] else 'no'}",
+         f"- Teacher-error study: {'yes' if inv['has_teacher_error'] else 'no'}"
+         + ("" if not inv["teacher_not_converging"] else
+            "  **teacher NOT converging on: " +
+            ", ".join(inv["teacher_not_converging"]) + "**"),
+         f"- Matched PINN comparison: {'yes' if inv['has_matched'] else 'no'}",
          f"- Result files scanned: {inv['files']}", ""]
     if inv["single_seed_files"]:
         L += ["> **Single-seed tables still present** (a headline number must not come "

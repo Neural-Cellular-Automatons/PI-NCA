@@ -250,9 +250,13 @@ def main():
     if want("plots"):
         r.stage("benchmark plots (final)", "plots", fatal=False)
 
-    if want("report"):
+    if want("claims"):
         # Audit before the report, so the report is written against a checked inventory.
         r.stage("claims audit: prose vs measured inventory", "claims", fatal=False)
+        r.stage("bibliography: re-verify every citation against arXiv", "bib", fatal=False)
+        r.stage("paper: regenerate every table and quoted number", "paper", fatal=False)
+
+    if want("report"):
         r.stage("architecture diagrams", "arch_figs", fatal=False)
         r.stage("report: regenerate Markdown from results", "report", fatal=False)
         r.stage("report: render PDF", "md2pdf", [REPORT_MD], fatal=False)
