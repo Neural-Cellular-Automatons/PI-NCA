@@ -20,6 +20,7 @@ from .flux_nca import DeepFluxNCA, MultiChannelFluxNCA
 from .fno import FNO2d
 from .hybrids import BoundedConsFluxNCA, SpectralFluxNCA, MultiScaleFluxNCA
 from .ablation_nca import AblationNCA
+from .baselines import ResNetEmulator, UNetEmulator, IdentityEmulator
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,26 @@ REGISTRY: dict[str, ArchSpec] = {
     "mc_flux_nca": ArchSpec(
         "mc_flux_nca", lambda C, bounds=None: (lambda: MultiChannelFluxNCA(out_channels=C)),
         note="multi-channel per-field conservative flux NCA (SWE/FHN/GS)"),
+    # --- standard learned surrogates with NO physics prior (the controls) ---
+    # Without these, "the conservation prior helps" is confounded with "we never tried
+    # an ordinary CNN". resnet is the local control for the NCA family; unet is the
+    # multi-resolution route to a global receptive field, separating "global context
+    # helps" from "Fourier mixing helps" (which the FNO alone cannot).
+    "resnet": ArchSpec(
+        "resnet", lambda C, bounds=None: (lambda: ResNetEmulator(out_channels=C, width=32, depth=4)),
+        note="autoregressive residual CNN, circular pad (~7.4e4 params)"),
+    "resnet_iso": ArchSpec(
+        "resnet_iso", lambda C, bounds=None: (lambda: ResNetEmulator(out_channels=C, width=12, depth=2)),
+        note="iso-parameter CNN control (~5.4e3, matched to the NCA budget)"),
+    "unet": ArchSpec(
+        "unet", lambda C, bounds=None: (lambda: UNetEmulator(out_channels=C, width=24, levels=2)),
+        note="multi-resolution U-Net emulator (~2.7e5 params)"),
+    "unet_iso": ArchSpec(
+        "unet_iso", lambda C, bounds=None: (lambda: UNetEmulator(out_channels=C, width=4, levels=2)),
+        note="iso-parameter U-Net control (~7.5e3, matched to the NCA budget)"),
+    "identity": ArchSpec(
+        "identity", lambda C, bounds=None: (lambda: IdentityEmulator(out_channels=C)),
+        note="do-nothing floor g(x)=x -- any model above this learned worse than nothing"),
     # --- A4: conservation on/off at MATCHED backbone width (32/64, 3x3, single-scale) ---
     "abl_flux": ArchSpec(
         "abl_flux", lambda C, bounds=None: (lambda: AblationNCA(out_channels=C, head="flux")),
@@ -65,6 +86,25 @@ REGISTRY: dict[str, ArchSpec] = {
     "abl_multiscale": ArchSpec(
         "abl_multiscale", lambda C, bounds=None: (lambda: AblationNCA(out_channels=C, kernel=3, dilations=(1, 2, 4))),
         scalar_only=True, note="A5: 3x3 dilated multi-scale (1,2,4)"),
+    # --- A7: HOW mass is restored after the bound clip (bounded models only) ---
+    # The naive uniform offset re-violates the bound it just enforced; the headroom
+    # projection does not. Same backbone, same bounds, one line different.
+    "abl_proj_uniform": ArchSpec(
+        "abl_proj_uniform",
+        lambda C, bounds=None: (lambda: MultiScaleFluxNCA(
+            out_channels=C, conserve=True, bounds=bounds or (-1.0, 1.0), projection="uniform")),
+        note="A7: uniform mass re-projection after clip (breaks the bound)"),
+    "abl_proj_headroom": ArchSpec(
+        "abl_proj_headroom",
+        lambda C, bounds=None: (lambda: MultiScaleFluxNCA(
+            out_channels=C, conserve=True, bounds=bounds or (-1.0, 1.0), projection="headroom")),
+        note="A7: headroom-proportional re-projection (bounded AND conserving)"),
+    "abl_proj_none": ArchSpec(
+        "abl_proj_none",
+        lambda C, bounds=None: (lambda: MultiScaleFluxNCA(
+            out_channels=C, conserve=True, bounds=bounds or (-1.0, 1.0), projection="none")),
+        note="A7: clip only, no re-projection (bounded, not conserving)"),
+
     # --- hybrids (scalar conservative fields) ---
     "bounded_cons_nca": ArchSpec(
         "bounded_cons_nca",
@@ -91,6 +131,22 @@ REGISTRY: dict[str, ArchSpec] = {
 # technique rather than a Cahn-Hilliard special case: clipping heat to a hardcoded
 # [-1,1] would destroy a field whose amplitudes run 5-10. The (-1,1) default is only
 # a fallback for direct construction.
+
+
+# Iso-parameter budget classes (TODO: fair efficiency claims). An accuracy comparison
+# is only meaningful *within* a class; across classes report accuracy-at-equal-params
+# and accuracy-at-equal-compute separately. Counts are for C=1 on a 32x32 grid.
+BUDGET_CLASS = {
+    "identity": "floor",
+    "pi_nca": "small", "abl_flux": "small", "abl_residual": "small", "abl_k3": "small",
+    "abl_k5": "small", "bounded_cons_nca": "small", "multiscale_flux_nca": "small",
+    "bounded_multiscale_nca": "small", "resnet_iso": "small", "unet_iso": "small",
+    "plain_nca": "small", "fno_small": "small", "abl_multiscale": "small",
+    "mc_flux_nca": "small",
+    "resnet": "medium",
+    "abl_proj_uniform": "small", "abl_proj_headroom": "small", "abl_proj_none": "small",
+    "spectral_flux_nca": "large", "unet": "large", "fno": "large",
+}
 
 
 # Architectures compared on every phenomenon. The ablation entries (abl_*) are

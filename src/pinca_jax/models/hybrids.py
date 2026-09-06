@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 
 from ..physics import (multichannel_divergence_update, conserve_energy_per_channel,
-                       total_mass_per_channel)
+                       conserve_energy_bounded, total_mass_per_channel)
 from .fno import SpectralConv2d
 
 _HE = nn.initializers.he_normal()  # better start for ReLU convs (matches originals)
@@ -39,12 +39,31 @@ _HE = nn.initializers.he_normal()  # better start for ReLU convs (matches origin
 # deficit be paid out of another's.
 
 
+def _project(x, tgt, bounds, mode):
+    """Restore mass after a clip. `mode` selects HOW, which is an ablation axis.
+
+    "uniform"  -- add the same offset everywhere (the original recipe). Exact mass, but
+                  it moves clipped cells straight back outside the bound.
+    "headroom" -- distribute in proportion to each cell's remaining room to the bound.
+                  Exact mass AND inside the bound whenever the target is feasible.
+
+    Bounding and conservation are only jointly achievable with the second; "uniform"
+    is kept so the cost of the naive choice can be measured rather than asserted.
+    """
+    if mode == "none" or bounds is None:
+        return x
+    if mode == "headroom":
+        return conserve_energy_bounded(x, tgt, bounds[0], bounds[1])
+    return conserve_energy_per_channel(x, tgt)
+
+
 class BoundedConsFluxNCA(nn.Module):
     """Flux-divergence NCA + (clip -> mass re-projection): bounded AND mass-conserving."""
     out_channels: int = 1
     bounds: tuple = (-1.0, 1.0)
     perceive_features: int = 32
     hidden_features: int = 64
+    projection: str = "headroom"   # "headroom" | "uniform" | "none" (ablation A7)
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -57,8 +76,7 @@ class BoundedConsFluxNCA(nn.Module):
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         x = multichannel_divergence_update(x, flux)      # conserves mass
         x = jnp.clip(x, self.bounds[0], self.bounds[1])  # bounds (breaks conservation)
-        x = conserve_energy_per_channel(x, tgt)          # restores exact per-field mass
-        return x
+        return _project(x, tgt, self.bounds, self.projection)
 
 
 class SpectralFluxNCA(nn.Module):
@@ -112,6 +130,7 @@ class MultiScaleFluxNCA(nn.Module):
     dilations: tuple = (1, 2, 4)
     conserve: bool = True
     bounds: tuple | None = None
+    projection: str = "headroom"   # how mass is restored after the clip (ablation A7)
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -126,8 +145,7 @@ class MultiScaleFluxNCA(nn.Module):
         flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         out = multichannel_divergence_update(x, flux)
-        if self.bounds is not None:
-            out = jnp.clip(out, self.bounds[0], self.bounds[1])
-        if self.conserve:
-            out = conserve_energy_per_channel(out, tgt)  # exact per-field mass, post-clip
-        return out
+        if self.bounds is None:
+            return conserve_energy_per_channel(out, tgt) if self.conserve else out
+        out = jnp.clip(out, self.bounds[0], self.bounds[1])
+        return _project(out, tgt, self.bounds, self.projection if self.conserve else "none")

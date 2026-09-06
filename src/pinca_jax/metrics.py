@@ -37,6 +37,19 @@ def rel_l2(pred, target, eps=1e-8):
     return float(num / den)
 
 
+def rel_l2_per_sample(pred, target, eps=1e-8):
+    """Per-initial-condition relative L2 -> list of length B.
+
+    The batch-reduced `rel_l2` cannot support a paired comparison between two
+    architectures: pairing needs one number per initial condition so the difference
+    is taken within an IC. Every driver that claims "A beats B" consumes this.
+    """
+    ax = tuple(range(1, pred.ndim))
+    num = jnp.sqrt(jnp.sum((pred - target) ** 2, axis=ax))
+    den = jnp.sqrt(jnp.sum(target ** 2, axis=ax)) + eps
+    return [float(v) for v in (num / den)]
+
+
 def max_abs_error(pred, target):
     """L∞ (worst-cell) error."""
     return float(jnp.max(jnp.abs(pred - target)))
@@ -94,6 +107,32 @@ def conservation_error(pred, u0):
     return float(jnp.mean(jnp.abs(mass(pred) - mass(u0))))
 
 
+def conservation_error_per_channel(pred, u0):
+    """Per-channel |mass(pred) - mass(u0)|, mean over batch -> list of length C.
+
+    `conservation_error` lumps all channels into one scalar, which hides a model that
+    conserves the total while moving mass between fields. A multi-field conservation
+    claim must be made per channel.
+    """
+    ax = tuple(range(1, pred.ndim - 1))
+    d = jnp.abs(jnp.sum(pred, axis=ax) - jnp.sum(u0, axis=ax))   # (B,C)
+    return [float(v) for v in jnp.mean(d, axis=0)]
+
+
+def conservation_drift(traj, u0):
+    """Relative mass drift along a trajectory -> list of length T.
+
+    Structural (flux-form) conservation is flat in time up to float error; a projection
+    or an unconstrained residual model drifts. Reporting the whole curve separates the
+    two, which a single end-of-rollout number cannot.
+    """
+    m0 = jnp.sum(u0, axis=tuple(range(1, u0.ndim)))              # (B,)
+    scale = jnp.mean(jnp.abs(m0)) + 1e-12
+    ax = tuple(range(2, traj.ndim))
+    mt = jnp.sum(traj, axis=ax)                                  # (T,B)
+    return [float(v) for v in jnp.mean(jnp.abs(mt - m0[None]), axis=1) / scale]
+
+
 def periodic_bc_residual(u):
     """Periodic-BC satisfaction: wrap-around mismatch (≈0 for roll-based/circular models)."""
     lr = jnp.mean(jnp.abs(u[:, :, 0, :] - u[:, :, -1, :]))
@@ -147,5 +186,19 @@ def aggregate_runs(run_dicts):
     """List[dict[name->float]] → dict[name->Agg]. For multi-seed metric tables."""
     if not run_dicts:
         return {}
-    keys = run_dicts[0].keys()
+    keys = [k for k in run_dicts[0]
+            if not isinstance(run_dicts[0][k], (list, tuple, dict))]
     return {k: aggregate([r[k] for r in run_dicts]) for k in keys}
+
+
+def pool_per_ic(run_dicts, key="per_ic_rel_l2"):
+    """Concatenate a per-IC list across seed runs -> one paired sample vector.
+
+    Ordering is (seed-major, IC-minor) and identical for every architecture, because
+    every architecture is evaluated on the same seeds and the same evaluation ICs. That
+    is what makes `stats.paired_test` legitimate here.
+    """
+    out = []
+    for r in run_dicts:
+        out.extend(float(v) for v in r.get(key, []))
+    return out

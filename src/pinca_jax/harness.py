@@ -195,6 +195,7 @@ def evaluate_emulator(model, params, cfg: EmuConfig):
                    for k, i in qs.items()}
     growth = rel_profile["rel_l2_t_final"] / (rel_profile["rel_l2_t_q1"] + 1e-8)
 
+    drift = metrics.conservation_drift(pred_traj, x0)
     one_step = jax.jit(lambda x: model.apply(params, x))
     infer = metrics.time_callable(one_step, x0)
     cells = cfg.n_eval * cfg.grid_size * cfg.grid_size
@@ -214,6 +215,8 @@ def evaluate_emulator(model, params, cfg: EmuConfig):
         "error_growth_ratio": float(growth),
         # physics
         "conservation_err": metrics.conservation_error(pred, x0),
+        "conservation_drift_max": max(drift),      # worst relative mass drift over rollout
+        "conservation_drift_final": drift[-1],
         "bc_residual": metrics.periodic_bc_residual(pred),
         "grad_energy": metrics.gradient_energy(pred),
         # cost
@@ -221,6 +224,10 @@ def evaluate_emulator(model, params, cfg: EmuConfig):
         "infer_s_per_step": infer,
         "throughput_cells_per_s": float(cells / (infer + 1e-12)),
         "train_wall_s": None,  # filled by run_multiseed
+        # paired-statistics payloads (lists, skipped by aggregate_runs)
+        "per_ic_rel_l2": metrics.rel_l2_per_sample(pred, target),
+        "per_channel_cons_err": metrics.conservation_error_per_channel(pred, x0),
+        "conservation_drift": drift,
     }
     out.update(rel_profile)
     return out
