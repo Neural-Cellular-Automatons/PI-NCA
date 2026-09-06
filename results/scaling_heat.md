@@ -16,9 +16,9 @@ Kendall's tau between the ranking at grid=16 and grid=24: **0.67** -- **ordering
 | rollout | plain_nca | pi_nca | fno | identity |
 |---|---|---|---|---|
 | 4 | 0.128 | 0.0595 | 0.0599 | 0.49 |
-| 8 | 0.164 | 0.0755 | 0.072 | 0.812 |
+| 8 | 0.152 | 0.0626 | 0.0711 | 0.49 |
 
-Kendall's tau between the ranking at rollout=4 and rollout=8: **0.67** -- **ordering changes with scale**. The best architecture changes from `pi_nca` to `fno`.
+Kendall's tau between the ranking at rollout=4 and rollout=8: **1.00** -- ordering is stable.
 
 #### epochs
 
@@ -29,4 +29,4 @@ Kendall's tau between the ranking at rollout=4 and rollout=8: **0.67** -- **orde
 
 Kendall's tau between the ranking at epochs=60 and epochs=150: **1.00** -- ordering is stable.
 
-> **Any headline ranking should be read as conditional on the operating point**, because the ordering is not stable along: `grid`, `rollout`. Reporting a winner without the scale it was measured at would be misleading.
+> **Any headline ranking should be read as conditional on the operating point**, because the ordering is not stable along: `grid`. Reporting a winner without the scale it was measured at would be misleading.

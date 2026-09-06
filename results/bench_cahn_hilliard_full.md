@@ -1,37 +1,42 @@
 ### cahn_hilliard  (grid=16, train_steps=6, eval_steps=12, epochs=150, seeds=2, clip=None)
 
-| metric | plain_nca | pi_nca |
-|---|---|---|
-| rel-L2 ↓ | 8.324e-02±1.9e-03 | **8.294e-02±4.3e-03** |
-| MSE ↓ | 2.659e-04±2.5e-05 | **2.633e-04±1.4e-05** |
-| RMSE ↓ | 1.630e-02±7.7e-04 | **1.622e-02±4.4e-04** |
-| MAE ↓ | **1.232e-02±7.5e-04** | 1.247e-02±3.9e-04 |
-| L∞ ↓ | 8.877e-02±1.3e-02 | **8.114e-02±1.6e-03** |
-| PSNR(dB) ↑ | 36.6±0.66 | **36.7±0.014** |
-| SSIM ↑ | 0.996±0.00075 | **0.997±0.00034** |
-| hi-freq err frac ↓ | **8.062e-01±4.1e-03** | 8.934e-01±9.7e-03 |
-| rel-L2 @T/4 ↓ | 1.521e-02±3.1e-04 | **1.451e-02±6.4e-04** |
-| rel-L2 @T/2 ↓ | 3.362e-02±7.2e-04 | **3.270e-02±1.5e-03** |
-| rel-L2 @3T/4 ↓ | 5.606e-02±1.3e-03 | **5.531e-02±2.7e-03** |
-| rel-L2 @T ↓ | 8.324e-02±1.9e-03 | **8.294e-02±4.3e-03** |
-| err-growth T/(T/4) ↓ | **5.47±0.014** | 5.72±0.042 |
-| mass-cons err ↓ | 1.712e-01±6.6e-02 | **1.673e-06±2.3e-07** |
-| periodic-BC res ↓ | 1.658e-01±9.5e-03 | **1.641e-01±8.9e-03** |
-| grad-energy | 2.735e-02±3.2e-04 | 2.740e-02±4.2e-04 |
-| params ↓ | 6784 | **4576** |
-| train wall(s) ↓ | **12.3±1.8** | 13.4±0.49 |
-| infer s/step ↓ | 6.109e-04±1.3e-05 | **6.055e-04±1.4e-04** |
-| throughput cells/s ↑ | 3.35e+06 | **3.48e+06** |
+| metric | plain_nca | pi_nca | fno | fno_small | mc_flux_nca | resnet | resnet_iso |
+|---|---|---|---|---|---|---|---|
+| rel-L2 ↓ | 8.324e-02±1.9e-03 | 8.294e-02±4.3e-03 | 5.078e-02±1.7e-03 | 1.510e-01±9.8e-03 | 6.938e-02±4.5e-03 | **4.409e-02±2.4e-05** | 7.253e-02±2.9e-03 |
+| MSE ↓ | 2.659e-04±2.5e-05 | 2.633e-04±1.4e-05 | 9.870e-05±2.0e-06 | 8.733e-04±7.1e-05 | 1.842e-04±1.5e-05 | **7.448e-05±3.7e-06** | 2.014e-04±6.5e-06 |
+| RMSE ↓ | 1.630e-02±7.7e-04 | 1.622e-02±4.4e-04 | 9.934e-03±9.9e-05 | 2.954e-02±1.2e-03 | 1.357e-02±5.6e-04 | **8.629e-03±2.1e-04** | 1.419e-02±2.3e-04 |
+| MAE ↓ | 1.232e-02±7.5e-04 | 1.247e-02±3.9e-04 | 8.019e-03±1.7e-04 | 2.345e-02±7.6e-04 | 1.029e-02±3.4e-04 | **6.567e-03±2.6e-04** | 1.066e-02±1.2e-04 |
+| L∞ ↓ | 8.877e-02±1.3e-02 | 8.114e-02±1.6e-03 | **3.318e-02±2.6e-03** | 1.159e-01±3.0e-02 | 7.726e-02±2.2e-02 | 4.909e-02±1.0e-02 | 1.007e-01±3.9e-02 |
+| PSNR(dB) ↑ | 36.6±0.66 | 36.7±0.014 | 40.9±0.16 | 31.5±0.1 | 38.2±0.11 | **42.2±0.47** | 37.8±0.11 |
+| SSIM ↑ | 0.996±0.00075 | 0.997±0.00034 | 0.995±0.0038 | 0.987±0.00021 | 0.998±0.00031 | **0.999±1.4e-05** | 0.996±0.0016 |
+| hi-freq err frac ↓ | 8.062e-01±4.1e-03 | 8.934e-01±9.7e-03 | 9.325e-01±6.3e-03 | **6.525e-01±1.6e-02** | 8.849e-01±1.8e-03 | 8.523e-01±1.1e-02 | 8.470e-01±1.2e-02 |
+| rel-L2 @T/4 ↓ | 1.521e-02±3.1e-04 | 1.451e-02±6.4e-04 | 7.856e-03±2.6e-04 | 2.681e-02±2.1e-03 | 1.231e-02±1.2e-03 | **5.996e-03±6.7e-05** | 1.117e-02±9.3e-04 |
+| rel-L2 @T/2 ↓ | 3.362e-02±7.2e-04 | 3.270e-02±1.5e-03 | 1.847e-02±5.1e-04 | 6.061e-02±4.4e-03 | 2.760e-02±2.5e-03 | **1.458e-02±1.5e-04** | 2.609e-02±1.8e-03 |
+| rel-L2 @3T/4 ↓ | 5.606e-02±1.3e-03 | 5.531e-02±2.7e-03 | 3.259e-02±9.4e-04 | 1.020e-01±7.0e-03 | 4.644e-02±3.6e-03 | **2.681e-02±1.8e-04** | 4.601e-02±2.5e-03 |
+| rel-L2 @T ↓ | 8.324e-02±1.9e-03 | 8.294e-02±4.3e-03 | 5.078e-02±1.7e-03 | 1.510e-01±9.8e-03 | 6.938e-02±4.5e-03 | **4.409e-02±2.4e-05** | 7.253e-02±2.9e-03 |
+| err-growth T/(T/4) ↓ | **5.47±0.014** | 5.72±0.042 | 6.46±0.0086 | 5.64±0.067 | 5.64±0.2 | 7.35±0.079 | 6.51±0.28 |
+| mass-cons err ↓ | 1.712e-01±6.6e-02 | **1.673e-06±2.3e-07** | 2.513e-01±2.9e-02 | 2.171e-01±1.8e-01 | 1.766e-06±5.0e-07 | 5.678e-02±7.6e-04 | 1.264e-01±5.1e-02 |
+| periodic-BC res ↓ | 1.658e-01±9.5e-03 | 1.641e-01±8.9e-03 | 1.684e-01±1.1e-02 | **1.563e-01±1.2e-02** | 1.653e-01±1.2e-02 | 1.675e-01±1.2e-02 | 1.668e-01±1.2e-02 |
+| grad-energy | 2.735e-02±3.2e-04 | 2.740e-02±4.2e-04 | 2.817e-02±3.8e-04 | 2.914e-02±1.2e-03 | 2.779e-02±5.5e-05 | 2.839e-02±4.9e-04 | 2.820e-02±1.4e-04 |
+| params ↓ | 6784 | **4576** | 592897 | 8433 | 9936 | 74336 | 5364 |
+| train wall(s) ↓ | 12.3±1.8 | 13.4±0.49 | 29.9±0.99 | 9.96±2.1 | 15±1.8 | 87.7±8.8 | **9.06±1** |
+| infer s/step ↓ | 6.109e-04±1.3e-05 | **6.055e-04±1.4e-04** | 6.200e-03±1.1e-04 | 7.293e-04±1.5e-04 | 1.442e-03±5.0e-04 | 3.203e-03±3.9e-05 | 1.827e-03±1.0e-04 |
+| throughput cells/s ↑ | 3.35e+06 | **3.48e+06** | 3.30e+05 | 2.87e+06 | 1.51e+06 | 6.40e+05 | 1.12e+06 |
 
 ### cahn_hilliard - rel-L2 with uncertainty and paired tests
 
-n = 16 paired evaluations (2 seed(s) x 8 held-out initial conditions). CIs are 10,000-sample percentile bootstraps. The paired column tests each architecture against **pi_nca** (best mean) on the SAME initial conditions, using Wilcoxon signed-rank with Holm-Bonferroni across the 1 comparisons in this table; `tie` means the difference is not resolvable at this sample size, not that the means are equal.
+n = 16 paired evaluations (2 seed(s) x 8 held-out initial conditions). CIs are 10,000-sample percentile bootstraps. The paired column tests each architecture against **resnet** (best mean) on the SAME initial conditions, using Wilcoxon signed-rank with Holm-Bonferroni across the 6 comparisons in this table; `tie` means the difference is not resolvable at this sample size, not that the means are equal.
 
 Note: the mean here is the unweighted mean of per-IC relative errors, while the ranking table above reports the batch-reduced ratio of norms (which weights high-energy initial conditions more heavily). The two are different estimators of the same quantity and will not print equal numbers; the paired tests need the per-IC form, so it is the one reported with uncertainty.
 
-| architecture | rel-L2 mean | 95% CI | median | vs pi_nca (mean diff) | p (Holm) | verdict |
+| architecture | rel-L2 mean | 95% CI | median | vs resnet (mean diff) | p (Holm) | verdict |
 |---|---|---|---|---|---|---|
-| pi_nca | 8.3050e-02 | [7.996e-02, 8.613e-02] | 8.2511e-02 | - | - | **reference** |
-| plain_nca | 8.3264e-02 | [8.080e-02, 8.574e-02] | 8.4333e-02 | +2.135e-04 | 1 | tie |
+| resnet | 4.3500e-02 | [4.127e-02, 4.599e-02] | 4.2485e-02 | - | - | **reference** |
+| fno | 4.9869e-02 | [4.480e-02, 5.507e-02] | 4.9510e-02 | +6.369e-03 | 0.065 | tie |
+| mc_flux_nca | 6.9137e-02 | [6.649e-02, 7.216e-02] | 6.7891e-02 | +2.564e-02 | 3.1e-05 | worse |
+| resnet_iso | 7.1574e-02 | [6.769e-02, 7.568e-02] | 7.1636e-02 | +2.807e-02 | 3.1e-05 | worse |
+| pi_nca | 8.3050e-02 | [7.996e-02, 8.613e-02] | 8.2511e-02 | +3.955e-02 | 3.1e-05 | worse |
+| plain_nca | 8.3264e-02 | [8.080e-02, 8.574e-02] | 8.4333e-02 | +3.976e-02 | 3.1e-05 | worse |
+| fno_small | 1.5151e-01 | [1.435e-01, 1.602e-01] | 1.5142e-01 | +1.080e-01 | 3.1e-05 | worse |
 
-Statistically indistinguishable from pi_nca at this sample size: `plain_nca`.
+Statistically indistinguishable from resnet at this sample size: `fno`.

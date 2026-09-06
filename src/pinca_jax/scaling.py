@@ -60,10 +60,14 @@ def sweep(pde, archs, axis, values, base, seeds=(42,)):
     for v in values:
         kw = dict(base)
         kw[axis] = v
-        # The evaluation horizon follows the training horizon on the rollout axis only;
-        # on every other axis it is held fixed, or the sweep would confound two changes.
-        if axis == "rollout":
-            kw["eval_steps"] = max(kw["eval_steps"], v * 4)
+        # The evaluation horizon is held FIXED on every axis, the rollout axis included.
+        # Letting it grow with the training horizon would change the task and the training
+        # budget at the same time, and the question this axis asks is precisely how much
+        # training horizon is needed to stay accurate over a FIXED evaluation horizon.
+        if axis == "rollout" and v > kw["eval_steps"]:
+            raise ValueError(f"training horizon {v} exceeds the fixed evaluation horizon "
+                             f"{kw['eval_steps']}; raise --eval instead of letting the "
+                             f"sweep move it")
         bounds = field_bounds(pde, kw["grid"])
         row = {}
         for a in archs:

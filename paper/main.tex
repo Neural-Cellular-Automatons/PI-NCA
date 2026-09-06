@@ -415,11 +415,23 @@ cell. That composition is not sound:
 \text{clip}(u) + \delta \notin [\ell, h]^N \quad\text{whenever } \delta \neq 0,
 \end{equation}
 
-because a uniform offset moves every cell, including the ones the clip has just pinned to
-a bound. The model is then neither bounded nor, in any useful sense, both. This is not
-hypothetical: measured on Cahn--Hilliard with the guard disabled, it puts a few percent of
-cells outside the range in exactly the model family whose stated property is being
-simultaneously bounded and conserving (Table~\ref{tab:stability}, out-of-range column).
+because a uniform offset moves every cell, including the ones the clip has just pinned to a
+bound. The model is then neither bounded nor, in any useful sense, both.
+
+\emph{How large is this in practice?} We are careful here, because an earlier draft of this
+paper quoted a violation of a few percent of cells on Cahn--Hilliard and that figure came
+from the non-converging teacher described above. Re-measured against the corrected teacher
+(Table~\ref{tab:stability}, out-of-range column) the uniform projection's violation on this
+equation is below measurement --- $0\%$ of cells --- because the per-step mass deficit is
+small enough that the offset does not push a clipped cell past the bound at this scale. The
+defect is therefore a \emph{provable} property of the composition rather than a large
+measured effect here: the constructed test in
+\code{tests/test\_rigor.py::test\_uniform\_projection\_leaves\_the\_box} exhibits a state on
+which it fails, and the violation grows with the size of the deficit the projection has to
+absorb, which grows with the timestep, the rollout length, and how hard the clip is binding.
+We present the headroom projection as a correctness guarantee that costs nothing, not as a
+measured accuracy win, and ablation A7 (Table~\ref{tab:a7}) reports what it actually
+changes.
 
 We replace the uniform offset with one proportional to each cell's remaining headroom:
 

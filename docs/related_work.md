@@ -62,8 +62,16 @@ bounded fields (Cahn-Hilliard, Allen-Cahn) need the state clipped to its physica
 to remain stable; conservative models need total mass restored after the clip. The obvious
 composition -- clip, then add a uniform offset to restore mass -- **re-violates the bound
 it just enforced**, because a uniform offset moves clipped cells back outside the range.
-Measured on Cahn-Hilliard with `pinca_jax.stability`, that is 4.4% of cells in exactly the
-model family whose selling point is being simultaneously bounded and conserving.
+How large the violation is in practice deserves care, because an earlier version of this
+document quoted 4.4% of cells on Cahn-Hilliard and that figure came from a teacher that was
+not converging (see `docs/research_log.md`). Re-measured against the corrected teacher it is
+below measurement — 0% of cells — because the per-step mass deficit at this scale is too
+small for the uniform offset to push a clipped cell past the bound. This is therefore a
+**provable defect with a currently small empirical footprint**, not a large measured effect:
+a constructed state on which the uniform projection leaves the box is pinned in the test
+suite, and the violation grows with the deficit the projection must absorb, hence with the
+timestep, the rollout length and how hard the clip is binding.
+
 `physics.conserve_energy_bounded` replaces the uniform offset with one proportional to
 each cell's remaining headroom: mass is restored exactly, no cell can cross the bound, it
 is a single vectorised differentiable pass, and when the target mass is genuinely

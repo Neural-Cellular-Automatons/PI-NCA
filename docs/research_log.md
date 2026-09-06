@@ -231,3 +231,63 @@ correctness gate asserted the JAX solver equalled the PyTorch solver — which i
 faithfully, including the instability. Equality with a reference implementation is not the
 same property as being a converged discretisation, and until `teacher_error` existed
 nothing in the project checked the second one.
+
+---
+
+## Update — two of our own claims, corrected by our own instruments
+
+Re-running Cahn–Hilliard against the fixed teacher falsified a claim this project had made
+about its *own* contribution, and fixing the scaling study's design changed one of its
+results. Both are recorded here because the whole point of the audit machinery is that it
+should catch us too.
+
+### 1. The bounded-projection violation was overstated
+
+The claim was: composing a clip with a uniform mass re-projection re-violates the bound,
+"4.4% of cells on Cahn–Hilliard". The mathematical part is right and provable — a uniform
+offset moves every cell, including the ones the clip has just pinned to a bound — and there
+is a constructed state in `tests/test_rigor.py` on which it demonstrably fails.
+
+The 4.4% was measured against the **non-converging** `dt = 0.5` teacher, where the field
+sat saturated at the clip and the projection had a large deficit to absorb. Re-measured
+against the corrected `dt = 0.02` teacher (`results/stability_cahn_hilliard.md`,
+out-of-range column) it is **0.00% of cells**: the per-step deficit is now small enough that
+the uniform offset does not push a clipped cell past the bound at this scale.
+
+So the honest statement is that the headroom projection is a **correctness guarantee that
+costs nothing**, not a measured accuracy win — and the violation it prevents grows with the
+deficit the projection must absorb, hence with the timestep, the rollout length and how hard
+the clip is binding. The paper, `docs/related_work.md` and `docs/conservation.md` now say
+that, and each names the retracted figure rather than quietly dropping it.
+
+What the corrected stability table *does* show is categorical and unaffected: at 8× the
+training horizon on Cahn–Hilliard, **every unbounded model fails on 100% of initial
+conditions** (plain NCA, flux PI-NCA, multi-scale PI-NCA, FNO, ResNet, U-Net; median
+survival 58–73 of 96 steps) while **every bounded variant survives all of them**. Bounding is
+doing real work; the specific claim about how mass is restored afterwards is smaller than
+we said.
+
+### 2. The scaling study had a confound we introduced
+
+`scaling.py` swept the training rollout horizon while letting the evaluation horizon grow
+with it (`eval_steps = max(eval_steps, 4H)`), which changes the task and the training budget
+at the same time. That is exactly the error the module exists to detect in other people's
+tables.
+
+With the evaluation horizon held fixed — the correct design, since the question is how much
+*training* horizon is needed to stay accurate over a *fixed* evaluation horizon — the
+rollout axis goes from "ordering changes" (τ = 0.67) to **stable (τ = 1.00)**. The confound
+was manufacturing an instability that is not there.
+
+Only the **grid** axis actually changes the ordering: PI-NCA wins at grid 16 and the FNO at
+grid 24. That is the one caveat the headline ranking genuinely carries, and it is the one
+the spectral diagnostic predicts, since a local rule's per-step receptive field is fixed in
+cells and its advantage on a small domain is partly an artefact of the domain being small.
+
+### The pattern
+
+Both corrections came from instruments built to check the *models*, turned on the project's
+own claims: `teacher_error` invalidated a headline result, and re-running the study that
+result came from invalidated a contribution claim. Neither would have been caught by reading
+the code. That is the argument for building the audit before writing the paper rather than
+after.

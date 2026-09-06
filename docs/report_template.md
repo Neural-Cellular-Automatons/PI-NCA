@@ -197,19 +197,33 @@ Measured results: §6.2 and §5.
 
 ### D. BoundedConsFluxNCA — `models/hybrids.py` *(hybrid)*
 
-**The problem it solves.** On Cahn–Hilliard — a stiff equation whose field is physically
-stuck in [-1, 1] — every emulator blew up, reaching rel-L2 of 13–18 when simply predicting
-"nothing changes" would have scored 0.93.
+**The problem it solves.** On stiff equations whose field is physically stuck in a range,
+unbounded network outputs drift outside that range and then explode. Ablation A1 measures
+it: clipping each step to the field's measured physical range fixes the blow-up but
+*destroys* conservation, because clipping arbitrarily adds and removes material. Stability
+and conservation are in direct conflict, and this model exists to resolve it.
 
-Ablation A1 diagnosed it: unbounded network outputs drift outside the physical range and
-then explode. Clipping each step to [-1, 1] fixed the blow-up — a **24–27× improvement** —
-but *destroyed* conservation, because clipping arbitrarily adds and removes material
-(3.3e-5 → 7.6).
-
-So stability and conservation were in direct conflict.
+> **A retracted motivating result.** This section previously motivated the model with
+> Cahn–Hilliard numbers — every emulator blowing up to rel-L2 13–18 where predicting "nothing
+> changes" scored 0.93. Those came from a teacher that was not converging: Cahn–Hilliard is
+> fourth order, its explicit stability limit is `dt <= 0.231`, the reference shipped
+> `dt = 0.5`, and it avoided visible blow-up only because the stepper clips to [-1,1] every
+> step. Timestep refinement gives an observed order of accuracy of 0.00. At a converging
+> `dt = 0.02` every architecture beats the identity floor by roughly an order of magnitude.
+> See `docs/research_log.md` (final entry) and `results/teacher_error.md`.
+>
+> The *conflict* between bounding and conservation is unaffected by that correction — it is
+> a property of the update rule, not of the teacher — and is measured directly by ablation
+> A7 below and by the out-of-range column of `results/stability_*.md`.
 
 **The fix.** Record the total mass before the update. Do the conservative flux update. Clip.
-Then re-project the total mass back to the recorded value. Bounded *and* conserving.
+Then restore the total mass. **How** it is restored matters, and the obvious choice is
+wrong: adding a uniform offset to every cell moves the clipped cells straight back outside
+the bound the clip just enforced, so the model ends up neither bounded nor usefully both.
+`physics.conserve_energy_bounded` instead distributes the deficit in proportion to each
+cell's remaining headroom, which restores mass exactly and cannot cross the bound. Ablation
+**A7** (`abl_proj_none` / `abl_proj_uniform` / `abl_proj_headroom`) measures what the naive
+choice costs rather than asserting the fix is free.
 
 ![BoundedConsFluxNCA](figures/arch/arch_bounded_cons_nca.png)
 
