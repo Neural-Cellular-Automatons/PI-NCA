@@ -1,4 +1,25 @@
 # ============================================================
+# LEGACY REFERENCE - NOT THE IMPLEMENTATION. DO NOT CITE NUMBERS FROM THIS FILE.
+#
+# This is the original PyTorch script the JAX package was migrated from. It is kept
+# for provenance only: it is not on the pipeline, not covered by the correctness gate,
+# and no result in the paper comes from running it. The canonical implementation is
+# src/pinca_jax/ (`python -m pinca_jax.runner`).
+#
+# Known defects, documented in full with line references in docs/legacy_pytorch.md:
+#   * the plotted training curve can be identically zero (acc_loss is read after the
+#     truncation branch has reset it),
+#   * validation omits the conserve_energy projection that training and the final test
+#     both apply, so it scores a different model,
+#   * deprecated torch.cuda.amp API, unconditional torch.compile with no fallback,
+#     global RNG state, and no CLI/config/checkpointing.
+#
+# The physics it encodes -- the flux-divergence update, the mass projection, the
+# initialisation recipe, the heat solver -- was migrated verbatim and is asserted equal
+# to this file by tests/test_migration_correctness.py.
+# ============================================================
+
+# ============================================================
 # MULTI-STEP FUSED PHYSICS-INFORMED NCA (FULLY FIXED)
 # ============================================================
 

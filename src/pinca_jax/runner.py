@@ -3,9 +3,11 @@
     python -m pinca_jax.runner
 
 That is the whole command. It runs, in order: the correctness gate, the uniform 2-D
-matrix, the ablations, the uniform 3-D matrix, the resolution study, the continuous
-baselines, trajectory capture, the field figures, the benchmark plots, and finally
-regenerates the report (Markdown + PDF) from whatever results exist.
+matrix, the ablations, the multi-seed headline comparison, the out-of-distribution
+study, the stability stress test, the teacher-error study, the uniform 3-D matrix, the
+resolution study, the continuous baselines, trajectory capture, the field figures, the
+benchmark plots, the claims audit, and finally regenerates the report (Markdown + PDF)
+from whatever results exist.
 
 Design notes, all of which exist because this runs unattended for hours:
 
@@ -20,6 +22,13 @@ Design notes, all of which exist because this runs unattended for hours:
 
 Useful flags:
     --profile smoke|bench|full   scale preset (default full)
+
+Cost, so the choice is informed rather than discovered three hours in. The 2-D matrix is
+14 architectures x 10 phenomena x `seeds` trainings; the headline stage adds
+14 x 3 x `headline_seeds`. At the `full` preset that is 700 + 420 trainings, which is an
+overnight run on a single mid-range GPU, not a coffee break. `--profile bench` skips the
+figure stages; `--only`/`--skip` select stages; every stage checkpoints per cell, so an
+interrupted run resumes rather than restarting.
     --only bench2d,plots         run just these stages
     --skip figures               skip stages
     --force                      recompute cells already on disk
@@ -44,17 +53,27 @@ PROFILES = {
     # ~2 minutes end to end: proves every stage wires up, numbers are meaningless.
     "smoke": dict(seeds=1, epochs=40, grid=16, batch=8, rollout=4, eval=12,
                   grid3d=8, epochs3d=20, batch3d=2, res_epochs=20,
-                  viz_grid=16, viz_epochs=40, viz3d_grid=8, viz3d_epochs=20, max_mb=8),
+                  viz_grid=16, viz_epochs=40, viz3d_grid=8, viz3d_epochs=20, max_mb=8,
+                  headline_seeds=2, n_eval=8, ood_epochs=40, stab_epochs=40),
     # measurements only, no field figures.
-    "bench": dict(seeds=3, epochs=2000, grid=64, batch=64, rollout=12, eval=48,
+    "bench": dict(seeds=5, epochs=2000, grid=64, batch=64, rollout=12, eval=48,
                   grid3d=32, epochs3d=800, batch3d=16, res_epochs=600,
                   viz_grid=48, viz_epochs=400, viz3d_grid=16, viz3d_epochs=200,
-                  max_mb=64),
-    "full": dict(seeds=3, epochs=2000, grid=64, batch=64, rollout=12, eval=48,
+                  max_mb=64, headline_seeds=10, n_eval=32, ood_epochs=1000,
+                  stab_epochs=1000),
+    "full": dict(seeds=5, epochs=2000, grid=64, batch=64, rollout=12, eval=48,
                  grid3d=32, epochs3d=800, batch3d=16, res_epochs=600,
                  viz_grid=48, viz_epochs=400, viz3d_grid=16, viz3d_epochs=200,
-                 max_mb=64),
+                 max_mb=64, headline_seeds=10, n_eval=32, ood_epochs=1000,
+                 stab_epochs=1000),
 }
+
+# The three regimes the regime map distinguishes: smooth diffusive, stiff bounded
+# phase-separating, and advective/turbulent. The expensive high-seed-count studies run
+# on these rather than on all ten, because a 10-seed x 14-architecture sweep over the
+# whole suite costs more than the rest of the pipeline combined and buys resolution on
+# phenomena whose ranking the 5-seed matrix already settles.
+HEADLINE_PDES = "heat,cahn_hilliard,navier_stokes"
 
 VIZ_2D = ["heat", "allen_cahn", "nagumo", "adv_diff", "gray_scott", "shallow_water",
           "fitzhugh_nagumo", "wave", "cahn_hilliard", "navier_stokes"]
@@ -81,7 +100,8 @@ class Run:
         cmd = [sys.executable, "-u", "-m", f"pinca_jax.{module}"] + [str(a) for a in args]
         if self.force and module in ("bench_all", "bench3d"):
             cmd.append("--force")
-        if self.allow_cpu and module in ("bench_all", "bench3d", "res_study"):
+        if self.allow_cpu and module in ("bench_all", "bench3d", "res_study", "ood",
+                                         "stability", "teacher_error", "matched"):
             cmd.append("--allow-cpu")
         return cmd
 
@@ -155,6 +175,36 @@ def main():
                  "--grid", P["grid"], "--batch", P["batch"], "--rollout", P["rollout"],
                  "--eval", P["eval"]], fatal=True)
 
+    if want("headline"):
+        # Same matrix, more seeds, on the three regime representatives. This is the
+        # table the paired statistics and the headline sentences come from; the 5-seed
+        # full matrix is the breadth result.
+        r.stage(f"headline: {P['headline_seeds']} seeds on {HEADLINE_PDES}", "bench_all",
+                ["--group", "all", "--seeds", P["headline_seeds"], "--epochs", P["epochs"],
+                 "--grid", P["grid"], "--batch", P["batch"], "--rollout", P["rollout"],
+                 "--eval", P["eval"], "--pdes", HEADLINE_PDES, "--tag", "headline"],
+                fatal=False)
+
+    if want("teacher"):
+        # Cheap and it gates the interpretation of every accuracy number, so it runs
+        # early rather than as an afterthought.
+        r.stage("teacher error: what the distillation target itself gets wrong",
+                "teacher_error", ["--grid", P["grid"], "--steps", P["eval"]], fatal=False)
+
+    if want("ood"):
+        for pde in HEADLINE_PDES.split(","):
+            r.stage(f"OOD generalisation: {pde}", "ood",
+                    ["--pde", pde, "--grid", P["grid"], "--epochs", P["ood_epochs"],
+                     "--eval", P["eval"], "--n-eval", P["n_eval"],
+                     "--seeds", min(3, P["seeds"])], fatal=False)
+
+    if want("stability"):
+        for pde in HEADLINE_PDES.split(","):
+            r.stage(f"stability stress (guard OFF): {pde}", "stability",
+                    ["--pde", pde, "--grid", P["grid"], "--epochs", P["stab_epochs"],
+                     "--eval", P["eval"], "--n-ic", P["n_eval"],
+                     "--seeds", min(3, P["seeds"])], fatal=False)
+
     if want("bench3d"):
         r.stage("3-D matrix: every architecture x every phenomenon", "bench3d",
                 ["--grid", P["grid3d"], "--epochs", P["epochs3d"],
@@ -172,6 +222,11 @@ def main():
     if want("baselines"):
         for mod in ("pinn_heat", "deeponet_heat", "darcy"):
             r.stage(f"baseline: {mod}", mod, fatal=False)
+        # The only PINN-vs-emulator comparison that is well posed: same PDE, same ICs,
+        # same horizon, same metric, with both cost structures reported.
+        r.stage("matched PINN vs emulator (same task, both cost structures)", "matched",
+                ["--pde", "heat", "--k", P["n_eval"], "--grid", P["grid"],
+                 "--steps", P["eval"], "--epochs", P["epochs"]], fatal=False)
 
     if want("capture"):
         r.stage("capture trajectories for figures", "capture",
@@ -196,6 +251,8 @@ def main():
         r.stage("benchmark plots (final)", "plots", fatal=False)
 
     if want("report"):
+        # Audit before the report, so the report is written against a checked inventory.
+        r.stage("claims audit: prose vs measured inventory", "claims", fatal=False)
         r.stage("architecture diagrams", "arch_figs", fatal=False)
         r.stage("report: regenerate Markdown from results", "report", fatal=False)
         r.stage("report: render PDF", "md2pdf", [REPORT_MD], fatal=False)
@@ -210,7 +267,7 @@ def main():
     print(f"  plots          docs/figures/bench/*.png")
     print(f"  report         docs/PI-NCA_Architectures_and_Results.{{md,pdf}}")
     print(f"  raw data       results/traj/*.npz")
-    print(f"  audit          results/run_manifest.json")
+    print(f"  audit          results/run_manifest.json + docs/claims_audit.md")
     if r.failures:
         print(f"\n  {len(r.failures)} non-fatal stage(s) failed:")
         for f in r.failures:

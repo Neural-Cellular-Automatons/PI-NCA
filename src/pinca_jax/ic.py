@@ -1,4 +1,4 @@
-"""Initial-condition generators for the 8-PDE suite (vectorised JAX, NHWC).
+"""Initial-condition generators for the 10-PDE suite (vectorised JAX, NHWC).
 
 Ported from the notebook `make_state`/`make_gaussian_blobs`
 (docs/migration/pde_inventory.md). Where the notebook used per-sample Python

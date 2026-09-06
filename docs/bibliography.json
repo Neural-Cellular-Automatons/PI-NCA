@@ -1,0 +1,842 @@
+{
+ "entries": {
+  "2006.09535": {
+   "id": "2006.09535",
+   "title": "Multipole Graph Neural Operator for Parametric Partial Differential Equations",
+   "authors": [
+    "Zongyi Li",
+    "Nikola Kovachki",
+    "Kamyar Azizzadenesheli",
+    "Burigede Liu",
+    "Kaushik Bhattacharya",
+    "Andrew Stuart",
+    "Anima Anandkumar"
+   ],
+   "published": "2020-06-16"
+  },
+  "2209.05150": {
+   "id": "2209.05150",
+   "title": "Bounding the Rademacher Complexity of Fourier neural operators",
+   "authors": [
+    "Taeyoung Kim",
+    "Myungjoo Kang"
+   ],
+   "published": "2022-09-12"
+  },
+  "2201.05624": {
+   "id": "2201.05624",
+   "title": "Scientific Machine Learning through Physics-Informed Neural Networks: Where we are and What's next",
+   "authors": [
+    "Salvatore Cuomo",
+    "Vincenzo Schiano di Cola",
+    "Fabio Giampaolo",
+    "Gianluigi Rozza",
+    "Maziar Raissi",
+    "Francesco Piccialli"
+   ],
+   "published": "2022-01-14"
+  },
+  "2107.07562": {
+   "id": "2107.07562",
+   "title": "On universal approximation and error bounds for Fourier Neural Operators",
+   "authors": [
+    "Nikola Kovachki",
+    "Samuel Lanthaler",
+    "Siddhartha Mishra"
+   ],
+   "published": "2021-07-15"
+  },
+  "2411.18240": {
+   "id": "2411.18240",
+   "title": "Physics Informed Neural Networks (PINNs) as intelligent computing technique for solving partial differential equations: Limitation and Future prospects",
+   "authors": [
+    "Weiwei Zhang",
+    "Wei Suo",
+    "Jiahao Song",
+    "Wenbo Cao"
+   ],
+   "published": "2024-11-27"
+  },
+  "2510.06684": {
+   "id": "2510.06684",
+   "title": "AutoBalance: An Automatic Balancing Framework for Training Physics-Informed Neural Networks",
+   "authors": [
+    "Kang An",
+    "Chenhao Si",
+    "Ming Yan",
+    "Shiqian Ma"
+   ],
+   "published": "2025-10-08"
+  },
+  "2505.13058": {
+   "id": "2505.13058",
+   "title": "A Path to Universal Neural Cellular Automata",
+   "authors": [
+    "Gabriel B\u00e9na",
+    "Maxence Faldor",
+    "Dan F. M. Goodman",
+    "Antoine Cully"
+   ],
+   "published": "2025-05-19"
+  },
+  "2211.11417": {
+   "id": "2211.11417",
+   "title": "DyNCA: Real-time Dynamic Texture Synthesis Using Neural Cellular Automata",
+   "authors": [
+    "Ehsan Pajouheshgar",
+    "Yitao Xu",
+    "Tong Zhang",
+    "Sabine S\u00fcsstrunk"
+   ],
+   "published": "2022-11-21"
+  },
+  "2506.04912": {
+   "id": "2506.04912",
+   "title": "Differentiable Logic Cellular Automata: From Game of Life to Pattern Generation",
+   "authors": [
+    "Pietro Miotti",
+    "Eyvind Niklasson",
+    "Ettore Randazzo",
+    "Alexander Mordvintsev"
+   ],
+   "published": "2025-06-05"
+  },
+  "2505.14595": {
+   "id": "2505.14595",
+   "title": "Physics-informed Reduced Order Modeling of Time-dependent PDEs via Differentiable Solvers",
+   "authors": [
+    "Nima Hosseini Dashtbayaz",
+    "Hesam Salehipour",
+    "Adrian Butscher",
+    "Nigel Morris"
+   ],
+   "published": "2025-05-20"
+  },
+  "2111.03794": {
+   "id": "2111.03794",
+   "title": "Physics-Informed Neural Operator for Learning Partial Differential Equations",
+   "authors": [
+    "Zongyi Li",
+    "Hongkai Zheng",
+    "Nikola Kovachki",
+    "David Jin",
+    "Haoxuan Chen",
+    "Burigede Liu",
+    "Kamyar Azizzadenesheli",
+    "Anima Anandkumar"
+   ],
+   "published": "2021-11-06"
+  },
+  "2108.08481": {
+   "id": "2108.08481",
+   "title": "Neural Operator: Learning Maps Between Function Spaces",
+   "authors": [
+    "Nikola Kovachki",
+    "Zongyi Li",
+    "Burigede Liu",
+    "Kamyar Azizzadenesheli",
+    "Kaushik Bhattacharya",
+    "Andrew Stuart",
+    "Anima Anandkumar"
+   ],
+   "published": "2021-08-19"
+  },
+  "2503.18181": {
+   "id": "2503.18181",
+   "title": "Adaptive Physics-informed Neural Networks: A Survey",
+   "authors": [
+    "Edgar Torres",
+    "Jonathan Schiefer",
+    "Mathias Niepert"
+   ],
+   "published": "2025-03-23"
+  },
+  "2407.06151": {
+   "id": "2407.06151",
+   "title": "Automated machine learning for physics-informed convolutional neural networks",
+   "authors": [
+    "Wanyun Zhou",
+    "Haoze Song",
+    "Xiaowen Chu"
+   ],
+   "published": "2024-07-08"
+  },
+  "2602.23113": {
+   "id": "2602.23113",
+   "title": "Learning Physical Operators using Neural Operators",
+   "authors": [
+    "Vignesh Gopakumar",
+    "Ander Gray",
+    "Dan Giles",
+    "Lorenzo Zanisi",
+    "Matt J. Kusner",
+    "Timo Betcke",
+    "Stanislas Pamela",
+    "Marc Peter Deisenroth"
+   ],
+   "published": "2026-02-26"
+  },
+  "2404.06279": {
+   "id": "2404.06279",
+   "title": "NoiseNCA: Noisy Seed Improves Spatio-Temporal Continuity of Neural Cellular Automata",
+   "authors": [
+    "Ehsan Pajouheshgar",
+    "Yitao Xu",
+    "Sabine S\u00fcsstrunk"
+   ],
+   "published": "2024-04-09"
+  },
+  "2406.06718": {
+   "id": "2406.06718",
+   "title": "TORAX: A Fast and Differentiable Tokamak Transport Simulator in JAX",
+   "authors": [
+    "Jonathan Citrin",
+    "Ian Goodfellow",
+    "Akhil Raju",
+    "Jeremy Chen",
+    "Jonas Degrave",
+    "Craig Donner",
+    "Federico Felici",
+    "Philippe Hamel",
+    "Andrea Huber",
+    "Dmitry Nikulin",
+    "David Pfau",
+    "Brendan Tracey",
+    "Martin Riedmiller",
+    "Pushmeet Kohli"
+   ],
+   "published": "2024-06-10"
+  },
+  "2111.13545": {
+   "id": "2111.13545",
+   "title": "$\u03bc$NCA: Texture Generation with Ultra-Compact Neural Cellular Automata",
+   "authors": [
+    "Alexander Mordvintsev",
+    "Eyvind Niklasson"
+   ],
+   "published": "2021-11-26"
+  },
+  "2207.05748": {
+   "id": "2207.05748",
+   "title": "Physics-Informed Deep Neural Operator Networks",
+   "authors": [
+    "Somdatta Goswami",
+    "Aniruddha Bora",
+    "Yue Yu",
+    "George Em Karniadakis"
+   ],
+   "published": "2022-07-08"
+  },
+  "2402.00531": {
+   "id": "2402.00531",
+   "title": "Preconditioning for Physics-Informed Neural Networks",
+   "authors": [
+    "Songming Liu",
+    "Chang Su",
+    "Jiachen Yao",
+    "Zhongkai Hao",
+    "Hang Su",
+    "Youjia Wu",
+    "Jun Zhu"
+   ],
+   "published": "2024-02-01"
+  },
+  "2401.11037": {
+   "id": "2401.11037",
+   "title": "Equivariant Graph Neural Operator for Modeling 3D Dynamics",
+   "authors": [
+    "Minkai Xu",
+    "Jiaqi Han",
+    "Aaron Lou",
+    "Jean Kossaifi",
+    "Arvind Ramanathan",
+    "Kamyar Azizzadenesheli",
+    "Jure Leskovec",
+    "Stefano Ermon",
+    "Anima Anandkumar"
+   ],
+   "published": "2024-01-19"
+  },
+  "1711.10561": {
+   "id": "1711.10561",
+   "title": "Physics Informed Deep Learning (Part I): Data-driven Solutions of Nonlinear Partial Differential Equations",
+   "authors": [
+    "Maziar Raissi",
+    "Paris Perdikaris",
+    "George Em Karniadakis"
+   ],
+   "published": "2017-11-28"
+  },
+  "2410.02651": {
+   "id": "2410.02651",
+   "title": "CAX: Cellular Automata Accelerated in JAX",
+   "authors": [
+    "Maxence Faldor",
+    "Antoine Cully"
+   ],
+   "published": "2024-10-03"
+  },
+  "2504.03503": {
+   "id": "2504.03503",
+   "title": "Operator Learning: A Statistical Perspective",
+   "authors": [
+    "Unique Subedi",
+    "Ambuj Tewari"
+   ],
+   "published": "2025-04-04"
+  },
+  "2506.22899": {
+   "id": "2506.22899",
+   "title": "Neural Cellular Automata: From Cells to Pixels",
+   "authors": [
+    "Ehsan Pajouheshgar",
+    "Yitao Xu",
+    "Ali Abbasi",
+    "Alexander Mordvintsev",
+    "Wenzel Jakob",
+    "Sabine S\u00fcsstrunk"
+   ],
+   "published": "2025-06-28"
+  },
+  "1003.1983": {
+   "id": "1003.1983",
+   "title": "Cellular Automata, PDEs, and Pattern Formation",
+   "authors": [
+    "Xin-She Yang",
+    "Y. Young"
+   ],
+   "published": "2010-03-09"
+  },
+  "2205.01681": {
+   "id": "2205.01681",
+   "title": "Growing Isotropic Neural Cellular Automata",
+   "authors": [
+    "Alexander Mordvintsev",
+    "Ettore Randazzo",
+    "Craig Fouts"
+   ],
+   "published": "2022-05-03"
+  },
+  "2302.10197": {
+   "id": "2302.10197",
+   "title": "Growing Steerable Neural Cellular Automata",
+   "authors": [
+    "Ettore Randazzo",
+    "Alexander Mordvintsev",
+    "Craig Fouts"
+   ],
+   "published": "2023-02-19"
+  },
+  "2410.03496": {
+   "id": "2410.03496",
+   "title": "Fourier PINNs: From Strong Boundary Conditions to Adaptive Fourier Bases",
+   "authors": [
+    "Madison Cooley",
+    "Varun Shankar",
+    "Robert M. Kirby",
+    "Shandian Zhe"
+   ],
+   "published": "2024-10-04"
+  },
+  "2504.02260": {
+   "id": "2504.02260",
+   "title": "Implicit Neural Differential Model for Spatiotemporal Dynamics",
+   "authors": [
+    "Deepak Akhare",
+    "Pan Du",
+    "Tengfei Luo",
+    "Jian-Xun Wang"
+   ],
+   "published": "2025-04-03"
+  },
+  "2407.13010": {
+   "id": "2407.13010",
+   "title": "A Resolution Independent Neural Operator",
+   "authors": [
+    "Bahador Bahmani",
+    "Somdatta Goswami",
+    "Ioannis G. Kevrekidis",
+    "Michael D. Shields"
+   ],
+   "published": "2024-07-17"
+  },
+  "2601.16096": {
+   "id": "2601.16096",
+   "title": "Neural Particle Automata: Learning Self-Organizing Particle Dynamics",
+   "authors": [
+    "Hyunsoo Kim",
+    "Ehsan Pajouheshgar",
+    "Sabine S\u00fcsstrunk",
+    "Wenzel Jakob",
+    "Jinah Park"
+   ],
+   "published": "2026-01-22"
+  },
+  "2411.00180": {
+   "id": "2411.00180",
+   "title": "APEBench: A Benchmark for Autoregressive Neural Emulators of PDEs",
+   "authors": [
+    "Felix Koehler",
+    "Simon Niedermayr",
+    "R\u00fcdiger Westermann",
+    "Nils Thuerey"
+   ],
+   "published": "2024-10-31"
+  },
+  "2302.14227": {
+   "id": "2302.14227",
+   "title": "A unified scalable framework for causal sweeping strategies for Physics-Informed Neural Networks (PINNs) and their temporal decompositions",
+   "authors": [
+    "Michael Penwarden",
+    "Ameya D. Jagtap",
+    "Shandian Zhe",
+    "George Em Karniadakis",
+    "Robert M. Kirby"
+   ],
+   "published": "2023-02-28"
+  },
+  "1910.03193": {
+   "id": "1910.03193",
+   "title": "DeepONet: Learning nonlinear operators for identifying differential equations based on the universal approximation theorem of operators",
+   "authors": [
+    "Lu Lu",
+    "Pengzhan Jin",
+    "George Em Karniadakis"
+   ],
+   "published": "2019-10-08"
+  },
+  "2010.08895": {
+   "id": "2010.08895",
+   "title": "Fourier Neural Operator for Parametric Partial Differential Equations",
+   "authors": [
+    "Zongyi Li",
+    "Nikola Kovachki",
+    "Kamyar Azizzadenesheli",
+    "Burigede Liu",
+    "Kaushik Bhattacharya",
+    "Andrew Stuart",
+    "Anima Anandkumar"
+   ],
+   "published": "2020-10-18"
+  },
+  "2602.19265": {
+   "id": "2602.19265",
+   "title": "Spectral bias in physics-informed and operator learning: Analysis and mitigation guidelines",
+   "authors": [
+    "Siavash Khodakarami",
+    "Vivek Oommen",
+    "Nazanin Ahmadi Daryakenari",
+    "Maxim Beekenkamp",
+    "George Em Karniadakis"
+   ],
+   "published": "2026-02-22"
+  },
+  "1711.10566": {
+   "id": "1711.10566",
+   "title": "Physics Informed Deep Learning (Part II): Data-driven Discovery of Nonlinear Partial Differential Equations",
+   "authors": [
+    "Maziar Raissi",
+    "Paris Perdikaris",
+    "George Em Karniadakis"
+   ],
+   "published": "2017-11-28"
+  },
+  "2305.01240": {
+   "id": "2305.01240",
+   "title": "On the convergence of PINNs",
+   "authors": [
+    "Nathan Doum\u00e8che",
+    "G\u00e9rard Biau",
+    "Claire Boyer"
+   ],
+   "published": "2023-05-02"
+  },
+  "2310.14809": {
+   "id": "2310.14809",
+   "title": "Learning spatio-temporal patterns with Neural Cellular Automata",
+   "authors": [
+    "Alex D. Richardson",
+    "Tibor Antal",
+    "Richard A. Blythe",
+    "Linus J. Schumacher"
+   ],
+   "published": "2023-10-23"
+  },
+  "2010.03409": {
+   "id": "2010.03409",
+   "title": "Learning Mesh-Based Simulation with Graph Networks",
+   "authors": [
+    "Tobias Pfaff",
+    "Meire Fortunato",
+    "Alvaro Sanchez-Gonzalez",
+    "Peter W. Battaglia"
+   ],
+   "published": "2020-10-07"
+  },
+  "2202.03376": {
+   "id": "2202.03376",
+   "title": "Message Passing Neural PDE Solvers",
+   "authors": [
+    "Johannes Brandstetter",
+    "Daniel Worrall",
+    "Max Welling"
+   ],
+   "published": "2022-02-07"
+  },
+  "2209.04934": {
+   "id": "2209.04934",
+   "title": "Clifford Neural Layers for PDE Modeling",
+   "authors": [
+    "Johannes Brandstetter",
+    "Rianne van den Berg",
+    "Max Welling",
+    "Jayesh K. Gupta"
+   ],
+   "published": "2022-09-08"
+  },
+  "2210.01741": {
+   "id": "2210.01741",
+   "title": "Neural Conservation Laws: A Divergence-Free Perspective",
+   "authors": [
+    "Jack Richter-Powell",
+    "Yaron Lipman",
+    "Ricky T. Q. Chen"
+   ],
+   "published": "2022-10-04"
+  },
+  "2111.11798": {
+   "id": "2111.11798",
+   "title": "Composing Partial Differential Equations with Physics-Aware Neural Networks",
+   "authors": [
+    "Matthias Karlbauer",
+    "Timothy Praditia",
+    "Sebastian Otte",
+    "Sergey Oladyshkin",
+    "Wolfgang Nowak",
+    "Martin V. Butz"
+   ],
+   "published": "2021-11-23"
+  },
+  "2104.06010": {
+   "id": "2104.06010",
+   "title": "Finite Volume Neural Network: Modeling Subsurface Contaminant Transport",
+   "authors": [
+    "Timothy Praditia",
+    "Matthias Karlbauer",
+    "Sebastian Otte",
+    "Sergey Oladyshkin",
+    "Martin V. Butz",
+    "Wolfgang Nowak"
+   ],
+   "published": "2021-04-13"
+  },
+  "2210.07182": {
+   "id": "2210.07182",
+   "title": "PDEBENCH: An Extensive Benchmark for Scientific Machine Learning",
+   "authors": [
+    "Makoto Takamoto",
+    "Timothy Praditia",
+    "Raphael Leiteritz",
+    "Dan MacKinlay",
+    "Francesco Alesiani",
+    "Dirk Pfl\u00fcger",
+    "Mathias Niepert"
+   ],
+   "published": "2022-10-13"
+  },
+  "1812.04426": {
+   "id": "1812.04426",
+   "title": "PDE-Net 2.0: Learning PDEs from Data with A Numeric-Symbolic Hybrid Deep Network",
+   "authors": [
+    "Zichao Long",
+    "Yiping Lu",
+    "Bin Dong"
+   ],
+   "published": "2018-11-30"
+  },
+  "2308.05732": {
+   "id": "2308.05732",
+   "title": "PDE-Refiner: Achieving Accurate Long Rollouts with Neural PDE Solvers",
+   "authors": [
+    "Phillip Lippe",
+    "Bastiaan S. Veeling",
+    "Paris Perdikaris",
+    "Richard E. Turner",
+    "Johannes Brandstetter"
+   ],
+   "published": "2023-08-10"
+  },
+  "2002.09405": {
+   "id": "2002.09405",
+   "title": "Learning to Simulate Complex Physics with Graph Networks",
+   "authors": [
+    "Alvaro Sanchez-Gonzalez",
+    "Jonathan Godwin",
+    "Tobias Pfaff",
+    "Rex Ying",
+    "Jure Leskovec",
+    "Peter W. Battaglia"
+   ],
+   "published": "2020-02-21"
+  },
+  "1710.09668": {
+   "id": "1710.09668",
+   "title": "PDE-Net: Learning PDEs from Data",
+   "authors": [
+    "Zichao Long",
+    "Yiping Lu",
+    "Xianzhong Ma",
+    "Bin Dong"
+   ],
+   "published": "2017-10-26"
+  },
+  "2608.30328": {
+   "id": "2608.30328",
+   "title": "Learning PDE Time-Stepping with Neural Cellular Automata",
+   "authors": [
+    "Esha Saha",
+    "Hao Wang"
+   ],
+   "published": "2026-08-31"
+  }
+ },
+ "cited": {
+  "1003.1983": [
+   "docs\\architecture_report.md:37",
+   "docs\\literature_review.md:47",
+   "docs\\literature_review.md:114",
+   "docs\\research_paper.txt:1265"
+  ],
+  "1710.09668": [
+   "docs\\related_work.md:17",
+   "docs\\related_work.md:104"
+  ],
+  "1711.10561": [
+   "docs\\architecture_report.md:56",
+   "docs\\literature_review.md:81",
+   "docs\\related_work.md:112",
+   "docs\\research_paper.txt:1287"
+  ],
+  "1711.10566": [
+   "docs\\research_paper.txt:1289"
+  ],
+  "1812.04426": [
+   "docs\\related_work.md:104"
+  ],
+  "1910.03193": [
+   "docs\\literature_review.md:166",
+   "docs\\related_work.md:107",
+   "docs\\research_paper.txt:1319"
+  ],
+  "2002.09405": [
+   "docs\\related_work.md:109"
+  ],
+  "2006.09535": [
+   "docs\\literature_review.md:180",
+   "docs\\research_paper.txt:1327"
+  ],
+  "2010.03409": [
+   "docs\\related_work.md:109"
+  ],
+  "2010.08895": [
+   "docs\\architecture_report.md:47",
+   "docs\\literature_review.md:139",
+   "docs\\related_work.md:105",
+   "docs\\research_paper.txt:1309"
+  ],
+  "2104.06010": [
+   "docs\\related_work.md:32",
+   "docs\\related_work.md:102"
+  ],
+  "2107.07562": [
+   "docs\\architecture_report.md:47",
+   "docs\\literature_review.md:139",
+   "docs\\research_paper.txt:1313"
+  ],
+  "2108.08481": [
+   "docs\\literature_review.md:139",
+   "docs\\research_paper.txt:1311"
+  ],
+  "2111.03794": [
+   "docs\\architecture_report.md:47",
+   "docs\\literature_review.md:140",
+   "docs\\literature_review.md:206",
+   "docs\\related_work.md:106",
+   "docs\\research_paper.txt:1317"
+  ],
+  "2111.11798": [
+   "docs\\related_work.md:33",
+   "docs\\related_work.md:102"
+  ],
+  "2111.13545": [
+   "docs\\literature_review.md:48",
+   "docs\\research_paper.txt:1269"
+  ],
+  "2201.05624": [
+   "docs\\literature_review.md:82",
+   "docs\\research_paper.txt:1291"
+  ],
+  "2202.03376": [
+   "docs\\related_work.md:108"
+  ],
+  "2205.01681": [
+   "docs\\literature_review.md:49",
+   "docs\\research_paper.txt:1273"
+  ],
+  "2207.05748": [
+   "docs\\literature_review.md:167",
+   "docs\\research_paper.txt:1321"
+  ],
+  "2209.04934": [
+   "docs\\related_work.md:110"
+  ],
+  "2209.05150": [
+   "docs\\literature_review.md:139",
+   "docs\\research_paper.txt:1315"
+  ],
+  "2210.01741": [
+   "docs\\related_work.md:39",
+   "docs\\related_work.md:103"
+  ],
+  "2210.07182": [
+   "docs\\related_work.md:113"
+  ],
+  "2211.11417": [
+   "docs\\literature_review.md:48",
+   "docs\\research_paper.txt:1271"
+  ],
+  "2302.10197": [
+   "docs\\literature_review.md:49",
+   "docs\\research_paper.txt:1275"
+  ],
+  "2302.14227": [
+   "docs\\architecture_report.md:56",
+   "docs\\literature_review.md:83",
+   "docs\\literature_review.md:99",
+   "docs\\research_paper.txt:1299"
+  ],
+  "2305.01240": [
+   "docs\\literature_review.md:83",
+   "docs\\research_paper.txt:1307"
+  ],
+  "2308.05732": [
+   "docs\\related_work.md:111"
+  ],
+  "2310.14809": [
+   "docs\\related_work.md:27",
+   "docs\\related_work.md:100"
+  ],
+  "2401.11037": [
+   "docs\\literature_review.md:180",
+   "docs\\research_paper.txt:1329"
+  ],
+  "2402.00531": [
+   "docs\\literature_review.md:83",
+   "docs\\literature_review.md:98",
+   "docs\\research_paper.txt:1305"
+  ],
+  "2404.06279": [
+   "docs\\architecture_report.md:25",
+   "docs\\literature_review.md:48",
+   "docs\\literature_review.md:114",
+   "docs\\related_work.md:101",
+   "docs\\research_paper.txt:1267"
+  ],
+  "2406.06718": [
+   "docs\\literature_review.md:187",
+   "docs\\literature_review.md:206",
+   "docs\\research_paper.txt:1331"
+  ],
+  "2407.06151": [
+   "docs\\literature_review.md:114",
+   "docs\\research_paper.txt:1339"
+  ],
+  "2407.13010": [
+   "docs\\literature_review.md:167",
+   "docs\\research_paper.txt:1323"
+  ],
+  "2410.02651": [
+   "docs\\cax_evaluation.md:4",
+   "docs\\literature_review.md:51",
+   "docs\\literature_review.md:188",
+   "docs\\research_paper.txt:1115",
+   "docs\\research_paper.txt:1285"
+  ],
+  "2410.03496": [
+   "docs\\literature_review.md:83",
+   "docs\\literature_review.md:97",
+   "docs\\research_paper.txt:1301"
+  ],
+  "2411.00180": [
+   "docs\\literature_review.md:34",
+   "docs\\literature_review.md:66",
+   "docs\\literature_review.md:188",
+   "docs\\related_work.md:113",
+   "docs\\research_paper.txt:1337"
+  ],
+  "2411.18240": [
+   "docs\\literature_review.md:82",
+   "docs\\research_paper.txt:1295"
+  ],
+  "2503.18181": [
+   "docs\\literature_review.md:82",
+   "docs\\research_paper.txt:1293"
+  ],
+  "2504.02260": [
+   "docs\\architecture_report.md:37",
+   "docs\\literature_review.md:115",
+   "docs\\literature_review.md:187",
+   "docs\\literature_review.md:205",
+   "docs\\research_paper.txt:1333"
+  ],
+  "2504.03503": [
+   "docs\\literature_review.md:167",
+   "docs\\literature_review.md:186",
+   "docs\\research_paper.txt:1325"
+  ],
+  "2505.13058": [
+   "docs\\literature_review.md:50",
+   "docs\\research_paper.txt:1279"
+  ],
+  "2505.14595": [
+   "docs\\literature_review.md:115",
+   "docs\\literature_review.md:187",
+   "docs\\research_paper.txt:1335"
+  ],
+  "2506.04912": [
+   "docs\\literature_review.md:50",
+   "docs\\research_paper.txt:1283"
+  ],
+  "2506.22899": [
+   "docs\\architecture_report.md:25",
+   "docs\\literature_review.md:50",
+   "docs\\research_paper.txt:1277"
+  ],
+  "2510.06684": [
+   "docs\\architecture_report.md:56",
+   "docs\\literature_review.md:83",
+   "docs\\literature_review.md:98",
+   "docs\\research_paper.txt:1297"
+  ],
+  "2601.16096": [
+   "docs\\literature_review.md:50",
+   "docs\\research_paper.txt:1281"
+  ],
+  "2602.19265": [
+   "docs\\literature_review.md:83",
+   "docs\\literature_review.md:97",
+   "docs\\literature_review.md:155",
+   "docs\\research_paper.txt:1303"
+  ],
+  "2602.23113": [
+   "docs\\literature_review.md:186"
+  ],
+  "2608.30328": [
+   "docs\\related_work.md:14",
+   "docs\\related_work.md:99"
+  ]
+ },
+ "unresolved": [],
+ "n_cited": 52,
+ "n_resolved": 52
+}

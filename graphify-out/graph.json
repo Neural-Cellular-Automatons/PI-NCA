@@ -1,0 +1,223 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "PI NCA_v1.py",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "pi_nca_v1",
+      "community": 1,
+      "norm_label": "pi nca_v1.py"
+    },
+    {
+      "label": "HeatEquationSolver",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L55",
+      "_origin": "ast",
+      "id": "pi_nca_v1_heatequationsolver",
+      "community": 2,
+      "norm_label": "heatequationsolver"
+    },
+    {
+      "label": ".__init__()",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L56",
+      "_origin": "ast",
+      "id": "pi_nca_v1_heatequationsolver_init",
+      "community": 0,
+      "norm_label": ".__init__()"
+    },
+    {
+      "label": ".step()",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L73",
+      "_origin": "ast",
+      "id": "pi_nca_v1_heatequationsolver_step",
+      "community": 2,
+      "norm_label": ".step()"
+    },
+    {
+      "label": ".k_steps()",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L76",
+      "_origin": "ast",
+      "id": "pi_nca_v1_heatequationsolver_k_steps",
+      "community": 2,
+      "norm_label": ".k_steps()"
+    },
+    {
+      "label": "conserve_energy()",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L84",
+      "_origin": "ast",
+      "id": "pi_nca_v1_conserve_energy",
+      "community": 1,
+      "norm_label": "conserve_energy()"
+    },
+    {
+      "label": "DeepFluxNCA",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L91",
+      "_origin": "ast",
+      "id": "pi_nca_v1_deepfluxnca",
+      "community": 0,
+      "norm_label": "deepfluxnca"
+    },
+    {
+      "label": ".__init__()",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L92",
+      "_origin": "ast",
+      "id": "pi_nca_v1_deepfluxnca_init",
+      "community": 0,
+      "norm_label": ".__init__()"
+    },
+    {
+      "label": ".forward()",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L108",
+      "_origin": "ast",
+      "id": "pi_nca_v1_deepfluxnca_forward",
+      "community": 0,
+      "norm_label": ".forward()"
+    },
+    {
+      "label": "make_state()",
+      "file_type": "code",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L117",
+      "_origin": "ast",
+      "id": "pi_nca_v1_make_state",
+      "community": 1,
+      "norm_label": "make_state()"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L84",
+      "weight": 1.0,
+      "source": "pi_nca_v1",
+      "target": "pi_nca_v1_conserve_energy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L91",
+      "weight": 1.0,
+      "source": "pi_nca_v1",
+      "target": "pi_nca_v1_deepfluxnca",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L55",
+      "weight": 1.0,
+      "source": "pi_nca_v1",
+      "target": "pi_nca_v1_heatequationsolver",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L117",
+      "weight": 1.0,
+      "source": "pi_nca_v1",
+      "target": "pi_nca_v1_make_state",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L56",
+      "weight": 1.0,
+      "source": "pi_nca_v1_heatequationsolver",
+      "target": "pi_nca_v1_heatequationsolver_init",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L76",
+      "weight": 1.0,
+      "source": "pi_nca_v1_heatequationsolver",
+      "target": "pi_nca_v1_heatequationsolver_k_steps",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L73",
+      "weight": 1.0,
+      "source": "pi_nca_v1_heatequationsolver",
+      "target": "pi_nca_v1_heatequationsolver_step",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "pi_nca_v1_heatequationsolver_init",
+      "target": "pi_nca_v1_deepfluxnca_init",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L78",
+      "weight": 1.0,
+      "source": "pi_nca_v1_heatequationsolver_k_steps",
+      "target": "pi_nca_v1_heatequationsolver_step",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L108",
+      "weight": 1.0,
+      "source": "pi_nca_v1_deepfluxnca",
+      "target": "pi_nca_v1_deepfluxnca_forward",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "PI NCA_v1.py",
+      "source_location": "L92",
+      "weight": 1.0,
+      "source": "pi_nca_v1_deepfluxnca",
+      "target": "pi_nca_v1_deepfluxnca_init",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "1738db0963a7c3e200a581b29c845e5bd71843cf"
+}

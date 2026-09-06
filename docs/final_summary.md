@@ -5,7 +5,7 @@ absolute numbers re-run at full scale on GPU with unchanged code.*
 
 ## Abstract
 We migrate a PyTorch Physics-Informed Neural Cellular Automaton (PI-NCA) codebase to
-JAX/Flax, build a correctness-gated 8-PDE suite, and compare — under one shared
+JAX/Flax, build a correctness-gated 10-PDE suite, and compare — under one shared
 autoregressive-emulation protocol — a conservative flux-divergence **PI-NCA**, an
 unconstrained **NCA**, and a **Fourier Neural Operator (FNO)**, plus a continuous **PINN**
 baseline. The objective is explicitly *not* to crown NCAs but to characterise **which

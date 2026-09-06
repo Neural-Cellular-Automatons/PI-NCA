@@ -1,0 +1,128 @@
+{
+ "pde": "cahn_hilliard",
+ "seeds": [
+  42
+ ],
+ "grid": 16,
+ "horizon": 48,
+ "blowup_factor": 10.0,
+ "results": {
+  "plain_nca": {
+   "failure_curve": {
+    "8": 0.0,
+    "16": 0.0,
+    "24": 0.0,
+    "32": 1.0,
+    "40": 1.0,
+    "48": 1.0
+   },
+   "failure_rate_final": 1.0,
+   "median_survival": 25.0,
+   "survival_summary": {
+    "n": 6,
+    "mean": 25.0,
+    "std": 0.6324555320336759,
+    "sem": 0.25819888974716115,
+    "median": 25.0,
+    "iqr": 0.0,
+    "ci_lo": 24.5,
+    "ci_hi": 25.5,
+    "vmin": 24.0,
+    "vmax": 26.0
+   },
+   "bounded_violation_frac": 0.014322916977107525,
+   "perturb_t0_amplification": 2.063928921444613,
+   "perturb_mid_amplification": 1.0738535883866613,
+   "perturb_t0_diverged": 0.0,
+   "dt_sensitivity": {
+    "1.0": 0.7584801912307739,
+    "0.5": 2.8539671897888184,
+    "2.0": 0.8672804832458496
+   },
+   "params": 6784,
+   "n_seeds": 1,
+   "horizon": 48
+  },
+  "bounded_multiscale_nca": {
+   "failure_curve": {
+    "8": 0.0,
+    "16": 0.0,
+    "24": 0.0,
+    "32": 0.0,
+    "40": 0.0,
+    "48": 0.0
+   },
+   "failure_rate_final": 0.0,
+   "median_survival": 48.0,
+   "survival_summary": {
+    "n": 6,
+    "mean": 48.0,
+    "std": 0.0,
+    "sem": 0.0,
+    "median": 48.0,
+    "iqr": 0.0,
+    "ci_lo": 48.0,
+    "ci_hi": 48.0,
+    "vmin": 48.0,
+    "vmax": 48.0
+   },
+   "bounded_violation_frac": 0.0436197929084301,
+   "perturb_t0_amplification": 2.2238641536919643,
+   "perturb_mid_amplification": 1.037800735040838,
+   "perturb_t0_diverged": 0.0,
+   "dt_sensitivity": {
+    "1.0": 0.7491694688796997,
+    "0.5": 0.9658240079879761,
+    "2.0": 0.8526384234428406
+   },
+   "params": 5520,
+   "n_seeds": 1,
+   "horizon": 48
+  },
+  "identity": {
+   "failure_curve": {
+    "8": 0.0,
+    "16": 0.0,
+    "24": 0.0,
+    "32": 0.0,
+    "40": 0.0,
+    "48": 0.0
+   },
+   "failure_rate_final": 0.0,
+   "median_survival": 48.0,
+   "survival_summary": {
+    "n": 6,
+    "mean": 48.0,
+    "std": 0.0,
+    "sem": 0.0,
+    "median": 48.0,
+    "iqr": 0.0,
+    "ci_lo": 48.0,
+    "ci_hi": 48.0,
+    "vmin": 48.0,
+    "vmax": 48.0
+   },
+   "bounded_violation_frac": 0.0,
+   "perturb_t0_amplification": 0.9999999999989874,
+   "perturb_mid_amplification": 0.9999999999989874,
+   "perturb_t0_diverged": 0.0,
+   "dt_sensitivity": {
+    "1.0": 0.9314458966255188,
+    "0.5": 0.9323740005493164,
+    "2.0": 0.9351907968521118
+   },
+   "params": 1,
+   "n_seeds": 1,
+   "horizon": 48
+  }
+ },
+ "device": {
+  "tag": "stability",
+  "jax": "0.10.1",
+  "backend": "cpu",
+  "devices": [
+   "cpu:0"
+  ],
+  "peak_mem_mb": 0.0
+ }
+}

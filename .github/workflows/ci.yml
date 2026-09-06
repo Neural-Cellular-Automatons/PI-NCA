@@ -1,0 +1,48 @@
+name: gate
+
+# The claim this repository makes is that its JAX ports are numerically equal to the
+# original PyTorch references and that its statistical machinery behaves as described.
+# CI exists to keep that claim true on a clean machine, not to lint.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install (CPU wheels only)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-jax.txt
+          python -m pip install -e .
+
+      - name: Correctness gate
+        run: python -m pytest tests/ -q
+
+      - name: Self-checks that are not pytest
+        run: |
+          python -m pinca_jax.stats
+          python -m pinca_jax.physics
+          python -m pinca_jax.models.baselines
+          python -m pinca_jax.teacher_error --demo
+
+      - name: Pipeline wiring (smoke profile, CPU, numbers meaningless)
+        run: python -m pinca_jax.runner --profile smoke --allow-cpu --no-gate --only bench2d,plots
+
+      - name: Claims audit must match the results
+        run: python -m pinca_jax.claims

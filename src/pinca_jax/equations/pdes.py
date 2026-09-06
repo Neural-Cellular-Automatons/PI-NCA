@@ -1,4 +1,4 @@
-"""The 8-PDE suite — differentiable JAX reference solvers (numerical teachers).
+"""The 10-PDE suite — differentiable JAX reference solvers (numerical teachers).
 
 Faithfully migrated from the PyTorch notebook
 `PINCA_v3plus_SWE_FHN_CH_PSNR.ipynb` (see docs/migration/pde_inventory.md for the

@@ -1,0 +1,159 @@
+"""Verify every arXiv identifier cited anywhere in the repository, against arXiv itself.
+
+A bibliography with a plausible-looking but wrong identifier is worse than no citation:
+it points a reader at the wrong paper and it is the single easiest thing for a reviewer
+to check. This scans the documents for `arXiv:NNNN.NNNNN` patterns, queries the arXiv
+API for each one, and writes the resolved title, first author and date back out.
+
+Anything that does not resolve is reported as BAD and must be removed or corrected; the
+script exits non-zero under `--strict` so CI can enforce it. Results are cached in
+`docs/bibliography.json` so a re-run is offline and reproducible.
+
+    python -m pinca_jax.bib            # verify and write docs/bibliography.md
+    python -m pinca_jax.bib --strict   # non-zero exit if any identifier is unresolvable
+    python -m pinca_jax.bib --refresh  # ignore the cache and re-query arXiv
+"""
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import os
+import re
+import time
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DOCS = os.path.join(ROOT, "docs")
+CACHE = os.path.join(DOCS, "bibliography.json")
+API = "http://export.arxiv.org/api/query?id_list={}&max_results=100"
+ATOM = "{http://www.w3.org/2005/Atom}"
+
+ID_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5})(v\d+)?", re.I)
+
+
+def scan(paths=None) -> dict[str, list[str]]:
+    """{arxiv_id: [file:line, ...]} for every identifier cited in the repository."""
+    paths = paths or (sorted(glob.glob(os.path.join(DOCS, "**", "*.md"), recursive=True)) +
+                      sorted(glob.glob(os.path.join(DOCS, "**", "*.txt"), recursive=True)) +
+                      [os.path.join(ROOT, "README.md")])
+    found: dict[str, list[str]] = {}
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            text = open(path, encoding="utf-8").read()
+        except Exception:
+            continue
+        rel = os.path.relpath(path, ROOT)
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for m in ID_RE.finditer(line):
+                found.setdefault(m.group(1), []).append(f"{rel}:{lineno}")
+    return dict(sorted(found.items()))
+
+
+def fetch(ids, batch=40, pause=3.0) -> dict[str, dict]:
+    """Resolve identifiers against the arXiv API. Unresolvable ones map to None."""
+    out: dict[str, dict] = {}
+    ids = list(ids)
+    for i in range(0, len(ids), batch):
+        chunk = ids[i:i + batch]
+        url = API.format(",".join(chunk))
+        try:
+            raw = urllib.request.urlopen(url, timeout=60).read()
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            print(f"[bib] query failed for {len(chunk)} ids ({type(exc).__name__}); "
+                  f"leaving them unverified")
+            for cid in chunk:
+                out.setdefault(cid, None)
+            continue
+        root = ET.fromstring(raw)
+        for entry in root.findall(f"{ATOM}entry"):
+            eid = (entry.findtext(f"{ATOM}id") or "")
+            m = re.search(r"abs/(\d{4}\.\d{4,5})", eid)
+            title = (entry.findtext(f"{ATOM}title") or "").strip()
+            if not m or not title or title.lower().startswith("error"):
+                continue
+            authors = [a.findtext(f"{ATOM}name") for a in entry.findall(f"{ATOM}author")]
+            out[m.group(1)] = {
+                "id": m.group(1),
+                "title": " ".join(title.split()),
+                "authors": [a for a in authors if a],
+                "published": (entry.findtext(f"{ATOM}published") or "")[:10],
+            }
+        for cid in chunk:
+            out.setdefault(cid, None)
+        if i + batch < len(ids):
+            time.sleep(pause)          # arXiv asks for >=3s between API calls
+    return out
+
+
+def verify(refresh=False) -> dict:
+    cites = scan()
+    cached = {}
+    if os.path.exists(CACHE) and not refresh:
+        try:
+            cached = json.load(open(CACHE, encoding="utf-8")).get("entries", {})
+        except Exception:
+            cached = {}
+    missing = [i for i in cites if i not in cached or cached[i] is None]
+    if missing:
+        print(f"[bib] querying arXiv for {len(missing)} identifier(s)...")
+        cached.update(fetch(missing))
+    entries = {i: cached.get(i) for i in cites}
+    bad = sorted(i for i, v in entries.items() if v is None)
+    payload = {"entries": cached, "cited": cites, "unresolved": bad,
+               "n_cited": len(cites), "n_resolved": len(cites) - len(bad)}
+    os.makedirs(DOCS, exist_ok=True)
+    with open(CACHE, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=1)
+    return payload
+
+
+def to_markdown(p) -> str:
+    cites, entries = p["cited"], p["entries"]
+    L = ["# Bibliography (machine-verified)", "",
+         "Generated by `python -m pinca_jax.bib`. Every identifier below was resolved "
+         "against the arXiv API; the title and authors shown are arXiv's, not this "
+         "repository's. Do not edit by hand.", "",
+         f"**{p['n_resolved']} of {p['n_cited']} cited identifiers resolve.**", ""]
+    if p["unresolved"]:
+        L += ["## Unresolved -- must be corrected or removed", "",
+              "| arXiv id | cited at |", "|---|---|"]
+        L += [f"| `{i}` | {', '.join(cites[i][:4])} |" for i in p["unresolved"]]
+        L += [""]
+    L += ["## Verified", "", "| arXiv id | title | first author | published | cited at |",
+          "|---|---|---|---|---|"]
+    for i in sorted(cites):
+        e = entries.get(i)
+        if not e:
+            continue
+        who = (e["authors"][0] + (" et al." if len(e["authors"]) > 1 else "")
+               ) if e["authors"] else "-"
+        where = ", ".join(sorted({c.split(":")[0] for c in cites[i]})[:3])
+        L.append(f"| [{i}](https://arxiv.org/abs/{i}) | {e['title']} | {who} | "
+                 f"{e['published']} | {where} |")
+    return "\n".join(L) + "\n"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--strict", action="store_true",
+                    help="exit non-zero if any cited identifier does not resolve")
+    ap.add_argument("--refresh", action="store_true", help="ignore the cache")
+    ap.add_argument("--out", default=os.path.join(DOCS, "bibliography.md"))
+    args = ap.parse_args()
+    p = verify(refresh=args.refresh)
+    with open(args.out, "w", encoding="utf-8") as f:
+        f.write(to_markdown(p))
+    print(f"[bib] {p['n_resolved']}/{p['n_cited']} identifiers resolved -> {args.out}")
+    for i in p["unresolved"]:
+        print(f"  UNRESOLVED arXiv:{i}  cited at {', '.join(p['cited'][i][:3])}")
+    if args.strict and p["unresolved"]:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,182 @@
+ICLR ACCEPTANCE AUDIT AND ACTION PLAN
+Project: PI-NCA / Physics-Informed Neural Cellular Automata for PDEs
+Audit date: 2026-09-06
+
+IMPORTANT SCOPE NOTE
+The visible main checkout contains only PI NCA_v1.py and generated graph metadata.
+A much more developed detached checkout exists at:
+.claude/worktrees/epic-mccarthy-c37190
+That checkout contains the JAX implementation, docs, tests, results, figures, and
+draft paper. The assessment below includes both, but the branch/packaging problem is
+itself a serious risk: a fresh reviewer cloning main would not receive the developed
+research artifact.
+
+BOTTOM-LINE ACCEPTANCE ESTIMATE
+
+As the visible main checkout stands now: effectively not submission-ready; estimated
+chance of acceptance is below 2%. There is no submission-ready paper, no trustworthy
+experimental record in the visible checkout, and no reproducible package.
+
+As represented by the developed detached checkout today: approximately 5-10% for an
+ICLR main-track acceptance, with a meaningful risk of desk/reviewer rejection because
+of statistical and comparison concerns. This is a qualitative estimate, not a
+probability model. The work has a potentially publishable empirical story, but the
+current evidence is not yet strong enough for a top-tier ML venue.
+
+If the action items marked BLOCKER are completed with convincing results, the work
+could become competitive for roughly 15-25%. If the paper is reframed as a careful
+benchmark/analysis paper and the full-scale evidence is strong, it could be higher;
+if full-scale runs weaken the headline claims, the correct outcome is to narrow the
+claims rather than preserve them.
+
+WHAT IS ALREADY STRONG
+
+1. The central question is useful: which inductive bias matches which PDE regime,
+   rather than claiming that one architecture always wins.
+2. The conservative flux-divergence update is an intelligible, physically motivated
+   architectural contribution.
+3. The developed checkout has a broad PDE suite, 2-D and 3-D code, several hybrids,
+   ablations, figures, raw JSON/Markdown results, and reproducibility documentation.
+4. The correctness-gated PyTorch-to-JAX migration and tests are good engineering and
+   improve confidence in the numerical implementation.
+5. The draft openly states CPU-only scale, single-seed limitations, incomplete sweeps,
+   and the mismatch between emulator and PINN/DeepONet settings. Keep that honesty.
+
+CRITICAL TECHNICAL / SCIENTIFIC RISKS
+
+1. MAIN BRANCH IS NOT THE RESEARCH ARTIFACT [BLOCKER]
+   Merge or publish the developed checkout from a clean, named branch/release. Remove
+   dependence on a hidden detached .claude/worktrees directory. Add a top-level README,
+   LICENSE, paper source, source package, tests, results, configs, and one clean command
+   that works from a fresh clone.
+
+2. SINGLE-SEED HEADLINE RESULTS [BLOCKER]
+   The central tables repeatedly use seed 42, while some other tables use multiple seeds.
+   Run at least 5 independent seeds (preferably 10 for the main comparison), report
+   mean, standard deviation, median, confidence intervals, and paired per-IC results.
+   Report the complete seed list and do not select the best seed or best checkpoint after
+   seeing test results. Use statistical tests or bootstrap intervals for claimed wins.
+
+3. REDUCED-SCALE CPU EVIDENCE [BLOCKER]
+   The headline experiments use small grids, short horizons, few epochs, and CPU-only
+   execution. Run the final protocol on GPU at realistic resolutions and horizons, and
+   include scaling curves for grid size, rollout length, and training budget. Stamp each
+   result with hardware, software versions, wall-clock, memory, and commit hash.
+
+4. UNFAIR / INCOMMENSURATE BASELINES [BLOCKER]
+   PINN and DeepONet are heat-only and use different tasks, horizons, and metrics from
+   the emulator models. Either remove them from the main head-to-head claims, or create
+   a genuinely matched evaluation: same PDE, IC distribution, target horizon, compute
+   budget, resolution, parameter-count reporting, and carefully explained training/data
+   regime. Add strong modern baselines such as PINO/operator-learning and a standard
+   autoregressive CNN/UNet or ResNet emulator.
+
+5. UNCLEAR NOVELTY RELATIVE TO PRIOR NCA/PDE WORK [BLOCKER]
+   Replace the living literature review with a precise related-work section. State the
+   exact difference from Neural CA/PDE solvers, physics-informed neural operators,
+   finite-volume neural networks, conservative neural operators, MP-PDE, PDEBench,
+   APEBench/Exponax, MeshGraphNets, FNO variants, and existing NCA dynamics work.
+   Include a table: prior method, locality, conservation, solver supervision, PDE suite,
+   dimensionality, and what this paper adds. Verify every citation, author, title, and
+   arXiv identifier; do not use placeholder bibliography entries.
+
+6. CLAIMS ARE BROADER THAN THE EVIDENCE [BLOCKER]
+   The paper says ten 2-D and six 3-D phenomena, while the abstract says eight 2-D.
+   Resolve every count, table, figure, and result-file discrepancy. Distinguish clearly
+   between measured results, scaffolded experiments, emulator results, solver results,
+   and illustrative figures. Do not claim dimension-independent conclusions from one
+   small 3-D resolution and one seed.
+
+7. TEST SET / INITIAL-CONDITION GENERALIZATION
+   Define train, validation, and test IC distributions before training. Include held-out
+   distributions: amplitude, blob count, length scale, spectrum, phase, coefficients,
+   boundary conditions, PDE parameters, and resolutions. Demonstrate interpolation and
+   extrapolation, not only random samples from one narrow blob generator.
+
+8. TEACHER-DISTILLATION CIRCULARITY
+   The emulator is trained to imitate a numerical solver and then judged against that
+   solver. Explain exactly what scientific problem is being solved, quantify teacher
+   discretization error, and include comparisons against the teacher's cost. Add a
+   rollout-only and one-step-only analysis, plus a baseline with the same solver access.
+
+9. CONSERVATION / BOUNDING DEFINITIONS
+   Separate exact structural conservation, projection-based global mass correction, and
+   empirical conservation. The global conserve_energy projection is not the same as a
+   local conservative finite-volume update. Explain positivity, bounds, boundary terms,
+   and whether clipping changes the PDE. Report conservation per channel and over time.
+
+10. IMPLEMENTATION CORRECTNESS AND REPRODUCIBILITY
+   In the original PyTorch script, train_loss is appended after acc_loss may have been
+   reset to zero, so the plotted training curve can be misleading. Validation omits the
+   conservation projection used at test time. The script uses deprecated AMP APIs,
+   torch.compile without a compatibility fallback, global randomness, and no CLI/config
+   or checkpointing. Fix these or clearly label the script as a legacy reference.
+   Make the tested JAX path the single canonical implementation.
+
+11. FAIR EFFICIENCY CLAIMS
+   Recheck every parameter-efficiency and speed claim using matched precision, batch,
+   compilation/warmup policy, hardware, resolution, and number of solver evaluations.
+   Include total training FLOPs/time, inference cost, memory, throughput, and accuracy
+   at equal parameter and equal compute budgets. Do not compare a large FNO to a tiny NCA
+   without an iso-parameter control.
+
+12. ABLATIONS ARE NOT COMPLETE
+   Finish A1-A6 and pre-register the interpretation: conservation, multi-scale stencil,
+   spectral mixing, bounds, initialization, rollout curriculum, and teacher/pre-seeding.
+   Include additive and subtractive ablations, equalized parameter counts, and interaction
+   effects. A single successful ablation is not enough to establish causality.
+
+13. STABILITY ANALYSIS
+   Add long-horizon failure-rate curves over many seeds, perturbation robustness, error
+   growth, spectral error, positivity/boundedness violations, and sensitivity to dt,
+   resolution, PDE coefficients, and rollout length. State when the model diverges and
+   count failures rather than hiding them behind guards or clamps.
+
+14. PAPER QUALITY
+   Convert research_paper.txt to a clean ICLR-format submission source. Remove the table
+   of contents unless the style permits it, reduce the paper to one crisp contribution,
+   move engineering detail to an appendix, and put the strongest evidence in the main
+   paper. Make every table/figure generated from raw results. Add confidence intervals,
+   exact n, compute budget, and a limitations paragraph next to every headline claim.
+
+15. REPRODUCIBLE RELEASE
+   Add pyproject/lockfile, tested Python versions, CPU and GPU installation paths, data
+   generation commands, deterministic seed commands, checkpoint download or generation,
+   expected outputs, CI, and a LICENSE. Pin the exact commit used for every table. Make
+   `pytest`, a smoke benchmark, and report regeneration pass from a clean environment.
+
+16. REVIEWER-PROOF PRESENTATION
+   Lead with the falsifiable regime hypothesis and the decision rule. Avoid words such as
+   "dominates" or "dimension-independent" unless supported statistically. Add failure
+   cases and negative results prominently. Explain why a practitioner should use this
+   method instead of a conventional CNN/FNO/finite-volume surrogate.
+
+RECOMMENDED EXECUTION ORDER
+
+Phase 1 (must do before more writing): publish the correct branch; clean the package;
+fix metric/evaluation inconsistencies; verify all JSON against code; resolve PDE counts;
+complete the baseline and ablation matrix.
+
+Phase 2 (evidence): run 5-10 seeds on GPU; run realistic grids and horizons; add held-out
+IC/PDE-parameter/resolution generalization; add iso-parameter and iso-compute baselines;
+record failures and confidence intervals.
+
+Phase 3 (paper): rewrite novelty and related work; narrow the claims to what survives;
+rebuild every table/figure from raw artifacts; use ICLR format; run an adversarial review
+with at least three readers who did not build the system.
+
+Phase 4 (release): clean-clone reproduction on a second machine; archive code/configs/
+results/checkpoints; add a concise README and an artifact appendix; verify no hidden
+worktree or local path is required.
+
+GO / NO-GO CHECKLIST
+
+Do not submit if: the final tables are still single-seed; the GPU/full-scale run is absent;
+the PINN comparison remains unmatched; the paper claims exceed measured experiments; the
+main branch lacks the actual artifact; or the key winner disappears under independent
+seeds and equalized budgets.
+
+Submit when: the central regime claim is statistically stable; the best baseline and
+matched budgets are included; all headline numbers are independently reproducible; the
+novelty is clearly distinct from prior conservative neural PDE solvers; failures are
+reported; and a clean clone reproduces the main table without manual intervention.
