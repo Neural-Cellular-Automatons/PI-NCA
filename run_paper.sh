@@ -31,6 +31,14 @@ fi
 PY="${PYTHON:-python}"
 command -v "$PY" >/dev/null 2>&1 || { echo "python not on PATH. Activate the venv first."; exit 1; }
 
+# Accept a bare profile word as the first argument -- `run_paper.sh smoke` as well as
+# `run_paper.sh --profile smoke`. The older launcher took the positional form and several
+# documents still suggest it, and a wrong guess should not cost an argparse error at the
+# start of an overnight run.
+case "${1:-}" in
+  smoke|paper|bench|full) set -- --profile "$1" "${@:2}";;
+esac
+
 # Make the package importable straight from a fresh clone, so `pip install -e .` is a
 # convenience rather than a prerequisite. Subprocesses inherit this, so every stage sees
 # it too. An editable install still takes precedence if one exists.

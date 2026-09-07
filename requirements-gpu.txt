@@ -1,7 +1,8 @@
-# GPU (CUDA 12) stack for the benchmark run — NVIDIA RTX 4090, Linux or WSL2.
+# GPU (CUDA 12) stack for the benchmark run — any CUDA-12-capable NVIDIA card,
+# Linux or WSL2. Verified on an RTX 3050.
 #
 #   pip install -r requirements-gpu.txt
-#   pip install -e .
+#   pip install -e .        # optional; the launchers add src/ to PYTHONPATH
 #   python -c "import jax; print(jax.default_backend(), jax.devices())"   # -> gpu [CudaDevice(id=0)]
 #
 # Python: 3.12, 3.13 and 3.14 all work. jax/jaxlib/jax-cuda12-plugin publish
@@ -11,7 +12,7 @@
 # Native Windows CANNOT use the GPU: jaxlib has a win_amd64 wheel but
 # jax-cuda12-plugin is manylinux-only. Use WSL2. See docs/gpu_runbook.md.
 #
-# Versions below were verified together by the full test suite (120 tests).
+# Versions below were verified together by the full test suite (205 tests).
 
 jax[cuda12]==0.11.1
 flax==0.12.9

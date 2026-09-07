@@ -30,7 +30,7 @@ claimed, how to run, how to read results), [`LICENSE`](../LICENSE) (MIT), and
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — which installs from requirements
 on a clean machine, runs the 205-test gate on two Python versions, runs the non-pytest
 self-checks, exercises the pipeline end to end, and fails if the documents disagree with the
-results. One clean command from a fresh clone: `python -m pinca_jax.runner`.
+results. One clean command from a fresh clone: `bash run_paper.sh`.
 
 ### 2. Single-seed headline results — **MACHINERY DONE, NEEDS THE GPU RUN**
 
@@ -181,7 +181,7 @@ The audit's do-not-submit list, item by item:
 | main branch lacks the artifact | resolved |
 | key winner disappears under independent seeds and equalised budgets | **partly known already** — on Cahn–Hilliard it did, and the physics-free CNN won |
 
-The remaining gap is compute, not method. `python -m pinca_jax.runner --profile full` on a
+The remaining gap is compute, not method. `bash run_paper.sh` on a
 GPU produces every number the audit is still waiting on, and `docs/claims_audit.md` will
 flip C2 and C3 to SUPPORTED automatically when it does. Whether C15 (rank stability) flips is
 an open empirical question, and if it does not, the correct response is to keep quoting the

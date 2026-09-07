@@ -60,5 +60,5 @@ echo.
 echo Then:
 echo   python -m pytest tests/ -q      correctness gate
 echo   python -m pinca_jax.plots       regenerate all benchmark figures
-echo   run_gpu.bat smoke               reduced-scale end-to-end pass
+echo   run_paper.bat smoke             reduced-scale end-to-end pass
 endlocal

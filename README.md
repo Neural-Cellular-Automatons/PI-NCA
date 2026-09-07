@@ -149,8 +149,8 @@ documents and the results have drifted apart.
 honest summary: the machinery and the breadth are in place; the released numbers are
 reduced-scale and CPU-only, and the audit correctly reports the seed count, the backend and
 rank stability as not yet supported. The remaining gap to a submission is compute, not
-method -- `python -m pinca_jax.runner --profile full` on a GPU produces every number the
-audit is currently waiting on.
+method -- `bash run_paper.sh` on a GPU produces every number the audit is currently
+waiting on.
 
 ## License
 

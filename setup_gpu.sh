@@ -18,7 +18,7 @@ REQ="requirements-gpu.txt"
 
 cd "$(dirname "$0")"
 
-# --- 1. find an interpreter the pins support (jax 0.10.1 needs >= 3.12) ------
+# --- 1. find an interpreter the pins support (jax 0.11.1 needs >= 3.12) ------
 PY=""
 for c in python3.14 python3.13 python3.12 python3; do
   command -v "$c" >/dev/null 2>&1 || continue
@@ -27,7 +27,7 @@ for c in python3.14 python3.13 python3.12 python3; do
   fi
 done
 if [ -z "$PY" ]; then
-  echo "No Python >= 3.12 found (jax 0.10.1 requires it). On Ubuntu:"
+  echo "No Python >= 3.12 found (jax 0.11.1 requires it). On Ubuntu:"
   echo "  sudo apt update && sudo apt install -y python3 python3-venv python3-pip"
   exit 1
 fi
@@ -59,8 +59,11 @@ python -m pip install -q torch==2.12.0 --index-url https://download.pytorch.org/
 echo "==> installing $REQ"
 python -m pip install -r "$REQ"
 
-echo "==> installing this package (editable, src layout)"
-python -m pip install -q -e .
+# Optional: the launchers put src/ on PYTHONPATH themselves, so the run works without
+# this. It is done here anyway so `python -m pinca_jax.*` works in a bare shell too, and
+# a failure is not fatal (it is the step that trips the Windows MAX_PATH limit).
+echo "==> installing this package (editable, src layout; optional)"
+python -m pip install -q -e . || echo "    (editable install failed; the launchers do not need it)"
 
 # --- 4. verify --------------------------------------------------------------
 echo
@@ -89,7 +92,10 @@ cat <<'EOF'
 
 Environment ready. Next:
 
-  source .venv/bin/activate     # every new shell
-  bash run_gpu.sh smoke         # ~2 min wiring check
-  bash run_gpu.sh               # full run
+  source .venv/bin/activate           # every new shell
+  python -m pytest tests/ -q          # correctness gate; must be green first
+  bash run_paper.sh --estimate        # what the full run costs on THIS card
+  bash run_paper.sh                   # every number, table and figure in the paper
+
+Safe to interrupt: re-running the same command resumes where it stopped.
 EOF
