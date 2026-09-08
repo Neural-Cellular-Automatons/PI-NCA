@@ -1,0 +1,40 @@
+\begin{table}[t]
+\centering
+\caption{Controlled ablations, grid $48^2$, five seeds. Each row changes exactly one
+thing at matched backbone width and, within a row, parameter counts differ by at most
+$1\%$ (A4) or not at all (A1, A7). A4 and A5 are run on one phenomenon of each
+structural type, because the claim under test is that the useful prior depends on the
+equation and a single-phenomenon ablation cannot show that.}
+\label{tab:ablsummary}
+\small
+\begin{tabularx}{\linewidth}{@{}llccX@{}}
+\toprule
+Ablation & Setting & $\relerr$ & Mass drift & Reading \\
+\midrule
+\multicolumn{5}{@{}l}{\emph{A4 --- conservation head on/off, matched backbone (4{,}576 vs.\ 4{,}544 params)}}\\
+& heat, flux head        & \textbf{0.00743} & $7.0\!\times\!10^{-5}$ & conservation helps by $4.6\times$ \\
+& heat, residual head    & 0.0339           & 14.3                   & where the quantity is conserved \\
+& Nagumo, flux head      & 0.379            & $1.8\!\times\!10^{-5}$ & conservation hurts by $24\times$ \\
+& Nagumo, residual head  & \textbf{0.0161}  & 707                    & where it is not \\
+\midrule
+\multicolumn{5}{@{}l}{\emph{A5 --- perception stencil, matched head and width}}\\
+& heat, $3\times3$       & 0.00896          & $5.8\!\times\!10^{-5}$ & wider reach helps on both, \\
+& heat, $5\times5$       & 0.00584          & $8.5\!\times\!10^{-5}$ & unlike at grid $24^2$, where \\
+& heat, dilated $(1,2,4)$& \textbf{0.00412} & $1.1\!\times\!10^{-4}$ & the smallest stencil won \\
+& NS, $3\times3$         & 0.679            & $4.1\!\times\!10^{-6}$ & (Section~\ref{sec:scaling}) \\
+& NS, $5\times5$         & 0.667            & $4.8\!\times\!10^{-6}$ & \\
+& NS, dilated $(1,2,4)$  & \textbf{0.583}   & $4.9\!\times\!10^{-6}$ & \\
+\midrule
+\multicolumn{5}{@{}l}{\emph{A1 --- output bounding on/off, identical 5{,}520-parameter backbone}}\\
+& CH, unbounded          & 0.515            & 19.9                   & bounding buys $30\%$ accuracy \\
+& CH, bounded            & \textbf{0.358}   & $5.2\!\times\!10^{-5}$ & \emph{and} five orders of drift \\
+& Allen--Cahn, unbounded & \textbf{0.04941} & $9.6\!\times\!10^{-6}$ & no effect where the state \\
+& Allen--Cahn, bounded   & 0.04947          & $8.6\!\times\!10^{-6}$ & never reaches the bound \\
+\midrule
+\multicolumn{5}{@{}l}{\emph{A7 --- how mass is restored after the clip, identical backbone and bounds}}\\
+& CH, clip only          & 0.3589           & 18.6                   & accuracy is unchanged; the \\
+& CH, uniform offset     & 0.3614           & $1.1\!\times\!10^{-4}$ & projection is what conserves, \\
+& CH, headroom           & \textbf{0.3583}  & $\mathbf{5.4\!\times\!10^{-5}}$ & headroom by a further $2\times$ \\
+\bottomrule
+\end{tabularx}
+\end{table}

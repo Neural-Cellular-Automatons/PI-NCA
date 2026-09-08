@@ -1,0 +1,37 @@
+\begin{table}[t]
+\centering
+\caption{Heat, grouped by parameter budget rather than ranked across budgets. Within a
+class the comparison isolates the prior; across classes it reports what two orders of
+magnitude more parameters actually bought. Inference is per rollout step at batch 8 on
+the RTX 4090. Comparing the large spectral operator with a five-thousand-parameter
+cellular automaton and calling the gap an architectural result would conflate capacity
+with inductive bias, which is why the classes are separated.}
+\label{tab:eff}
+\small
+\begin{tabular}{llcrr}
+\toprule
+Budget & Architecture & $\relerr$ & Params & Infer.\ (ms/step) \\
+\midrule
+\multirow{2}{*}{floor}
+ & \model{identity}                 & 0.1889   & 1       & 3.00 \\
+\midrule
+\multirow{8}{*}{small}
+ & \model{multiscale\_flux\_nca}    & 0.003699 & 5{,}520 & 1.79 \\
+ & \model{mc\_flux\_nca}            & 0.003766 & 9{,}936 & 1.32 \\
+ & \model{resnet\_iso}              & 0.005559 & 5{,}364 & 1.27 \\
+ & \model{fno\_small}               & 0.005616 & 8{,}433 & 3.39 \\
+ & \model{bounded\_cons\_nca}       & 0.005720 & 4{,}576 & 1.25 \\
+ & \model{bounded\_multiscale\_nca} & 0.005867 & 5{,}520 & 1.88 \\
+ & \model{pi\_nca}                  & 0.006057 & 4{,}576 & 1.23 \\
+ & \model{unet\_iso}                & 0.007381 & 7{,}464 & 1.58 \\
+ & \model{plain\_nca}               & 0.05614  & 6{,}784 & 1.48 \\
+\midrule
+medium & \model{resnet}             & 0.006070 & 74{,}336 & 1.67 \\
+\midrule
+\multirow{3}{*}{large}
+ & \model{fno}                      & 0.001447 & 592{,}897 & 4.17 \\
+ & \model{spectral\_flux\_nca}      & 0.003405 & 134{,}225 & 2.77 \\
+ & \model{unet}                     & 0.004081 & 265{,}104 & 1.80 \\
+\bottomrule
+\end{tabular}
+\end{table}

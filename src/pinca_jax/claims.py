@@ -111,6 +111,12 @@ def inventory() -> dict:
     inv["n_pdes_2d"] = len(inv["pdes_2d"])
     inv["n_pdes_3d"] = len(inv["pdes_3d"])
     inv["n_archs_2d"] = len(inv["archs_2d"])
+    # The seed-count claim is about the ACCURACY tables. The scaling sweeps are
+    # deliberately single-seed -- they vary scale, not seeds, and averaging over seeds
+    # there would buy nothing the paired tables do not already give -- so counting them
+    # would make the claim permanently and wrongly unsupported.
+    bench_seeds = [len(v) for k, v in inv["seeds"].items() if k.startswith("bench")]
+    inv["min_bench_seeds"] = min(bench_seeds, default=0)
     inv["min_seeds"] = min((len(v) for v in inv["seeds"].values()), default=0)
     inv["max_seeds"] = max((len(v) for v in inv["seeds"].values()), default=0)
     inv["single_seed_files"] = sorted(k for k, v in inv["seeds"].items() if len(v) < 2)
@@ -133,8 +139,8 @@ CLAIMS = [
     ("C1", "The 2-D benchmark matrix is uniform: the same architecture list is measured "
            "on every phenomenon.",
      lambda i: (len(i["archs_2d"]) > 0 and i["n_pdes_2d"] > 0) or None),
-    ("C2", "Headline comparisons use at least 5 independent seeds.",
-     lambda i: i["min_seeds"] >= 5 if i["seeds"] else None),
+    ("C2", "Every benchmark table uses at least 5 independent seeds.",
+     lambda i: i["min_bench_seeds"] >= 5 if i["seeds"] else None),
     ("C3", "Headline numbers were produced on a GPU backend.",
      lambda i: ("gpu" in i["backends"]) if i["backends"] else None),
     ("C4", "Every architecture comparison includes a do-nothing identity floor.",

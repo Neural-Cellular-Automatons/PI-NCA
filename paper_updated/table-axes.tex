@@ -1,0 +1,21 @@
+\begin{table}[t]
+\centering
+\caption{Comparison axes for the architecture families. Perception extent is the reach of
+a single update, which is not the full receptive field once a divergence is applied.
+Parameter counts are for the heat configuration, one channel, at the benchmark grid. The
+physics-free controls are present so that a conservation result cannot be confounded with
+never having tried an ordinary convolutional network.}
+\label{tab:axes}
+\resizebox{\linewidth}{!}{\begin{tabular}{lccccc}
+\toprule
+Axis & plain NCA & PI-NCA & multi-scale & ResNet / U-Net & FNO \\
+\midrule
+Perception extent  & local, 1 cell & local, 1 cell & local, 4 cells & local / pooled & \textbf{global} \\
+Conservation       & none & \textbf{structural} & \textbf{structural} & none & none \\
+Bounding available & no & no & \textbf{yes} & no & no \\
+Params (heat)      & 6{,}784 & \textbf{4{,}576} & 5{,}520 & 74k / 265k & $5.9\!\times\!10^{5}$ \\
+Shared update rule & \textbf{yes} & \textbf{yes} & \textbf{yes} & no & no \\
+Native BC          & periodic & periodic & periodic & periodic (circ.) & periodic (FFT) \\
+\bottomrule
+\end{tabular}}
+\end{table}

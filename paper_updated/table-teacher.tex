@@ -1,0 +1,32 @@
+\begin{table}[t]
+\centering
+\caption{What the distillation target itself gets wrong, at the benchmark's own grid
+($48^2$) and horizon. For the linear constant-coefficient members the periodic problem
+is diagonal in Fourier space, so the continuum solution is available in closed form and
+the error splits into the stencil's \emph{spatial} truncation and forward Euler's
+\emph{temporal} error; for the rest the timestep is refined and the Cauchy differences
+bound the teacher's own error, with the observed order of accuracy reported. Every
+teacher converges. The last column is the reference solver's wall-clock per step
+against the fastest emulator's.}
+\label{tab:teacher}
+\small
+\resizebox{\linewidth}{!}{\begin{tabular}{llccccrr}
+\toprule
+Phenomenon & Estimate & Teacher $\relerr$ & Spatial & Temporal & Order & Solver (ms) & Emulator (ms) \\
+\midrule
+Heat             & closed form   & 0.00114 & 0.00181 & 0.00070 & --- & 1.64 & 3.86 \\
+Wave             & closed form   & 0.00061 & 0.00048 & 0.00082 & --- & 3.79 & 4.23 \\
+Advection--diff. & closed form   & 0.00472 & 0.00480 & 0.00103 & --- & 3.27 & 4.61 \\
+Allen--Cahn      & $\Delta t$ refinement & 0.00017 & --- & --- & 0.97 & 3.63 & 6.44 \\
+Gray--Scott      & $\Delta t$ refinement & 0.00497 & --- & --- & 1.03 & 1.70 & 1.26 \\
+Shallow water    & $\Delta t$ refinement & $9.7\!\times\!10^{-7}$ & --- & --- & n/a$^{\dagger}$ & 4.92 & 4.72 \\
+Cahn--Hilliard   & $\Delta t$ refinement & 0.0441 & --- & --- & 0.94 & 3.08 & 6.28 \\
+FitzHugh--Nagumo & $\Delta t$ refinement & 0.00601 & --- & --- & 1.00 & 4.06 & 6.78 \\
+Nagumo           & $\Delta t$ refinement & 0.00282 & --- & --- & 1.00 & 3.81 & 6.36 \\
+Navier--Stokes   & $\Delta t$ refinement & 0.0251 & --- & --- & 1.54 & 1.15 & 1.28 \\
+\bottomrule
+\end{tabular}}
+\\[2pt]
+{\footnotesize $^{\dagger}$Shallow water's Cauchy differences reach machine precision,
+so the order estimate is undefined; the teacher is fine, the estimator is not.}
+\end{table}

@@ -1,0 +1,22 @@
+\begin{table}[t]
+\centering
+\caption{Matched comparison against a PINN, and against the solver. The task is fixed
+rather than the model: given $K=32$ held-out initial conditions from the same
+distribution, produce the solution of the heat equation at $T=48$ solver steps on a
+$32^2$ grid, scored by the same metric against the same reference. The emulator trains
+once and rolls out 32 times; the PINN trains once \emph{per initial condition}. The
+paired test is on the same initial conditions ($p=4.7\times10^{-10}$, emulator better on
+$100\%$ of them). Note the last row: at this grid the reference solver is both exact by
+construction and cheaper per initial condition than either surrogate.}
+\label{tab:matched}
+\small
+\begin{tabular}{lccrrrr}
+\toprule
+Method & $\relerr$ & 95\% CI & Params & Fixed (s) & Per IC (s) & Total (s) \\
+\midrule
+Emulator (\model{multiscale\_flux\_nca}) & 0.0153 & [0.0144, 0.0165] & 5{,}520 & 27.2 & 0.055 & 28.9 \\
+PINN, one run per initial condition      & 0.1235 & [0.118, 0.129]   & 14{,}209 & 0 & 389.8 & 12{,}474.3 \\
+Numerical solver (reference)             & 0 & --- & --- & 0 & 0.019 & 0.604 \\
+\bottomrule
+\end{tabular}
+\end{table}

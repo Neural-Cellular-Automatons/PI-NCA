@@ -1,0 +1,23 @@
+\begin{table}[t]
+\centering
+\caption{Three-dimensional results ($24^3$, 600 epochs, \textbf{single seed}, seven
+architectures). The 3-D suite carries neither the physics-free CNN controls nor the
+identity floor that the 2-D matrix uses, so these rows support a weaker statement than
+Table~\ref{tab:regime2d}: they show that structural trends recur across dimensionality,
+and nothing stronger. Two dimensionalities at one resolution and one seed are not
+independent samples of the same population, so no ranking here transfers.}
+\label{tab:regime3d}
+\small
+\begin{tabularx}{\linewidth}{@{}lllcX@{}}
+\toprule
+Phenomenon & Best in 3-D & Best in 2-D & 3-D $\relerr$ & Agreement \\
+\midrule
+Heat             & \model{fno}       & \model{fno}         & 0.00405 & same family \\
+Advection--diff. & \model{fno}       & \model{fno}         & 0.00161 & same family \\
+Allen--Cahn      & \model{fno}       & \model{spectral\_flux\_nca} & 0.00898 & both spectral \\
+Nagumo           & \model{plain\_nca}& \model{unet}        & 0.0273  & differs; both unconstrained \\
+Gray--Scott      & \model{plain\_nca}& \model{unet}        & 0.602   & differs; both unconstrained \\
+FitzHugh--Nagumo & \model{fno}       & \model{plain\_nca}  & 0.152   & \textbf{differs} \\
+\bottomrule
+\end{tabularx}
+\end{table}

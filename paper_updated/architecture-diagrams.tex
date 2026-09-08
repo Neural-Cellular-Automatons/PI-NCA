@@ -1,0 +1,135 @@
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=6mm and 6mm]
+  \node[box] (x) {state $s_t$\\$(B,H,W,C)$};
+  \node[box, right=of x] (p) {perceive\\$3{\times}3$ circ.};
+  \node[box, right=of p] (m) {$1{\times}1$ MLP\\ReLU};
+  \node[box, right=of m] (f) {flux head\\$2$ ch, zero-init};
+  \node[box, right=of f] (d) {discrete\\divergence};
+  \node[op, right=6mm of d] (add) {$+$};
+  \node[box, right=of add] (o) {$s_{t+1}$\\mass-conserving};
+  \draw[flow] (x) -- (p);
+  \draw[flow] (p) -- (m);
+  \draw[flow] (m) -- (f);
+  \draw[flow] (f) -- (d);
+  \draw[flow] (d) -- (add);
+  \draw[flow] (add) -- (o);
+  \draw[flow] (x.south) to[out=-40,in=-140] (add.south);
+\end{tikzpicture}}
+\caption{\texttt{DeepFluxNCA} (conservative flux-divergence PI-NCA). The head predicts a
+two-channel flux; its discrete divergence telescopes to zero on a periodic grid, so the
+residual update conserves mass by construction.}
+\label{fig:deepflux}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=5mm and 6mm]
+  \node[box] (x) {state $s_t$};
+  \node[box, right=8mm of x] (p2) {perceive $d{=}2$};
+  \node[box, above=of p2] (p1) {perceive $d{=}1$};
+  \node[box, below=of p2] (p4) {perceive $d{=}4$};
+  \node[box, right=of p2] (c) {concat};
+  \node[box, right=of c] (m) {MLP\\ReLU};
+  \node[box, right=of m] (f) {flux head};
+  \node[box, right=of f] (d) {divergence};
+  \node[op, right=6mm of d] (add) {$+$};
+  \node[box, right=of add] (cp) {clip\,+\,mass\\re-project\\(optional)};
+  \node[box, right=of cp] (o) {$s_{t+1}$};
+  \draw[flow] (x) |- (p1);
+  \draw[flow] (x) -- (p2);
+  \draw[flow] (x) |- (p4);
+  \draw[flow] (p1) -| (c);
+  \draw[flow] (p2) -- (c);
+  \draw[flow] (p4) -| (c);
+  \draw[flow] (c) -- (m);
+  \draw[flow] (m) -- (f);
+  \draw[flow] (f) -- (d);
+  \draw[flow] (d) -- (add);
+  \draw[flow] (add) -- (cp);
+  \draw[flow] (cp) -- (o);
+  \draw[flow] (x.south) to[out=-50,in=-130] (add.south);
+\end{tikzpicture}}
+\caption{\texttt{MultiScaleFluxNCA}. Three parallel dilated perception convolutions
+($d=1,2,4$) are concatenated, passed through an MLP and conservative flux head, and
+added to the state; an optional clipping and mass restoration are enabled when bounds are configured.}
+\label{fig:multiscale}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=6mm and 6mm]
+  \node[box] (x) {state $s_t$\\$\in[-1,1]$};
+  \node[box, right=of x] (p) {perceive\\ReLU};
+  \node[box, right=of p] (m) {MLP};
+  \node[box, right=of m] (f) {flux head};
+  \node[box, right=of f] (d) {divergence\\(+state)};
+  \node[box, right=of d] (cl) {clip\\$[-1,1]$};
+  \node[box, below=8mm of cl] (ce) {conserve\_energy\\restore mass};
+  \node[box, left=of ce] (o) {$s_{t+1}$\\clipped +\\mass-restored};
+  \draw[flow] (x) -- (p);
+  \draw[flow] (p) -- (m);
+  \draw[flow] (m) -- (f);
+  \draw[flow] (f) -- (d);
+  \draw[flow] (d) -- (cl);
+  \draw[flow] (cl) -- (ce);
+  \draw[flow] (ce) -- (o);
+  \draw[flow] (x.south) -- ++(0,-24mm) -| (ce.south);
+\end{tikzpicture}}
+\caption{\texttt{BoundedConsFluxNCA}. The conservative flux update is followed by a clip
+to the configured range $[-1,1]$, followed by the reported mass-restoring correction.
+The diagram describes the implementation sequence; a correction must itself respect
+the bounds to guarantee both properties simultaneously.}
+\label{fig:bounded}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=5mm and 6mm]
+  \node[box] (x) {state $s_t$};
+  \node[box, above right=3mm and 8mm of x] (lp) {perceive\,$\to$\,MLP\\$\to$\,flux head};
+  \node[box, right=of lp] (ld) {divergence\\(conserves mass)};
+  \node[box, below right=3mm and 8mm of x] (gl) {lift $1{\times}1$};
+  \node[box, right=of gl] (sc) {[SpectralConv2d\\$+\,1{\times}1$]$\times$depth};
+  \node[box, right=of sc] (pr) {proj};
+  \node[op, right=8mm of ld] (sum) {$+$};
+  \node[box, right=of sum] (ce) {conserve\\energy};
+  \node[box, right=of ce] (o) {$s_{t+1}$};
+  \draw[flow] (x) |- (lp);
+  \draw[flow] (lp) -- (ld);
+  \draw[flow] (x) |- (gl);
+  \draw[flow] (gl) -- (sc);
+  \draw[flow] (sc) -- (pr);
+  \draw[flow] (ld) -- (sum);
+  \draw[flow] (pr) -| (sum);
+  \draw[flow] (sum) -- (ce);
+  \draw[flow] (ce) -- (o);
+\end{tikzpicture}}
+\caption{\texttt{SpectralFluxNCA}. A local conservative stream (perceive $\to$ MLP
+$\to$ flux head $\to$ divergence) and a global FNO-style spectral stream (lift $\to$
+stacked \texttt{SpectralConv2d} blocks $\to$ projection) are summed and passed through
+a mass-restoring \texttt{conserve\_energy} step.}
+\label{fig:spectral}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=6mm and 6mm]
+  \node[box] (x) {state $s_t$\\$(B,H,W,C)$};
+  \node[box, right=of x] (p) {perceive\\$\to$\,MLP};
+  \node[box, right=of p] (f) {flux head\\$2C$ channels};
+  \node[box, right=of f] (d) {per-channel\\divergence};
+  \node[op, right=6mm of d] (add) {$+$};
+  \node[box, right=of add] (o) {$s_{t+1}$\\each field's\\mass conserved};
+  \draw[flow] (x) -- (p);
+  \draw[flow] (p) -- (f);
+  \draw[flow] (f) -- (d);
+  \draw[flow] (d) -- (add);
+  \draw[flow] (add) -- (o);
+  \draw[flow] (x.south) to[out=-40,in=-140] (add.south);
+\end{tikzpicture}}
+\caption{\texttt{MultiChannelFluxNCA}. The flux head emits $2C$ channels---a flux
+$(f_x,f_y)$ per field---and a per-channel divergence conserves each field's mass
+independently.}
+\label{fig:multichannel}
+\end{figure}

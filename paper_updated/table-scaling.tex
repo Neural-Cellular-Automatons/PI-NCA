@@ -1,0 +1,28 @@
+\begin{table}[t]
+\centering
+\caption{Rank stability. Each axis is swept with everything else fixed at the headline
+operating point (grid $48^2$, rollout 12, 1{,}200 epochs, 48 evaluation steps), and we
+report Kendall's $\tau$ between the ordering of six architectures at the smallest and
+largest setting. $\tau=1$ means the ranking is unchanged. Four of the nine sweeps change
+the ordering, and two change the winner, so every ranking in this paper is reported with
+the scale at which it was measured rather than as a property of the architectures.}
+\label{tab:scaling}
+\small
+\begin{tabularx}{\linewidth}{@{}llcXl@{}}
+\toprule
+Phenomenon & Axis & $\tau$ & Winner at each end & Verdict \\
+\midrule
+Heat & grid $24\!\to\!48$      & 0.73 & \model{multiscale\_flux\_nca} $\to$ \model{fno} & \textbf{changes} \\
+     & rollout $4\!\to\!12$    & 0.87 & unchanged & stable \\
+     & epochs $300\!\to\!1200$ & 0.87 & unchanged & stable \\
+\midrule
+Cahn--Hilliard & grid $24\!\to\!48$      & 0.73 & \model{multiscale\_flux\_nca} $\to$ \model{pi\_nca} & \textbf{changes} \\
+               & rollout $4\!\to\!12$    & 0.73 & unchanged & \textbf{changes} \\
+               & epochs $300\!\to\!1200$ & 0.60 & \model{multiscale\_flux\_nca} $\to$ \model{pi\_nca} & \textbf{changes} \\
+\midrule
+Navier--Stokes & grid $24\!\to\!48$      & 0.87 & unchanged & stable \\
+               & rollout $4\!\to\!12$    & 0.07 & unchanged & \textbf{changes} \\
+               & epochs $300\!\to\!1200$ & 0.60 & unchanged & \textbf{changes} \\
+\bottomrule
+\end{tabularx}
+\end{table}

@@ -1,0 +1,25 @@
+\begin{table}[t]
+\centering
+\caption{Diagnostic panel on heat (grid $48^2$, ten seeds), for representatives of each
+family. High-frequency error fraction is the share of squared residual energy in the
+upper half of the spatial spectrum: it describes \emph{where} the residual sits, not how
+large it is, and it is not ordered by quality. Mass drift is an invariant error only for
+a quantity the target actually conserves. Error growth is the ratio of relative error at
+the final step to that at one quarter of the horizon.}
+\label{tab:heat20}
+\small
+\resizebox{\linewidth}{!}{\begin{tabular}{lcccccc}
+\toprule
+Architecture & $\relerr$ & PSNR (dB) & HF frac.\ & Mass drift & Err.\ growth & Train (s) \\
+\midrule
+\model{fno}                     & 0.001447 & 71.7 & 0.036 & 2.04 & 2.11 & 107.6 \\
+\model{spectral\_flux\_nca}     & 0.003405 & 65.3 & 0.162 & $8.2\!\times\!10^{-4}$ & 3.10 & 53.4 \\
+\model{multiscale\_flux\_nca}   & 0.003699 & 63.9 & 0.235 & $4.5\!\times\!10^{-4}$ & 2.98 & 64.1 \\
+\model{unet}                    & 0.004081 & 62.4 & 0.146 & 2.74 & 3.07 & 57.6 \\
+\model{resnet\_iso}             & 0.005559 & 60.1 & 0.063 & 7.83 & 2.74 & 20.7 \\
+\model{pi\_nca}                 & 0.006057 & 60.4 & 0.553 & $8.2\!\times\!10^{-5}$ & 5.52 & 12.9 \\
+\model{plain\_nca}              & 0.05614  & 46.1 & 0.331 & 65.3 & 22.87 & 15.3 \\
+\model{identity} (floor)        & 0.1889   & 29.3 & 0.000 & 0    & 3.70 & --- \\
+\bottomrule
+\end{tabular}}
+\end{table}

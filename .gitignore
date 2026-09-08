@@ -13,3 +13,4 @@ results/**/*.png
 # unattended-run log; regenerated on every run and appended to across resumes
 run_paper.log
 run_gpu.log
+results/_not_from_this_run/

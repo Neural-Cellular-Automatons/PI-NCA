@@ -1,0 +1,399 @@
+\section{PDE Definitions and Teacher Scope}
+\label{sec:equations}
+The experiments concern the numerical one-step map for each PDE. The governing
+forms below define the structural distinctions used in the main text; they do not
+replace the full teacher configuration. Domain sizes, coefficients, solver
+substeps, initial-condition distributions, and numerical precision must be taken
+from the corresponding experiment configuration to reproduce a particular score.
+
+\paragraph{Heat.}
+\begin{equation}
+ \partial_t u=\alpha\nabla^2u.
+\end{equation}
+With periodic boundaries and constant diffusivity, spatial integration removes the
+Laplacian and conserves total heat. This is the smooth local-diffusion test.
+
+\paragraph{Advection--diffusion.}
+\begin{equation}
+ \partial_t u=-\mathbf{c}\cdot\nabla u+\alpha\nabla^2u.
+\end{equation}
+Constant-velocity periodic transport conserves the integral as well as moving the
+field. Its FNO result should not be interpreted as evidence that conservation is
+absent; it shows that a correct invariant alone need not determine the best model.
+
+\paragraph{Allen--Cahn.}
+\begin{equation}
+ \partial_t u=\varepsilon^2\nabla^2u-W'(u),\qquad W'(u)=u^3-u.
+\end{equation}
+The reaction term generally changes the spatial integral. Evolving interfaces
+provide a setting in which both non-conservation and spatial detail matter.
+
+\paragraph{Wave.}
+\begin{equation}
+ \partial_{tt}u=c^2\nabla^2u.
+\end{equation}
+The emulator represents this as a first-order system in $(u,\partial_tu)$.
+Propagation and coupling between fields distinguish it from scalar diffusion.
+
+\paragraph{Shallow-water.}
+The source-free periodic shallow-water system is represented in conserved variables
+$(h,hu,hv)$. Per-field conservation concerns height and momentum, not arbitrary
+primitive velocity channels. This variable choice is part of the architectural prior.
+
+\paragraph{Nagumo and FitzHugh--Nagumo.}
+The scalar bistable Nagumo equation is
+\begin{equation}
+ \partial_tu=D\nabla^2u+u(1-u)(u-a).
+\end{equation}
+FHN is the two-field activator--inhibitor reaction system in the implementation.
+Its reaction coefficients and precise variant are not specified by the supplied
+summary. For both problems, reaction terms generally preclude conserving each
+field's total independently.
+
+\paragraph{Cahn--Hilliard.}
+\begin{equation}
+ \partial_tu=\nabla^2\bigl(-\varepsilon^2\nabla^2u+W'(u)\bigr),
+ \qquad W'(u)=u^3-u.
+\end{equation}
+This fourth-order equation conserves mass on a periodic domain. The reported
+teacher clips to $[-1,1]$, and the emulator bounding ablation follows that
+convention. We do not identify this clipped map with the unconstrained continuum
+equation. The learned correction also does not establish a discrete free-energy
+law. These distinctions are important when interpreting the stability improvement.
+
+\paragraph{Gray--Scott.}
+\begin{align}
+ \partial_tu&=D_u\nabla^2u-uv^2+F(1-u),\\
+ \partial_tv&=D_v\nabla^2v+uv^2-(F+k)v.
+\end{align}
+The feed and removal terms change field totals. The reference parameters with
+$dt=2.0$ were reported to diverge; the benchmark uses $dt=1.0$. The reported
+errors remain large, so this is a difficult case rather than an unqualified success
+for either family.
+
+\paragraph{Navier--Stokes.}
+The reported vorticity formulation uses the Poisson relation
+$\nabla^2\psi=-\omega$ to reconstruct the flow. This is the relevant source of
+global coupling. Viscosity, forcing, the treatment of the zero Fourier mode, and
+the full time-discretization settings must be specified by the experiment code;
+no additional values are inferred here.
+
+\paragraph{Three-dimensional suite.}
+Heat, advection--diffusion, Allen--Cahn, Nagumo, Gray--Scott, and FHN are implemented
+in NDHWC layout and evaluated on $24^3$ grids in this run. The implementation uses a
+7-point Laplacian, flux divergence along all three axes, and spectral convolution
+through \model{rfftn}; the explicit stability bound tightens to
+$\Delta t\le\Delta x^2/(6D)$ in three dimensions, which is why Gray--Scott uses
+$\Delta t=0.5$ here against $1.0$ in 2-D. The 3-D correctness subset contains 11 checks.
+It does not include 3-D versions of the wave, shallow-water, Navier--Stokes, or
+Cahn--Hilliard problems.
+
+\section{Architecture Details and Schematics}
+\label{sec:architecture-details}
+The code names in the tables map to the following models:
+\model{plain\_nca} is the residual NCA;
+\model{pi\_nca} is \model{DeepFluxNCA};
+\model{multiscale\_flux\_nca} uses dilations 1/2/4;
+\model{bounded\_cons\_nca} is \model{BoundedConsFluxNCA};
+\model{spectral\_flux\_nca} is the local-plus-global hybrid; and
+\model{mc\_flux\_nca} is \model{MultiChannelFluxNCA}.
+Abbreviated labels such as ``multiscale,'' ``spectral,'' and ``mc\_flux'' refer to
+these same implementations within their respective tables.
+
+For a fixed architecture width and stencil, local convolutional update cost scales
+linearly with the number of cells. Exact FLOP counts also depend on channel widths,
+MLP depth, and stencil support; parameter count alone is not a runtime model.
+The update heads are reported to be zero-initialized to start residual emulator
+maps at the identity. This initialization statement is not intended to describe
+the native prediction functions of the continuous PINN or DeepONet.
+
+The multi-scale update can be written as
+\begin{equation}
+ s_{t+1}=\mathcal{C}\!\left[s_t+D_hF_\theta
+ \bigl([P_1(s_t)\Vert P_2(s_t)\Vert P_4(s_t)]\bigr)\right],
+\end{equation}
+where $\mathcal{C}$ is the identity when \model{bounds=None} and the reported
+clipping/restoration operation when bounds are enabled. In the source discussion,
+\model{bounds=(-1,1)} is reported to match the CH winner with approximately
+$6\times$ lower variance; the supporting variance panel is not supplied, so this
+remains a contextual observation rather than a headline result.
+
+\paragraph{FNO.}
+A spectral layer combines a pointwise transformation with learned Fourier weights:
+\begin{equation}
+ v_{\ell+1}=\sigma\!\left(Wv_\ell+
+ \mathcal{F}^{-1}\bigl(R_\ell\odot\mathcal{F}[v_\ell]\bigr)\right).
+\end{equation}
+The implementation truncates spectral mixing to the lowest $m\times m$ modes in
+2-D. Global mixing, mode truncation, and pointwise nonlinearities jointly determine
+its behavior. The present experiments neither imply that FNO always removes sharp
+features nor guarantee invariant accuracy across grids.
+
+\paragraph{PINN.}
+The continuous single-IVP baseline minimizes
+\begin{equation}
+\begin{split}
+ \mathcal{L}_{\mathrm{PINN}}={}&\lambda_r\|\partial_tu_\phi-\mathcal{N}[u_\phi]\|^2
+ +\lambda_b\|\mathcal{B}[u_\phi]\|^2\\
+ &+\lambda_0\|u_\phi(\cdot,0)-u_0\|^2.
+\end{split}
+\end{equation}
+It uses the equation, boundary conditions, and initial condition without labeled
+interior solver pairs. Its continuous coordinate representation permits off-grid
+queries, but the experiment trains anew for each IVP.
+
+\paragraph{DeepONet.}
+The branch network encodes the input function at sensors and the trunk encodes the
+query coordinate, giving
+$G(a)(y)\approx\sum_k b_k(a)t_k(y)$. It is trained on solver-generated function
+pairs across initial conditions. Its supervised operator task differs from both the
+single-IVP PINN and the fixed-step autoregressive emulator.
+
+\input{table-axes}
+
+The schematics below retain the original architecture decompositions. Arrows
+describe computation, not guarantees of numerical stability. In particular,
+``restore mass'' denotes the reported correction routine; simultaneous bound and
+mass preservation requires checking that routine, not merely composing two labels.
+\input{architecture-diagrams}
+\clearpage
+
+\section{Training, Initialization, and Measurement}
+\label{sec:metrics}
+\label{sec:setup}
+Each training trajectory starts with a randomly drawn initial condition and a teacher
+pre-seeding rollout of ten steps, except on Cahn--Hilliard where pre-seeding is disabled.
+The teacher and emulator then evolve from the resulting common state over $K=12$ steps.
+The optimizer receives the gradient of trajectory MSE through a \model{lax.scan} rollout,
+with all epochs inside a single jitted scan and donated buffers. Evaluation uses a
+distinct PRNG stream for held-out initial conditions and a four-times longer horizon.
+
+\paragraph{One protocol, recorded per file.}
+Unlike earlier reduced-scale studies of this benchmark, every 2-D number in this paper
+comes from one protocol: grid $48^2$, batch 32, 12 training steps, 48 evaluation steps,
+1{,}200 epochs, He/Kaiming-normal initialization before ReLU, zero-initialized update
+heads, 30 warmup epochs, and ten pre-seeding steps. The full matrix uses five seeds
+$\{0,\dots,4\}$ and the three regime representatives use ten $\{0,\dots,9\}$. Each
+results file records the JAX version, backend, device list, and the complete
+configuration dataclass, so a table cannot be assembled from runs that differ in any of
+these without the difference being visible.
+
+Cahn--Hilliard's \model{preseed\_steps=0} is the one exception, and it is a documented
+one: CH solutions coarsen rapidly from fresh initial conditions, so developed states
+mismatch the evaluation distribution. Models within the CH comparison share the setting,
+so the comparison remains internally controlled.
+
+\paragraph{Teacher timestep corrections.}
+Two reference solvers required stability corrections that are recorded rather than
+silently applied. Gray--Scott ships at $\Delta t=2.0$, above the explicit-diffusion bound
+$\Delta x^2/(4D_u)=1.25$; experiments use $\Delta t=1.0$. Cahn--Hilliard is fourth order,
+so its explicit bound is $\Delta t\le 2/(|\lambda_{\mathrm{lap}}|+\varepsilon^2
+\lambda_{\mathrm{lap}}^2)=0.231$, and the original configuration used $\Delta t=0.5$. It
+avoided visible blow-up only because the stepper clips the state each step; removing the
+clip at that timestep reaches NaN, and timestep refinement gives an observed order of
+accuracy of zero. Experiments therefore use $\Delta t=0.02$, where the scheme converges
+at the expected first order (Table~\ref{tab:teacher}). The verbatim parameters are kept
+in the registry so the migration gate still compares against the original. This is why
+the teacher-convergence verdict in Table~\ref{tab:teacher} is reported per equation
+rather than assumed.
+
+\paragraph{Reported metric inventory.}
+Relative $L^2$ error, MSE, RMSE, MAE, $L^\infty$, PSNR, an SSIM-style structural score,
+high-frequency error fraction, relative error at $T/4,T/2,3T/4,T$, error-growth ratio,
+per-channel mass drift and its drift curve, periodic-boundary residual, gradient energy,
+parameter count, training wall time, inference time per step, and throughput. The primary
+metric is per-initial-condition relative $L^2$, because pairing requires one value per
+initial condition; the batch-reduced ratio of norms is also recorded and is a different
+estimator of the same quantity, so the two do not print equal numbers.
+
+Mass drift is $|\mass(\mathrm{prediction})-\mass(\mathrm{initial\ condition})|$, computed
+\emph{per channel}: a lumped total would score a model that adds mass to one field and
+removes it from another as perfectly conserving. For non-conservative targets a low drift
+score indicates a wrong constraint rather than fidelity. Gradient energy is a diagnostic
+proxy, not a proof of nonlinear stability, and a normalized high-frequency error fraction
+need not decrease when total error decreases.
+
+\input{table-heat20}
+
+\section{Additional Results and Resource Accounting}
+\label{sec:additional-results}
+
+\paragraph{Heat.}
+Table~\ref{tab:heatms} gives the complete ten-seed ranking. Three observations that the
+main text compresses. First, the plain NCA is an order of magnitude behind every other
+learned model ($0.0561$ against $0.0074$ for the next worst) and its error-growth ratio
+is $22.9\times$ against $2$--$3\times$ for everything else; the deficit is rollout
+instability, not one-step accuracy. Second, the four architectures between $0.0034$ and
+$0.0041$---spectral hybrid, multi-scale conservative, multi-channel conservative, and
+U-Net---span parameter counts from $5{,}520$ to $265{,}104$, so within that accuracy band
+parameter count is not predictive. Third, at $n=80$ every pairwise difference against the
+leader is Holm-significant, so none of these orderings is a tie at this sample size.
+
+\input{table-eff}
+
+\paragraph{Resource accounting.}
+Table~\ref{tab:eff} groups by parameter budget. The within-class comparison is the one
+that bears on inductive bias: at a matched small budget the conservative local models
+lead the physics-free controls ($0.003699$ for multi-scale conservative against
+$0.005559$ for the iso-parameter ResNet and $0.007381$ for the iso-parameter U-Net).
+Across classes, a $107\times$ increase in parameters buys a factor of $2.6$ in error.
+Inference latency does not track parameter count: the $592{,}897$-parameter FNO costs
+$4.17$\,ms per step against $1.79$\,ms for the $5{,}520$-parameter multi-scale model,
+but the $265{,}104$-parameter U-Net costs $1.80$\,ms, because the FFT rather than the
+weight count dominates. Accuracy, size, and latency must be read separately, and none of
+these ratios establishes solver acceleration \citep{mcgreivy2024baselines}; the only
+statement about that is Table~\ref{tab:matched}.
+
+\input{table-ablsummary}
+
+\paragraph{Ablation details.}
+All four ablations run at the headline protocol with five seeds. A4 and A5 hold the
+backbone fixed and change one component; A1 and A7 use an identical $5{,}520$-parameter
+backbone and identical measured bounds, differing only in whether the output is clipped
+and in how mass is restored afterwards. A4's parameter counts differ by $0.7\%$
+($4{,}576$ against $4{,}544$), which is the cost of a two-channel flux head versus a
+one-channel residual head and is far too small to explain a $4.6\times$ or $24\times$
+effect.
+
+A7 deserves one clarification. Its three variants are indistinguishable in accuracy
+($0.3589$, $0.3614$, $0.3583$ on CH) and differ enormously in mass drift ($18.6$,
+$1.07\times10^{-4}$, $5.40\times10^{-5}$). The correct reading is that the clip supplies
+the stability and the projection supplies the conservation; they are separate mechanisms
+that happen to be applied in sequence. The headroom projection of
+Equation~\ref{eq:headroom} improves the drift by a further factor of two over the uniform
+one and, unlike the uniform one, cannot move a clipped cell back outside the bound. We
+present it as a guarantee obtained at no accuracy cost. An earlier reduced-scale run of
+this benchmark reported the uniform projection violating the bound on a few percent of
+cells; that measurement came from the non-converging $\Delta t=0.5$ teacher described
+above and is withdrawn. The failure remains provable and is exhibited by a constructed
+state in the test suite, but its empirical magnitude at this scale is not established.
+
+\section{Evaluation Axes Not Measured at This Scale}
+\label{sec:notmeasured}
+Three axes present in the benchmark harness produced no results in this run, and we
+report them as missing rather than filling them from earlier reduced-scale runs on
+different hardware. Mixing backends within one study is precisely the error the controls
+in this paper exist to prevent.
+
+\begin{itemize}
+\item \textbf{Out-of-distribution generalization.} The harness defines held-out axes
+before training---amplitude, structure count, length scale, added broadband spectral
+content, a random torus translation as a negative control, PDE coefficient, and
+horizon---and evaluates a trained model on each. All three phenomena failed in this run
+after 8--10 minutes each. The failure is scale-specific: the same command completes on a
+smaller grid.
+\item \textbf{Long-horizon stability with the guard disabled.} The accuracy tables clamp
+rollouts to the teacher's measured physical range so that a diverging model cannot emit a
+meaningless metric. That guard is correct for accuracy and wrong for stability, so the
+stability study disables it and counts failures. All three phenomena failed in this run.
+\item \textbf{Resolution transfer.} Skipped by the runner because a previous file was
+present; the surviving file was produced on another backend and is therefore not used.
+\end{itemize}
+
+Because no stability numbers are available at this scale, the paper makes no long-horizon
+robustness claim. The one stability-adjacent quantity that \emph{is} measured is the
+error-growth ratio in Table~\ref{tab:heat20}, which is computed inside the guarded
+accuracy protocol and is a weaker statement.
+
+\section{Rank Stability Under Scale}
+\label{sec:scaling-details}
+\input{table-scaling}
+Each sweep varies one axis with the others fixed at the headline operating point, using
+six architectures spanning the unconstrained local, conservative local, global spectral,
+and physics-free families, at one seed. Kendall's $\tau$ compares only the endpoints and
+treats all rank inversions as equal, including inversions between models whose intervals
+overlap; the per-setting errors in the released results distinguish the two cases.
+
+The heat grid sweep is the one that changes a published conclusion. At $24^2$ the
+multi-scale conservative model leads; at $48^2$ the FNO does. A previous reduced-scale
+report from this benchmark concluded that the local conservative model was both more
+accurate and $107\times$ smaller on heat. The parameter claim stands; the accuracy claim
+was an artifact of the grid and is withdrawn in Section~\ref{sec:scaling}. Cahn--Hilliard
+is the least stable phenomenon, with all three axes changing the ordering, which is
+consistent with its being the stiffest system in the suite and the one where the training
+horizon interacts most strongly with the dynamics.
+
+\section{Matched Comparison Against a PINN and Against the Solver}
+\label{sec:operators}
+\input{table-matched}
+A PINN and an autoregressive emulator solve different problems, so the comparison fixes
+the task rather than the model: produce the solution at $T$ for $K=32$ initial conditions
+drawn from the same distribution, scored by the same metric against the same reference.
+The emulator trains once and rolls out 32 times; the PINN trains once per initial
+condition, at 6{,}000 iterations each. Costs are reported separately as a fixed component
+and a per-instance component, so the amortization crossover is a derived quantity rather
+than an assumption.
+
+The emulator is better on every one of the 32 initial conditions while receiving
+$431\times$ less total wall-clock, and the crossover is $K=1$. The solver row is included
+because a surrogate must clear the solver, not only the other surrogate: at $32^2$ the
+solver is roughly three times cheaper per initial condition than the emulator and exact
+by construction. At the benchmark's own $48^2$ grid the gap narrows to near parity and
+the emulator is faster on Gray--Scott and shallow water (Table~\ref{tab:teacher}). The
+regime in which a learned surrogate is worthwhile therefore begins beyond the scales
+measured here.
+
+Standalone PINN, DeepONet, and steady Darcy baselines were also executed in this run
+(284\,s, 3\,s, and 1{,}198\,s respectively) but write their results to the run log rather
+than to a results file, so their numbers are not reported in this manuscript. The PINN
+value that does appear, $0.1235$ in Table~\ref{tab:matched}, is from the matched
+comparison and is the one that is well posed against the emulator track.
+
+\section{Three-Dimensional Results}
+\label{sec:three-details}
+\input{table-regime3d}
+The 3-D suite uses $24^3$ grids, 600 epochs, eight-step training and 24-step evaluation
+horizons, a single seed, and seven architectures. It omits the physics-free ResNet and
+U-Net controls and the identity floor, both of which the 2-D matrix uses, so it cannot
+support the same kind of statement: with no floor, ``better than nothing'' is not
+checkable, and with no physics-free control a conservative model leading a field of
+conservative models would be uninformative.
+
+Read with those caveats, the 2-D and 3-D winners agree in family on five of six
+phenomena. The FNO leads heat, advection--diffusion, Allen--Cahn, and FitzHugh--Nagumo;
+the unconstrained plain NCA leads Nagumo and Gray--Scott. FitzHugh--Nagumo is the one
+disagreement, where the 2-D winner is the plain NCA and the 3-D winner is the FNO.
+Conservative models remain clustered well behind on the reaction systems---on Nagumo all
+five conservative variants sit at $0.197$ against the plain NCA's $0.0273$---which is the
+same sign as the 2-D A4 ablation. Neither 3-D Navier--Stokes nor 3-D Cahn--Hilliard is
+tested.
+
+\section{Reproduction Record}
+\label{sec:repro}
+Every result in this paper was produced by one command on one machine. The run executed
+52 stages over 22.2 hours on a single NVIDIA RTX 4090 with JAX 0.11.1, of which six
+failed (Appendix~\ref{sec:notmeasured}) and one was skipped; the per-stage timings, exit
+codes, and failures are recorded in the run manifest that accompanies the artifact.
+
+The run begins with a correctness gate of 205 tests that must pass before any benchmark
+executes. The gate asserts that the JAX ports equal verbatim PyTorch references to
+tolerance, and it includes regression tests for two defects found during the migration:
+a periodic Laplacian that differenced the wrong axes for the array layout the training
+path actually uses, and the Cahn--Hilliard timestep instability described in
+Appendix~\ref{sec:setup}. It also asserts properties the statistical claims rest on---that
+the bootstrap interval covers at its nominal rate, that Holm correction is strictly more
+conservative than uncorrected testing, that the closed-form solver references are correct,
+and that the headroom projection is simultaneously mass-exact, bound-preserving, and
+differentiable.
+
+Two generated documents accompany the artifact and are not written by hand. A claims
+audit derives the inventory of what was measured from the results files and evaluates
+fifteen pre-registered claims against it, reporting each as supported, unsupported, or
+not yet measured; for this run eleven are supported, one---rank stability---is
+unsupported, and three are not yet measured. A bibliography check resolves every cited
+arXiv identifier against the arXiv API. Both are regenerated at the end of every run, so
+they describe the run that actually happened rather than an intended one.
+
+\paragraph{A negative engineering result.} The CAX library for hardware-accelerated
+cellular automata \citep{cax} was evaluated as a drop-in accelerator for the rollout and
+measured to give no speedup on either CPU or GPU: both it and the \model{lax.scan} core
+compile to the same XLA scan. It was never on the hot path and is not a dependency of the
+released stack. We record this because a negative integration result is otherwise
+invisible.
+
+\paragraph{Remaining author checks.} The following should be completed before submission
+and are not established by this manuscript: rerunning the three failed evaluation axes at
+this scale; confirming the interpretation of mass drift on each reaction field;
+supplying the standalone continuous-baseline numbers from the run log or rerunning them
+with file output; and a personal review of the scientific interpretations and the
+bibliography.

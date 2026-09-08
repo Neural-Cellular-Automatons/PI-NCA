@@ -1,0 +1,641 @@
+\documentclass{article}
+\usepackage{iclr2027_conference,times}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx,booktabs,array,tabularx,multirow}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{hyperref}
+\usepackage{url}
+
+\iclrfinalcopy
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue,
+  pdfauthor={Tharun N Nanju; Tejaskumar Reddy J; Varun P Ranjit; Alike Sharmistha; Likitha P}}
+\tikzset{
+  box/.style={draw,rounded corners=2pt,align=center,font=\scriptsize,
+              inner sep=3pt,minimum height=8mm,fill=blue!4},
+  op/.style={draw,circle,inner sep=1pt,font=\scriptsize,fill=gray!8},
+  flow/.style={-{Stealth[length=2mm]},thick}
+}
+\newcommand{\relerr}{\mathrm{rel}\mbox{-}L^2}
+\newcommand{\mass}{\mathrm{mass}}
+\newcommand{\model}[1]{\texttt{#1}}
+
+\title{When Does Locality Pay Off?\\
+Structure-Aligned PDE Emulation\\with Neural Cellular Automata}
+\author{\textbf{Tharun N Nanju, Tejaskumar Reddy J, Varun P Ranjit,}\\
+\textbf{Alike Sharmistha \& Likitha P}\\
+\normalfont PES University, Bangalore, India\\
+\normalfont\small\texttt{tharunnnanju@gmail.com},
+\texttt{tejaskumar.jaikrishnan@gmail.com}\\
+\normalfont\small\texttt{varunranjit2005@gmail.com},
+\texttt{sharmistha.anr@gmail.com}\\
+\normalfont\small\texttt{likithap@pes.edu}}
+\date{}
+
+\begin{document}
+\maketitle
+\pagestyle{plain}
+
+\begin{abstract}
+Which physical priors make a small, local neural emulator competitive with a global
+neural operator? We answer this with a controlled JAX benchmark of fourteen
+architectures on ten two-dimensional and six three-dimensional PDE phenomena, run to
+completion on a single GPU: five seeds per cell for the full matrix and ten for three
+regime representatives, with every comparison reported as a paired Wilcoxon test on
+shared initial conditions under Holm--Bonferroni correction. Three controls decide how
+the numbers may be read---a do-nothing identity emulator, physics-free CNN and U-Net
+surrogates at full and parameter-matched size, and the reference solver with its own
+discretization error measured against closed-form solutions. No architecture wins
+everywhere. Global spectral mixing leads on smooth diffusion, transport, and turbulent
+flow; a bounded conservative cellular automaton leads by a wide margin on stiff
+fourth-order dynamics ($\relerr=0.357$ against $0.650$ for the Fourier neural operator
+at ten seeds); a purely conservative flux update leads on the multi-field conservation law;
+and physics-free convolutional baselines lead on three of ten phenomena, which is
+itself a result. Matched-width ablations show the effect of a conservation head
+reversing sign between heat ($4.6\times$ better) and Nagumo ($24\times$ worse), and
+output bounding cutting Cahn--Hilliard error by $30\%$ while reducing mass drift by
+five orders of magnitude. We also report where the evidence stops: on heat the leading
+model has reached the teacher's own discretization error, and four of nine scale sweeps
+change the ranking, so every ordering here is quoted with the scale at which it was
+measured.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+A neural PDE emulator must do more than predict the next field: it must keep making
+useful predictions after its own errors become part of the input. Architecture
+selection is therefore a question about the interaction between a learned update,
+the governing dynamics, and the rollout horizon. Global neural operators offer
+long-range communication, while local neural cellular automata offer compact,
+translation-equivariant update rules \citep{li2020fno,mordvintsev2020growing}.
+Neither design alone specifies which physical quantities should be conserved, which
+states should be admissible, or how errors should be controlled over time.
+
+This paper asks: \emph{when does a local, structure-preserving update provide a better
+accuracy--resource trade-off than global mixing, and when does that same prior become
+a liability?} The question connects representation learning to numerical modeling.
+A conservation constraint removes entire classes of possible updates; this can reduce
+learning burden when the constraint is correct, but exclude the target dynamics when
+it is not. A wider receptive field expands communication without ensuring stable
+integration. Likewise, conserving a scalar total does not imply reproducing the
+underlying trajectory.
+
+\paragraph{The falsifiable hypothesis.} We state it so that it can fail.
+\emph{The best-performing structural prior is determined by the equation's structure,
+not by the architecture's capacity: (i) where the dynamics are local and the quantity
+conserved, a local conservative update is competitive with a global spectral operator
+at a fraction of the parameters; (ii) where the solution is globally coupled or carries
+fine-scale structure, global mixing wins; (iii) where the dynamics are
+non-conservative, imposing conservation costs accuracy.} Each clause is falsified by a
+paired test on shared initial conditions showing the opposite ordering, or no
+resolvable difference. We report both outcomes, and clause~(i) survives only in its
+weaker, resource-relative form.
+
+\paragraph{Why the controls decide the reading.}
+An architecture comparison is only as informative as what it is measured against, and
+three baselines are absent from most such comparisons. We include all three, and each
+changes a conclusion. A \textbf{do-nothing identity emulator} $g(x)=x$ makes ``learned
+worse than nothing'' a reportable outcome; at ten seeds the plain NCA is on the wrong
+side of it on Navier--Stokes. \textbf{Physics-free ResNet and U-Net surrogates}, at full
+size and at parameter counts matched to the cellular automata, prevent a conservation
+result from being confounded with never having tried an ordinary convolutional network;
+they win three of ten phenomena outright. The \textbf{reference solver}, with its own
+error measured against closed-form solutions where they exist, bounds what any
+distillation-trained model can mean: on heat the best architecture has already reached
+it.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item \textbf{A regime map with uncertainty.} Fourteen architectures on ten 2-D and six
+3-D phenomena under one distillation harness, at five seeds per cell and ten for the
+three regime representatives, with bootstrap intervals and Holm-corrected paired tests
+on shared initial conditions (Section~\ref{sec:results}).
+\item \textbf{Mechanism-focused ablations that reverse.} The effect of a conservation
+head changes sign between a conservative and a non-conservative equation at matched
+backbone and parameter count, and output bounding on stiff dynamics buys accuracy and
+five orders of magnitude of mass drift simultaneously (Section~\ref{sec:ablation}).
+\item \textbf{An accounting of what the comparison is worth.} We measure the teacher's
+own discretization error, split into spatial and temporal parts; we report the
+amortization crossover against a per-instance PINN; and we test whether the ranking
+survives changes of grid, horizon, and training budget. It does not always
+(Sections~\ref{sec:teachererr}--\ref{sec:scaling}).
+\end{enumerate}
+
+\section{Related Work}
+\label{sec:related}
+\paragraph{Neural cellular automata.}
+NCAs learn a single homogeneous local update applied identically at every cell
+\citep{mordvintsev2020growing}. \citet{richardson2024patterns} train NCAs on PDE
+trajectories, demonstrate generalization beyond the training data, and constrain them
+to respect symmetries. \citet{saha2026timestepping} propose an NCA surrogate for PDE
+time-stepping with the same motivation used here---a small, local, homogeneous rule
+mirroring the locality of differential operators---benchmarked against PDE-Net, a PINN,
+and an FNO on five canonical equations beyond the training horizon. That NCAs are viable
+autoregressive PDE surrogates, and that they can be structurally constrained, is
+therefore established rather than claimed here. Our question is narrower: whether the conservation prior still pays once the
+update is \emph{also} required to be a single shared local rule, and on which
+equations.
+
+\paragraph{Learned local discretizations and graph solvers.}
+PDE-Net constrains filters to approximate differential operators
+\citep{long2018pdenet}, and learned data-driven discretizations replace hand-derived
+stencils with fitted ones \citep{barsinai2019discretizations}. Message-passing and
+mesh-based simulators generalize over
+geometry and resolution \citep{brandstetter2022message,pfaff2021mesh,%
+sanchez2020simulation}, at the cost of graph construction that a periodic regular grid does
+not require; under-reaching in such solvers is a known failure mode
+\citep{tesan2025underreaching}. Our domains are periodic and regular, so these methods
+are discussed rather than benchmarked.
+
+\paragraph{Conservation by construction and by correction.}
+Finite-volume bookkeeping makes conservation a property of the update rather than of
+the loss \citep{leveque2002finite}. FINN embeds that structure so each quantity follows
+its own conservation law with explicit inter-cell fluxes
+\citep{praditia2021finn,karlbauer2022composing}, and Neural Conservation Laws
+parameterize networks satisfying the continuity equation exactly
+\citep{richterpowell2022conservation}. Related work enforces constraints by projection or
+correction \citep{hansen2023probconserv,liu2024clawno}. \emph{A conservative flux-form
+neural PDE model is therefore not new}, and we do not claim it. What we contribute on
+this axis is a controlled measurement of when that prior helps once it is imposed
+inside a shared CA update, and a bound-preserving way to restore mass after clipping.
+
+\paragraph{Neural operators and residual-based learning.}
+The FNO learns a resolution-flexible global operator \citep{li2020fno,neuraloperator};
+DeepONet learns a map between function spaces from operator samples
+\citep{lu2021deeponet}; PINO adds a residual term \citep{li2021pino}, and
+physics-informed DeepONet couples operator learning with physics constraints
+\citep{wang2021pideeponet}. PINNs solve one initial-value problem per training run
+\citep{raissi2019pinn}, with known optimization failure modes, causality, and
+spectral-bias pathologies
+\citep{krishnapriyan2021failure,wang2024causality,rahaman2019spectral}. We measure a PINN
+under a matched task rather than in the same accuracy column
+(Section~\ref{sec:matched}); PINO is not measured and is named as the clearest omission.
+
+\paragraph{Long-horizon learning and frequency-resolved error.}
+Autoregressive rollout error is a distinct failure mode from one-step accuracy
+\citep{lippe2023refiner,um2020solver}. Dilated stencils widen context without
+downsampling \citep{yu2016dilated}. We report frequency-resolved residuals and error
+growth alongside aggregate error for this reason.
+
+\paragraph{Benchmarking and scope.}
+Benchmark design and reporting bias in scientific ML are themselves active concerns
+\citep{mcgreivy2024baselines,pdebench,apebench}. We follow that
+literature by including a do-nothing floor, physics-free controls, and the numerical
+solver's own cost and error in every comparison.
+
+\section{Problem and Experimental Design}
+\label{sec:problem}
+\subsection{Teacher emulation, not interchangeable learning tasks}
+Let $\mathcal{S}_{\Delta t}$ denote a numerical teacher for
+$\partial_t u=\mathcal{N}[u;\theta_{\mathrm{phys}}]$ on a periodic grid.
+An emulator $g_\theta$ approximates the discrete map
+$u_t\mapsto\mathcal{S}_{\Delta t}(u_t)$ and is evaluated recursively from held-out
+initial conditions. Unless otherwise stated, $s_t$ denotes its grid state, with
+physical fields represented as channels. The target is the \emph{teacher's discrete
+trajectory}, not a verified continuum solution. The distinction matters when the
+teacher contains a stabilizing operation such as clipping, and
+Section~\ref{sec:teachererr} quantifies how much it matters on each equation.
+
+The main suite contains ten 2-D phenomena: heat, advection--diffusion, Allen--Cahn,
+wave, shallow-water, Nagumo, FitzHugh--Nagumo (FHN), Navier--Stokes (NS),
+Cahn--Hilliard (CH), and Gray--Scott. Six are also evaluated in 3-D. Equations and
+implementation details are in Appendix~\ref{sec:equations}. A PINN fitted to individual
+initial-value problems is compared under a matched task in
+Section~\ref{sec:matched} rather than pooled into the emulator ranking.
+
+\subsection{Shared optimization and one protocol}
+\label{sec:protocol}
+Within a comparison, emulators share the teacher, initial conditions, optimizer
+(AdamW), and rollout-MSE objective. For a training horizon $K$,
+\begin{equation}
+\mathcal{L}_K(\theta)=\frac{1}{K}\sum_{\tau=1}^{K}
+\operatorname{MSE}\!\left(g_\theta^{\circ\tau}(s_0),
+\mathcal{S}_{\Delta t}^{\circ\tau}(s_0)\right).
+\label{eq:training}
+\end{equation}
+Gradients pass through the model trajectory using backpropagation through time.
+All 2-D results use one protocol: a $48^2$ grid, batch 32, 12 training steps, 48
+evaluation steps, 1{,}200 epochs, He/Kaiming-normal initialization before ReLU,
+zero-initialized update heads, learning-rate warmup, and teacher pre-evolution of
+initial conditions (``pre-seeding''), with \model{preseed\_steps=0} for CH, whose
+solutions coarsen too quickly from fresh initial conditions for developed states to
+match the evaluation distribution. The full matrix uses \textbf{five seeds} per cell and
+the three regime representatives---heat, CH, and NS---use \textbf{ten}. The 3-D suite
+uses $24^3$, 600 epochs, and a single seed, and is labeled as such wherever it appears.
+These shared settings equalize data and objective; they do not equalize parameter
+counts, FLOPs, or tuning budgets, which is why Section~\ref{sec:efficiency} groups
+results by parameter budget rather than ranking across budgets.
+
+\paragraph{Statistics.}
+Every architecture is evaluated on the \emph{same} held-out initial conditions in the
+same order, so comparisons are paired. Reported errors are per-initial-condition
+relative $L^2$, summarized with a 10{,}000-sample percentile bootstrap. Architecture
+comparisons are paired Wilcoxon signed-rank tests with Holm--Bonferroni correction
+across the thirteen comparisons made per equation. A difference is called significant
+only when the bootstrap interval on the paired differences excludes zero \emph{and}
+Wilcoxon rejects; otherwise it is reported as a tie, meaning unresolvable at this
+sample size rather than equal. At the headline sample size ($n=80$ paired evaluations)
+no difference in Table~\ref{tab:heatms} is a tie.
+
+\paragraph{Measurement.}
+The diagnostic panel also includes pointwise error, PSNR, high-frequency error fraction,
+error growth, per-channel mass drift, boundary residual, gradient energy, parameter
+count, training wall-clock, and inference latency (Appendix~\ref{sec:metrics}). Mass
+drift measures change from initial mass; it is an invariant error only for a quantity
+the target PDE actually conserves, so a low drift score on a reaction system indicates a
+wrong constraint rather than fidelity.
+
+\paragraph{Compute and provenance.}
+All results reported here were produced by one unattended 22.2-hour run on a single
+NVIDIA RTX 4090, preceded by a 205-test correctness gate that asserts the JAX ports
+equal verbatim PyTorch references to tolerance. Every results file records the JAX
+version, backend, devices, and exact configuration. Six stages of that run
+failed---three out-of-distribution studies and three stability studies---and one,
+resolution transfer, was skipped; those axes are therefore reported as \emph{not
+measured} at this scale rather than filled in from earlier reduced-scale runs
+(Section~\ref{sec:limitations}).
+
+\section{Structure-Aligned Update Rules}
+\label{sec:methods}
+\label{sec:arch}
+The model family separates three operations: neighborhood perception, learned
+update generation, and structural correction. The plain NCA uses a learned circular
+$3\times3$ perception convolution $P_\theta$, followed by a pointwise MLP:
+\begin{equation}
+ s_{t+1}=s_t+f_\theta(s_t),\qquad
+ f_\theta(s_t)=\operatorname{MLP}_\theta(\operatorname{ReLU}(P_\theta(s_t))).
+\label{eq:plain}
+\end{equation}
+The residual head is unconstrained. Local computation is inexpensive, but cannot
+encode an arbitrary global dependency in one update.
+
+\input{table-axes}
+
+\subsection{Conservation as a restriction on the hypothesis class}
+The conservative \model{DeepFluxNCA}, abbreviated PI-NCA, predicts a flux along
+each spatial axis and applies a periodic discrete divergence:
+\begin{equation}
+ s_{t+1}=s_t+D_hF_\theta(s_t),\qquad
+ D_hF=\sum_{a=1}^{d}\left(\operatorname{roll}_a(F_a)-F_a\right).
+\label{eq:flux}
+\end{equation}
+For each conserved field, periodic shifts preserve sums, so
+$\sum_{\mathrm{cells}}D_hF=0$ and the discrete total is unchanged in exact
+arithmetic, as in conservative finite-volume bookkeeping
+\citep{leveque2002finite}. This holds for \emph{any} weights, at initialization and
+after training, which is what distinguishes it from a penalty. It does not constrain
+the accuracy of the spatial redistribution or guarantee energy dissipation. Here
+``physics-informed'' refers to architectural conservation: these NCAs are trained on
+teacher data, not solely on a PINN-style residual loss.
+
+\model{MultiChannelFluxNCA} predicts a separate flux for each field ($2C$ flux
+channels in 2-D), so each field's total is conserved separately. Lumping the channels
+into a single total would let one field's deficit be paid out of another's, which is
+wrong for any multi-field system. It is appropriate for source-free periodic
+conservation laws in conserved variables, such as shallow-water mass and momentum.
+Applying the same constraint to both FHN reaction fields deliberately tests a
+mismatched prior.
+
+\subsection{Spatial reach and admissible states}
+\model{MultiScaleFluxNCA} concatenates perception features at dilations 1, 2, and 4
+before predicting conservative fluxes. These perception stencils reach $\pm4$
+cells rather than $\pm1$; the final divergence can enlarge the end-to-end dependency
+further. The hybrid remains spatially local, but broadens communication at modest
+parameter cost, following the established mechanism of expanding context without
+downsampling \citep{yu2016dilated}.
+\model{SpectralFluxNCA} instead combines a local flux stream with
+a global spectral residual and a mass-restoring correction:
+\begin{equation}
+ s_{t+1}=\mathcal{R}_{M_t}\!\left(s_t+D_hF_\theta(s_t)
+                       +g_\theta^{\mathrm{spectral}}(s_t)\right),
+ \qquad M_t=\sum_{\mathrm{cells}}s_t.
+\label{eq:spectral}
+\end{equation}
+The restoration is important: adding an unrestricted spectral residual would
+otherwise remove the conservation guarantee.
+
+For stiff bounded fields, \model{BoundedConsFluxNCA} clips the candidate state and then
+restores the recorded total:
+\begin{equation}
+ \widetilde s=\operatorname{clip}(s_t+D_hF_\theta(s_t),\ell,h),
+ \qquad s_{t+1}=\mathcal{R}_{M_t}(\widetilde s).
+\label{eq:bounded}
+\end{equation}
+The restored quantity is \emph{mass}, not the CH free energy, and the composition is
+not sound for the obvious choice of $\mathcal{R}$. A uniform offset
+$\delta=(M_t-\sum\widetilde s)/N$ moves every cell, including those the clip has just
+pinned to a bound, so the update is then neither bounded nor usefully both. We
+therefore distribute the deficit in proportion to each cell's remaining headroom,
+$r_i=h-\widetilde s_i$ when mass must be added and $\widetilde s_i-\ell$ when it must be
+removed:
+\begin{equation}
+ \mathcal{R}_{M_t}(\widetilde s)_i=\widetilde s_i
+ +\operatorname{sign}(d)\min\!\Big(\tfrac{|d|}{C},1\Big)\,r_i,
+ \qquad d=M_t-\textstyle\sum_j\widetilde s_j,\quad C=\textstyle\sum_j r_j.
+\label{eq:headroom}
+\end{equation}
+Mass is restored exactly whenever the target is feasible for the box, no cell can cross
+the bound because the total increment is capped by the total headroom by construction,
+the map is differentiable, and it is one vectorized pass. When
+$M_t\notin[N\ell,Nh]$ the field saturates and the residual mass error is reported rather
+than paid for by violating the bound. Ablation A7 measures what the naive choice costs
+instead of asserting that the fix is free; the bound $[\ell,h]$ is measured from a short
+teacher rollout rather than hardcoded, and is not an automatic maximum-principle
+guarantee for the continuum equation.
+
+The FNO baseline uses Fourier-space mixing plus pointwise maps
+\citep{li2020fno}. Its global receptive field is useful for long-range coupling but
+carries a larger parameter budget in the standard configuration. The physics-free
+controls---a residual CNN with circular padding and a U-Net with mean-pool
+downsampling---use zero-initialized heads, so like the NCAs they begin as the identity
+map. Architecture schematics are retained in
+Appendix~\ref{sec:architecture-details}.
+
+\section{Results: Which Prior Helps Which Dynamics?}
+\label{sec:results}
+\subsection{A regime map, not a universal winner}
+Table~\ref{tab:regime2d} summarizes the ten 2-D phenomena. Every winner beats the
+identity floor, so on no equation is the comparison a ranking of noise. The winners
+divide into four groups, and only two of them are the ones the hypothesis anticipated.
+
+\input{table-regime2d}
+
+\paragraph{Global mixing leads on smooth, transported, and turbulent dynamics.}
+The FNO is best on heat ($0.00157$), advection--diffusion ($0.00123$), and
+Navier--Stokes ($0.0730$). On NS this is expected: velocity is reconstructed through a
+globally coupled Poisson solve, and a short-range update must communicate over repeated
+steps. On heat it is \emph{not} what a reduced-scale study of this benchmark previously
+reported, and Section~\ref{sec:scaling} identifies why.
+
+\paragraph{Conservation leads exactly where the quantity is conserved.}
+On shallow water---three fields, source-free, genuinely conservative---the purely
+conservative \model{pi\_nca} is best at $0.00709$ with 5{,}280 parameters, ahead of the
+FNO's $0.00869$ with 592{,}995. Its mass drift is $8.5\times10^{-5}$ against the FNO's
+$2.09$. This is clause~(i) of the hypothesis holding in the setting it describes.
+
+\paragraph{Bounding leads on stiff fourth-order dynamics, decisively.}
+At ten seeds the bounded conservative hybrid reaches $0.357$ on CH against $0.650$ for
+the FNO, which places the largest model in the study twelfth of fourteen. The two bounded
+variants occupy the top two positions and the margin over the third
+($\model{resnet}$, $0.465$) is Holm-significant at $n=80$. The five-seed matrix agrees
+($0.353$ against $0.654$, same ordering). Stiffness and a hard state range, not locality
+as such, are what this prior is for.
+
+\paragraph{Physics-free baselines lead on three of ten, which is a result.}
+The U-Net is best on wave, Gray--Scott, and Nagumo. On Nagumo the entire top three are
+physics-free (\model{unet} $0.00751$, \model{resnet} $0.0104$, \model{resnet\_iso}
+$0.0109$) and the best conservative model is far behind. We report this prominently
+because the same data without those controls would have shown a conservative NCA
+winning a field of conservative NCAs.
+
+\input{table-heatms}
+
+\paragraph{Heat: the local models are close, not ahead.}
+Table~\ref{tab:heatms} gives the full ten-seed ranking. The FNO leads at
+$0.001447$; the best local conservative model, \model{multiscale\_flux\_nca}, is
+$0.003699$ with $107\times$ fewer parameters. At this sample size the gap is
+significant, so the accuracy claim runs the other way from the resource claim. The
+defensible statement is the resource-relative one: a $5{,}520$-parameter local update
+reaches $2.6\times$ the error of a $592{,}897$-parameter spectral operator. It is not
+that the local model is more accurate.
+
+\paragraph{Learning worse than nothing.}
+On NS the plain NCA scores $0.528$ against the identity floor's $0.513$ at ten seeds,
+and $0.492$ against $0.450$ at five: the only architecture--phenomenon pair in the study
+on the wrong side of its floor, in both tables. An unconstrained local residual head,
+trained through a rollout on globally coupled dynamics, is actively harmful rather than
+merely weak.
+
+\input{intervention-figure}
+
+\subsection{Controlled interventions}
+\label{sec:ablation}
+A regime map is a correlation until the priors are switched independently at matched
+capacity. Table~\ref{tab:ablsummary} reports four such interventions, each changing
+exactly one thing.
+
+\input{table-ablsummary}
+
+\paragraph{A4: the value of conservation reverses with the equation.}
+At matched backbone and parameter counts within $1\%$, replacing an unconstrained
+residual head with a conservative flux head improves heat by $4.6\times$
+($0.00743$ versus $0.0339$) and worsens Nagumo by $24\times$ ($0.379$ versus
+$0.0161$). The mass column shows why the constraint is not free: the flux head holds
+the total to $10^{-5}$ on \emph{both} equations, which is correct physics on the first
+and an actively wrong prior on the second, where the true dynamics create and destroy
+the quantity and the residual head's drift of order $10^{2}$--$10^{3}$ is the right
+behavior rather than a defect. This is the strongest controlled evidence in the paper
+for clauses~(i) and~(iii).
+
+\paragraph{A5: spatial reach helps on both equations at this grid.}
+Widening the stencil from $3\times3$ to $5\times5$ to dilated $(1,2,4)$ improves heat
+monotonically ($0.00896\to0.00584\to0.00412$) and NS likewise
+($0.679\to0.667\to0.583$). At a $24^2$ grid the heat ordering is the reverse, with the
+smallest stencil winning; the number of steps a local rule needs to cross the domain
+grows with the grid, so its optimal reach does too. The local models' disadvantage on
+globally coupled dynamics is therefore a receptive-field problem, addressable without a
+spectral transform, rather than an argument against locality as such.
+
+\paragraph{A1 and A7: bounding buys accuracy, and the projection buys conservation.}
+On CH, bounding the output reduces error from $0.515$ to $0.358$ and mass drift from
+$19.9$ to $5.2\times10^{-5}$ at an identical $5{,}520$-parameter backbone; on
+Allen--Cahn, whose states do not reach the bound, it changes nothing to four
+significant figures. A7 then separates the two mechanisms. Accuracy is indistinguishable
+across clip-only, uniform projection, and headroom projection ($0.3589$, $0.3614$,
+$0.3583$), but mass drift is $18.6$, $1.07\times10^{-4}$, and $5.40\times10^{-5}$: the
+clip provides the stability, the projection provides the conservation, and the
+headroom form of Equation~\ref{eq:headroom} improves on the uniform one by a further
+factor of two while additionally guaranteeing the bound it restores mass into. We
+present it as a correctness guarantee that costs no accuracy, not as an accuracy gain.
+
+\subsection{Is the distillation target meaningful?}
+\label{sec:teachererr}
+The emulators are trained to imitate a solver and scored against that same solver, so a
+low error could mean accurate physics or a faithful copy of a poor approximation. We
+measure the difference. For the linear constant-coefficient members the periodic problem
+is diagonal in Fourier space and the continuum solution is available in closed form; for
+the rest the timestep is refined and Cauchy differences bound the teacher's own error.
+
+\input{table-teacher}
+
+Every teacher converges, with observed orders of $0.94$--$1.03$ where forward Euler is
+used. The consequence for the paper is specific and constraining: the teacher's error on
+heat is $0.00114$ and the FNO's is $0.001447$, so the leading architecture has
+\emph{saturated the target}. Differences below roughly $10^{-3}$ on heat are measuring
+the solver's discretization error, not model quality, and the top of
+Table~\ref{tab:heatms} should be read accordingly. On CH the teacher error is $0.0441$
+against a best model error of $0.353$, an order of magnitude of headroom, so that
+comparison is safely learning-limited.
+
+\subsection{Does the ranking survive a change of scale?}
+\label{sec:scaling}
+Every table above is measured at one grid, one horizon, and one training budget. We
+sweep each axis with everything else fixed and report Kendall's $\tau$ between the
+ordering at the smallest and largest setting.
+
+\input{table-scaling}
+
+Four of nine sweeps change the ordering and two change the winner. Most consequentially,
+on heat the winner changes from \model{multiscale\_flux\_nca} at a $24^2$ grid to
+\model{fno} at $48^2$ ($\tau=0.73$). An earlier reduced-scale study of this same
+benchmark reported the local conservative model as both more accurate and $107\times$
+smaller than the FNO on heat; the accuracy half of that claim does not survive the
+change of grid, and we withdraw it. The mechanism is the one A5 exhibits: a local rule's
+per-step receptive field is fixed in cells, so its advantage on a small domain is partly
+an artifact of the domain being small. CH is the least stable phenomenon, with all three
+axes changing the ordering. Every ranking in this paper is therefore quoted with its
+operating point.
+
+\subsection{What is it worth?}
+\label{sec:matched}
+Two comparisons that are usually omitted, both of which cut against the surrogates. A
+PINN solves one initial-value problem per training run while an emulator trains once and
+applies to any initial condition, so comparing them on a single accuracy column compares
+different quantities. We fix the task instead.
+
+\input{table-matched}
+
+The emulator is better on $100\%$ of the 32 initial conditions
+($p=4.7\times10^{-10}$) while receiving $431\times$ \emph{less} total wall-clock, so its
+advantage is not bought with compute, and the amortization crossover is $K=1$. But the
+row that matters is the third. At a $32^2$ grid the reference solver produces the exact
+answer in $18.9$\,ms per initial condition, roughly a third of the emulator's $55$\,ms,
+so \textbf{at this scale no surrogate in this paper is a deployment case}. At the
+benchmark's own $48^2$ grid the gap closes to near parity and the emulator is faster on
+two of ten phenomena (Table~\ref{tab:teacher}), which locates rather than removes the
+problem: learned surrogates pay off where the solver does not fit---much larger grids,
+much longer horizons, stiff timestep restrictions, or differentiability through an
+entire rollout---and none of those conditions holds here.
+
+\subsection{What aggregate error misses}
+\label{sec:spectral}
+\input{table-heat20}
+
+Table~\ref{tab:heat20} reports the diagnostic panel on heat. The high-frequency error
+fraction separates models that share an aggregate error: \model{pi\_nca} concentrates
+$55\%$ of its residual energy in the upper half of the spectrum against the FNO's
+$3.6\%$, which is the mechanism behind the regime split---it predicts an advantage for
+global mixing on exactly the equations whose solutions carry fine-scale structure, from a
+quantity independent of the ranking it explains. It describes \emph{where} the residual
+lies, not its magnitude, and is not ordered by quality. Error growth separates the models
+further: the plain NCA's error grows $22.9\times$ from the first quarter of the horizon
+to the end, against $2$--$3\times$ for every other architecture, which is the aggregate
+signature of the instability that puts it below the floor on NS.
+
+\paragraph{Resource accounting.}
+\label{sec:efficiency}
+Table~\ref{tab:eff} groups heat by parameter budget rather than ranking across budgets.
+Within the small class the conservative local models lead the physics-free controls at
+matched size ($0.003699$ for \model{multiscale\_flux\_nca} against $0.005559$ for
+\model{resnet\_iso} and $0.007381$ for \model{unet\_iso}), which is the comparison that
+speaks to inductive bias. Across classes, two orders of magnitude more parameters buy a
+factor of $2.6$ in error. Reporting only the second comparison would present a capacity
+result as an architectural one. No matched accuracy--runtime comparison against an
+optimized numerical solver is supplied beyond Table~\ref{tab:matched}, so these ratios do
+not establish solver acceleration \citep{mcgreivy2024baselines}.
+
+\paragraph{Three-dimensional replication.}
+\label{sec:threed}
+Table~\ref{tab:regime3d} reports the 3-D suite. The FNO leads four of six phenomena and
+the unconstrained plain NCA the remaining two, and the 2-D and 3-D winners agree in
+family on five of six. We deliberately do not describe this as evidence that the regime
+dependence is dimension-independent: the 3-D suite is single-seed, at one reduced
+resolution, without the physics-free controls or the identity floor, and two
+dimensionalities are not independent samples of the same population. The supportable
+statement is that the orderings are consistent on the equations measured in both.
+
+\input{table-regime3d}
+
+\section{Discussion and Limitations}
+\label{sec:discussion}
+\label{sec:limitations}
+The practical takeaway is a sequence of checks rather than an architecture. First
+identify the target's actual invariants; A4 shows that imposing the wrong one costs a
+factor of $24$. Then ask whether the model can communicate over the relevant spatial
+range, remembering from A5 and Section~\ref{sec:scaling} that the answer depends on the
+grid. Then ask whether the state has a hard range, since on stiff bounded dynamics
+bounding was worth more than every other structural choice combined. Only then compare
+accuracy and resources, and do so within a parameter budget. The hybrid designs are
+candidate ways to compose these priors, not a validated selection algorithm.
+
+Several limitations bound the conclusions, and three are consequences of this run rather
+than of the design.
+
+\textbf{Three evaluation axes are not measured at this scale.} The out-of-distribution
+study (held-out amplitude, structure count, length scale, spectrum, PDE coefficient, and
+horizon) and the guard-disabled long-horizon stability study each failed on all three
+phenomena in this run, and the resolution-transfer sweep was skipped. Reduced-scale
+results for these axes exist from earlier runs on different hardware, but mixing
+backends within one study is exactly the error this paper's controls are meant to
+prevent, so they are omitted rather than reported. The generated claims audit accompanying
+the artifact marks these axes \textsc{not\_yet\_measured}.
+
+\textbf{The heat comparison is teacher-limited at the top.} Section~\ref{sec:teachererr}
+shows the leading model has reached the solver's own discretization error, so the
+ordering among the leading entries of Table~\ref{tab:heatms} is not a clean measurement
+of model quality.
+
+\textbf{Rankings are conditional on scale.} Four of nine sweeps change the ordering.
+Any use of Table~\ref{tab:regime2d} outside its operating point is unsupported, and a
+previously reported heat result from this benchmark is withdrawn on exactly these
+grounds.
+
+Beyond these: the 3-D suite is single-seed and lacks the controls; PINO is not measured;
+all domains are periodic and regular, so no claim extends to irregular geometry; the
+solvers are our own, so numbers are not comparable to published PDEBench or APEBench
+results; and teacher agreement establishes implementation consistency, not continuum
+accuracy. The bound $[\ell,h]$ is measured from the teacher, and
+Equation~\ref{eq:headroom} guarantees bounds and mass only when the target mass is
+feasible for the box; infeasibility is reported, not hidden.
+
+\section{Conclusion}
+Locality is neither a universal advantage nor an intrinsic obstacle to PDE emulation. In
+these experiments the useful prior is set by the equation: structural conservation wins
+where the quantity is conserved and costs a factor of $24$ where it is not, output
+bounding is worth more than every other structural choice on stiff bounded dynamics,
+global mixing wins on smooth, transported, and turbulent problems, and a physics-free
+convolutional baseline wins on three of ten phenomena. The contribution is a controlled account of these interactions together with
+the machinery that makes the negative results reportable---an identity floor, physics-free
+controls, paired statistics, the teacher's own error, and a rank-stability test that
+withdrew one of our own earlier claims. Physical structure becomes a testable design
+choice rather than a blanket argument for one model family.
+\label{sec:main-end}
+
+\clearpage
+\section*{Reproducibility Statement}
+The update rules and training objective are specified in
+Sections~\ref{sec:protocol}--\ref{sec:methods}; all numerical tables and additional
+experiment details are retained in the appendices. Appendix~\ref{sec:repro} records the
+software versions, the correctness gate, and the reproduction commands. Every result in
+this paper comes from a single unattended run of one command on one GPU; each results
+file records its backend, devices, and exact configuration, and the accompanying
+generated audit reports which pre-registered claims those results support and which they
+do not.
+
+\section*{AI Use Statement}
+An AI assistant was used to restructure and rewrite this manuscript, to build and check
+parts of the benchmarking and analysis code, to identify and verify literature, and to
+assist with interpretation and qualification of results. Experimental measurements were
+produced by executing that code; no numerical result in this paper was written by hand or
+estimated. The authors remain responsible for verifying the scientific claims,
+references, and reported data, and for completing the disclosure of AI use in the
+underlying research.
+
+\section*{Ethics Statement}
+The reported study concerns numerical PDE benchmarks rather than human-subject
+research. Its principal foreseeable risk is overinterpreting neural surrogates as
+validated scientific simulators. We therefore distinguish teacher emulation from
+continuum accuracy, report the solver's own error and cost alongside every model, and
+state which evaluation axes were not measured. Deployment in safety-critical simulation
+would require application-specific validation beyond this study.
+
+\input{references}
+\clearpage
+\input{appendix}
+
+\end{document}

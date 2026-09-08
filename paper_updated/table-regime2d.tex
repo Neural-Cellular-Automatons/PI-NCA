@@ -1,0 +1,29 @@
+\begin{table}[t]
+\centering
+\caption{Two-dimensional regime map. Grid $48^2$, 1{,}200 epochs, 12 training steps,
+48 evaluation steps, \textbf{five seeds} per cell, all on one NVIDIA RTX 4090.
+``Best'' is the lowest mean per-initial-condition relative $L^2$ error among the
+fourteen architectures measured on every phenomenon. \emph{Floor} is the do-nothing
+identity emulator $g(x)=x$; \emph{teacher} is the reference solver's own
+discretization error over the same horizon (Table~\ref{tab:teacher}). Every winner
+beats its floor. Rankings are conditional on this operating point
+(Section~\ref{sec:scaling}).}
+\label{tab:regime2d}
+\small
+\begin{tabularx}{\linewidth}{@{}lXlccc@{}}
+\toprule
+Phenomenon & Structure & Best architecture & $\relerr$ & Floor & Teacher \\
+\midrule
+Heat              & conservative, smooth, local        & \model{fno}                    & 0.00157 & 0.191 & 0.00114 \\
+Advection--diff.  & conservative, transported          & \model{fno}                    & 0.00123 & 0.228 & 0.00472 \\
+Wave              & 2-field, dispersive                & \model{unet}                   & 0.0129  & 0.0507 & 0.00061 \\
+Allen--Cahn       & bounded, sharp interfaces          & \model{spectral\_flux\_nca}    & 0.00382 & 0.0549 & 0.00017 \\
+Cahn--Hilliard    & 4th-order, stiff, bounded          & \model{bounded\_multiscale\_nca} & 0.353 & 0.918 & 0.0441 \\
+Gray--Scott       & 2-field reaction--diffusion        & \model{unet}                   & 0.138   & 0.345 & 0.00497 \\
+Shallow water     & 3-field, conservative              & \model{pi\_nca}                & 0.00709 & 0.0518 & $9.7\!\times\!10^{-7}$ \\
+FitzHugh--Nagumo  & 2-field excitable, non-conservative& \model{plain\_nca}             & 0.0529  & 1.135 & 0.00601 \\
+Nagumo            & bistable, non-conservative         & \model{unet}                   & 0.00751 & 0.380 & 0.00282 \\
+Navier--Stokes    & globally coupled, turbulent        & \model{fno}                    & 0.0730  & 0.450 & 0.0251 \\
+\bottomrule
+\end{tabularx}
+\end{table}

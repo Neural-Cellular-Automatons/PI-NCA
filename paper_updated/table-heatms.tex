@@ -1,0 +1,34 @@
+\begin{table}[t]
+\centering
+\caption{Heat, headline protocol: grid $48^2$, 1{,}200 epochs, \textbf{ten seeds}
+$\times$ 8 held-out initial conditions, $n=80$ paired evaluations per architecture.
+Intervals are 10{,}000-sample percentile bootstraps on the per-initial-condition
+errors. Every architecture is compared against \model{fno} by a Wilcoxon signed-rank
+test on the \emph{same} initial conditions with Holm--Bonferroni correction across the
+thirteen comparisons; at this sample size no difference is a tie. The teacher's own
+error on this task is $0.00114$, so the leading entry has essentially saturated the
+distillation target and the gap between the top two rows should not be
+over-interpreted.}
+\label{tab:heatms}
+\small
+\begin{tabular}{lccrl}
+\toprule
+Architecture & $\relerr$ & 95\% CI & Params & vs.\ \model{fno} \\
+\midrule
+\model{fno}                    & 0.001447 & [0.00136, 0.00154] & 592{,}897 & reference \\
+\model{spectral\_flux\_nca}    & 0.003405 & [0.00302, 0.00381] & 134{,}225 & worse \\
+\model{multiscale\_flux\_nca}  & 0.003699 & [0.00341, 0.00399] & 5{,}520   & worse \\
+\model{mc\_flux\_nca}          & 0.003766 & [0.00310, 0.00453] & 9{,}936   & worse \\
+\model{unet}                   & 0.004081 & [0.00383, 0.00434] & 265{,}104 & worse \\
+\model{resnet\_iso}            & 0.005559 & [0.00520, 0.00594] & 5{,}364   & worse \\
+\model{fno\_small}             & 0.005616 & [0.00531, 0.00592] & 8{,}433   & worse \\
+\model{bounded\_cons\_nca}     & 0.005720 & [0.00505, 0.00644] & 4{,}576   & worse \\
+\model{bounded\_multiscale\_nca}& 0.005867 & [0.00530, 0.00650] & 5{,}520  & worse \\
+\model{pi\_nca}                & 0.006057 & [0.00529, 0.00687] & 4{,}576   & worse \\
+\model{resnet}                 & 0.006070 & [0.00542, 0.00677] & 74{,}336  & worse \\
+\model{unet\_iso}              & 0.007381 & [0.00683, 0.00797] & 7{,}464   & worse \\
+\model{plain\_nca}             & 0.05614  & [0.0405, 0.0725]   & 6{,}784   & worse \\
+\model{identity} (floor)       & 0.1889   & [0.185, 0.193]     & 1         & worse \\
+\bottomrule
+\end{tabular}
+\end{table}

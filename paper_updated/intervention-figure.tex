@@ -1,0 +1,72 @@
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    name=conservation,
+    width=0.47\linewidth,height=4.8cm,
+    ybar,bar width=10pt,
+    ymode=log,log origin=infty,
+    ymin=0.005,ymax=3,
+    ylabel={Relative $L^2$ error},
+    symbolic x coords={Heat,Nagumo},xtick=data,
+    enlarge x limits=0.45,
+    ytick={0.01,0.1,1},
+    yticklabels={0.01,0.1,1},
+    title={(a) Matched-width heads (A4)},
+    title style={font=\small},
+    tick label style={font=\scriptsize},
+    label style={font=\small},
+    nodes near coords,
+    nodes near coords style={font=\tiny},
+    point meta=explicit symbolic,
+    legend style={font=\scriptsize,at={(0.5,-0.23)},anchor=north,draw=none},
+    legend columns=2,
+    axis lines*=left,
+    ymajorgrids,grid style={gray!15}
+]
+\addplot[fill=blue!65,draw=blue!80!black] coordinates
+  {(Heat,0.00743) [0.0074] (Nagumo,0.379) [0.379]};
+\addplot[fill=orange!65,draw=orange!80!black] coordinates
+  {(Heat,0.0339) [0.0339] (Nagumo,0.0161) [0.0161]};
+\legend{Conservative,Free}
+\end{axis}
+\begin{axis}[
+    at={(conservation.east)},anchor=west,xshift=1.05cm,
+    width=0.47\linewidth,height=4.8cm,
+    ybar,bar width=10pt,
+    ymode=log,log origin=infty,
+    ymin=1e-5,ymax=200,
+    symbolic x coords={Error,Mass drift},xtick=data,
+    enlarge x limits=0.45,
+    ytick={1e-4,1e-2,1,100},
+    yticklabels={$10^{-4}$,$10^{-2}$,$1$,$10^{2}$},
+    title={(b) CH output bounding (A1)},
+    title style={font=\small},
+    tick label style={font=\scriptsize},
+    label style={font=\small},
+    nodes near coords,
+    nodes near coords style={font=\tiny},
+    point meta=explicit symbolic,
+    legend style={font=\scriptsize,at={(0.5,-0.23)},anchor=north,draw=none},
+    legend columns=2,
+    axis lines*=left,
+    ymajorgrids,grid style={gray!15}
+]
+\addplot[fill=blue!65,draw=blue!80!black] coordinates
+  {(Error,0.515) [0.515] (Mass drift,19.9) [19.9]};
+\addplot[fill=orange!65,draw=orange!80!black] coordinates
+  {(Error,0.358) [0.358] (Mass drift,5.2e-5) [5e-5]};
+\legend{Unbounded,Bounded}
+\draw[dashed,gray!80] (rel axis cs:0,0.756) -- (rel axis cs:1,0.756);
+\end{axis}
+\end{tikzpicture}
+\caption{Two interventions, both at five seeds and matched backbone width, expose
+different mechanisms. \textbf{(a)} The same conservation head that improves heat by
+$4.6\times$ worsens Nagumo by $24\times$: the prior is only useful where the quantity is
+actually conserved. \textbf{(b)} On Cahn--Hilliard, output bounding improves the
+trajectory error by $30\%$ (well below the identity reference at $0.918$, dashed)
+\emph{and} reduces mass drift by five orders of magnitude, at an identical
+$5{,}520$-parameter backbone. Both panels use logarithmic axes because the effects span
+several decades.}
+\label{fig:interventions}
+\end{figure}

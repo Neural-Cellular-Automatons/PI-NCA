@@ -2,87 +2,375 @@
   "results": {},
   "stages": [
     {
-      "stage": "baseline: PINN (heat)",
-      "seconds": 133.6,
+      "stage": "gate: correctness tests",
+      "seconds": 302.3,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.pinn_heat --grid 12 --steps 8 --iters 150"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pytest tests/ -q"
+    },
+    {
+      "stage": "2-D matrix: every architecture x every phenomenon, + ablations",
+      "seconds": 35537.5,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.bench_all --group all --seeds 5 --epochs 1200 --grid 48 --batch 32 --rollout 12 --eval 48"
+    },
+    {
+      "stage": "headline: 10 seeds on heat,cahn_hilliard,navier_stokes",
+      "seconds": 18046.0,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.bench_all --group all --seeds 10 --epochs 1200 --grid 48 --batch 32 --rollout 12 --eval 48 --pdes heat,cahn_hilliard,navier_stokes --tag headline"
+    },
+    {
+      "stage": "teacher error: what the distillation target itself gets wrong",
+      "seconds": 67.6,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.teacher_error --grid 48 --steps 48"
+    },
+    {
+      "stage": "OOD generalisation: heat",
+      "seconds": 563.8,
+      "rc": 1,
+      "ok": false,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.ood --pde heat --archs plain_nca,pi_nca,multiscale_flux_nca,fno,resnet,unet --grid 48 --epochs 800 --eval 48 --n-eval 32 --batch 32 --seeds 3"
+    },
+    {
+      "stage": "OOD generalisation: cahn_hilliard",
+      "seconds": 509.8,
+      "rc": 1,
+      "ok": false,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.ood --pde cahn_hilliard --archs plain_nca,pi_nca,multiscale_flux_nca,fno,resnet,unet --grid 48 --epochs 800 --eval 48 --n-eval 32 --batch 32 --seeds 3"
+    },
+    {
+      "stage": "OOD generalisation: navier_stokes",
+      "seconds": 615.0,
+      "rc": 1,
+      "ok": false,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.ood --pde navier_stokes --archs plain_nca,pi_nca,multiscale_flux_nca,fno,resnet,unet --grid 48 --epochs 800 --eval 48 --n-eval 32 --batch 32 --seeds 3"
+    },
+    {
+      "stage": "stability stress (guard OFF): heat",
+      "seconds": 900.0,
+      "rc": 1,
+      "ok": false,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.stability --pde heat --archs plain_nca,pi_nca,multiscale_flux_nca,bounded_multiscale_nca,abl_proj_uniform,abl_proj_headroom,fno,resnet,unet,identity --grid 48 --epochs 800 --eval 48 --n-ic 32 --batch 32 --seeds 3"
+    },
+    {
+      "stage": "stability stress (guard OFF): cahn_hilliard",
+      "seconds": 888.4,
+      "rc": 1,
+      "ok": false,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.stability --pde cahn_hilliard --archs plain_nca,pi_nca,multiscale_flux_nca,bounded_multiscale_nca,abl_proj_uniform,abl_proj_headroom,fno,resnet,unet,identity --grid 48 --epochs 800 --eval 48 --n-ic 32 --batch 32 --seeds 3"
+    },
+    {
+      "stage": "stability stress (guard OFF): navier_stokes",
+      "seconds": 957.2,
+      "rc": 1,
+      "ok": false,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.stability --pde navier_stokes --archs plain_nca,pi_nca,multiscale_flux_nca,bounded_multiscale_nca,abl_proj_uniform,abl_proj_headroom,fno,resnet,unet,identity --grid 48 --epochs 800 --eval 48 --n-ic 32 --batch 32 --seeds 3"
+    },
+    {
+      "stage": "scaling: does the ranking survive scale? (heat)",
+      "seconds": 1608.3,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.scaling --pde heat --archs plain_nca,pi_nca,multiscale_flux_nca,fno,resnet_iso,identity --grids 24,32,48 --rollouts 4,8,12 --epochs-sweep 300,600,1200 --grid 48 --rollout 12 --epochs 1200 --eval 48 --batch 32 --n-eval 32"
+    },
+    {
+      "stage": "scaling: does the ranking survive scale? (cahn_hilliard)",
+      "seconds": 1542.0,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.scaling --pde cahn_hilliard --archs plain_nca,pi_nca,multiscale_flux_nca,fno,resnet_iso,identity --grids 24,32,48 --rollouts 4,8,12 --epochs-sweep 300,600,1200 --grid 48 --rollout 12 --epochs 1200 --eval 48 --batch 32 --n-eval 32"
+    },
+    {
+      "stage": "scaling: does the ranking survive scale? (navier_stokes)",
+      "seconds": 1772.4,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.scaling --pde navier_stokes --archs plain_nca,pi_nca,multiscale_flux_nca,fno,resnet_iso,identity --grids 24,32,48 --rollouts 4,8,12 --epochs-sweep 300,600,1200 --grid 48 --rollout 12 --epochs 1200 --eval 48 --batch 32 --n-eval 32"
+    },
+    {
+      "stage": "3-D matrix: every architecture x every phenomenon",
+      "seconds": 1711.3,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.bench3d --grid 24 --epochs 600 --batch 8"
+    },
+    {
+      "stage": "resolution transfer study",
+      "seconds": 0.0,
+      "rc": 0,
+      "ok": true,
+      "skipped": true
+    },
+    {
+      "stage": "benchmark plots (interim)",
+      "seconds": 33.4,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.plots"
+    },
+    {
+      "stage": "baseline: PINN (heat)",
+      "seconds": 283.8,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.pinn_heat --grid 32 --steps 48 --iters 6000"
     },
     {
       "stage": "baseline: DeepONet (heat)",
-      "seconds": 1.7,
+      "seconds": 3.1,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.deeponet_heat --seeds 1"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.deeponet_heat --seeds 3"
     },
     {
       "stage": "baseline: Darcy (steady operator)",
-      "seconds": 38.9,
+      "seconds": 1197.9,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.darcy --seeds 1 --iters 60 --n-train 32"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.darcy --seeds 3 --iters 2000 --n-train 256"
     },
     {
       "stage": "matched PINN vs emulator (same task, both cost structures)",
-      "seconds": 40.0,
+      "seconds": 12551.5,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.matched --pde heat --k 4 --grid 12 --steps 8 --epochs 25 --pinn-iters 150 --allow-cpu"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.matched --pde heat --k 32 --grid 32 --steps 48 --epochs 1200 --pinn-iters 6000"
+    },
+    {
+      "stage": "capture trajectories for figures",
+      "seconds": 648.0,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.capture --dims both --grid 48 --epochs 400 --grid3d 16 --epochs3d 200 --max-mb 64"
+    },
+    {
+      "stage": "figure: heat (2-D)",
+      "seconds": 6.6,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/heat_2d.npz"
+    },
+    {
+      "stage": "figure: allen_cahn (2-D)",
+      "seconds": 6.1,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/allen_cahn_2d.npz"
+    },
+    {
+      "stage": "figure: nagumo (2-D)",
+      "seconds": 6.1,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/nagumo_2d.npz"
+    },
+    {
+      "stage": "figure: adv_diff (2-D)",
+      "seconds": 6.1,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/adv_diff_2d.npz"
+    },
+    {
+      "stage": "figure: gray_scott (2-D)",
+      "seconds": 6.0,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/gray_scott_2d.npz"
+    },
+    {
+      "stage": "figure: shallow_water (2-D)",
+      "seconds": 6.1,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/shallow_water_2d.npz"
+    },
+    {
+      "stage": "figure: fitzhugh_nagumo (2-D)",
+      "seconds": 6.0,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/fitzhugh_nagumo_2d.npz"
+    },
+    {
+      "stage": "figure: wave (2-D)",
+      "seconds": 6.1,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/wave_2d.npz"
+    },
+    {
+      "stage": "figure: cahn_hilliard (2-D)",
+      "seconds": 6.2,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/cahn_hilliard_2d.npz"
+    },
+    {
+      "stage": "figure: navier_stokes (2-D)",
+      "seconds": 6.0,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/navier_stokes_2d.npz"
+    },
+    {
+      "stage": "figure: heat (3-D slice)",
+      "seconds": 6.5,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/heat_3d.npz"
+    },
+    {
+      "stage": "figure: heat (3-D volume)",
+      "seconds": 6.2,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d_volume --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/heat_3d.npz"
+    },
+    {
+      "stage": "figure: adv_diff (3-D slice)",
+      "seconds": 6.5,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/adv_diff_3d.npz"
+    },
+    {
+      "stage": "figure: adv_diff (3-D volume)",
+      "seconds": 6.3,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d_volume --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/adv_diff_3d.npz"
+    },
+    {
+      "stage": "figure: allen_cahn (3-D slice)",
+      "seconds": 6.6,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/allen_cahn_3d.npz"
+    },
+    {
+      "stage": "figure: allen_cahn (3-D volume)",
+      "seconds": 6.5,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d_volume --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/allen_cahn_3d.npz"
+    },
+    {
+      "stage": "figure: nagumo (3-D slice)",
+      "seconds": 6.6,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/nagumo_3d.npz"
+    },
+    {
+      "stage": "figure: nagumo (3-D volume)",
+      "seconds": 6.7,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d_volume --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/nagumo_3d.npz"
+    },
+    {
+      "stage": "figure: gray_scott (3-D slice)",
+      "seconds": 6.7,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/gray_scott_3d.npz"
+    },
+    {
+      "stage": "figure: gray_scott (3-D volume)",
+      "seconds": 6.8,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d_volume --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/gray_scott_3d.npz"
+    },
+    {
+      "stage": "figure: fitzhugh_nagumo (3-D slice)",
+      "seconds": 6.8,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/fitzhugh_nagumo_3d.npz"
+    },
+    {
+      "stage": "figure: fitzhugh_nagumo (3-D volume)",
+      "seconds": 7.1,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.viz3d_volume --npz /mnt/c/Users/Student1/Downloads/PI-NCA/src/pinca_jax/../../results/traj/fitzhugh_nagumo_3d.npz"
+    },
+    {
+      "stage": "benchmark plots (final)",
+      "seconds": 31.0,
+      "rc": 0,
+      "ok": true,
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.plots"
     },
     {
       "stage": "claims audit: prose vs measured inventory",
-      "seconds": 0.2,
+      "seconds": 0.4,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.claims"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.claims"
     },
     {
       "stage": "bibliography: re-verify every citation against arXiv",
-      "seconds": 0.3,
+      "seconds": 0.2,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.bib"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.bib"
     },
     {
       "stage": "paper: regenerate every table and every quoted number",
-      "seconds": 3.8,
+      "seconds": 5.4,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.paper"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.paper"
     },
     {
       "stage": "architecture diagrams",
-      "seconds": 1.8,
+      "seconds": 17.0,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.arch_figs"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.arch_figs"
     },
     {
       "stage": "report: regenerate Markdown from results",
-      "seconds": 1.7,
+      "seconds": 2.4,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.report"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.report"
     },
     {
       "stage": "report: render PDF",
-      "seconds": 0.1,
+      "seconds": 1.1,
       "rc": 0,
       "ok": true,
-      "cmd": "C:\\Users\\tharu\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -u -m pinca_jax.md2pdf C:\\Users\\tharu\\OneDrive\\Desktop\\PI-NCA\\docs\\PI-NCA_Architectures_and_Results.md"
+      "cmd": "/mnt/c/Users/Student1/Downloads/PI-NCA/.venv/bin/python -u -m pinca_jax.md2pdf /mnt/c/Users/Student1/Downloads/PI-NCA/docs/PI-NCA_Architectures_and_Results.md"
     }
   ],
-  "total_seconds": 222.1,
-  "failures": [],
+  "total_seconds": 79937.4,
+  "failures": [
+    "OOD generalisation: heat",
+    "OOD generalisation: cahn_hilliard",
+    "OOD generalisation: navier_stokes",
+    "stability stress (guard OFF): heat",
+    "stability stress (guard OFF): cahn_hilliard",
+    "stability stress (guard OFF): navier_stokes"
+  ],
   "skipped": [
+    "resolution transfer study",
     "pdf (no LaTeX toolchain)"
   ],
   "device": {
     "tag": "runner",
-    "jax": "0.10.1",
-    "backend": "cpu",
+    "jax": "0.11.1",
+    "backend": "gpu",
     "devices": [
-      "cpu:0"
+      "cuda:0"
     ],
     "peak_mem_mb": 0.0
   }

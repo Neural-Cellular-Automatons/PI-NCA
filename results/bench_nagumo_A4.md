@@ -1,35 +1,35 @@
-### nagumo  (grid=16, train_steps=6, eval_steps=12, epochs=150, seeds=2, clip=None)
+### nagumo  (grid=48, train_steps=12, eval_steps=48, epochs=1200, seeds=5, clip=None)
 
 | metric | abl_flux | abl_residual |
 |---|---|---|
-| rel-L2 ↓ | 1.103e-01±1.4e-03 | **1.392e-02±6.6e-04** |
-| MSE ↓ | 3.871e-03±2.1e-04 | **6.175e-05±7.6e-06** |
-| RMSE ↓ | 6.221e-02±1.7e-03 | **7.851e-03±4.8e-04** |
-| MAE ↓ | 5.972e-02±2.2e-03 | **6.175e-03±2.7e-04** |
-| L∞ ↓ | 1.098e-01±3.1e-03 | **4.757e-02±2.1e-02** |
-| PSNR(dB) ↑ | 20.9±0.022 | **38.9±0.28** |
-| SSIM ↑ | 0.985±0.00076 | **0.998±0.00041** |
-| hi-freq err frac ↓ | **6.641e-03±5.5e-04** | 4.127e-01±1.3e-01 |
-| rel-L2 @T/4 ↓ | 2.775e-02±3.6e-04 | **4.048e-03±6.5e-05** |
-| rel-L2 @T/2 ↓ | 5.546e-02±7.1e-04 | **7.671e-03±2.0e-04** |
-| rel-L2 @3T/4 ↓ | 8.301e-02±1.1e-03 | **1.094e-02±4.0e-04** |
-| rel-L2 @T ↓ | 1.103e-01±1.4e-03 | **1.392e-02±6.6e-04** |
-| err-growth T/(T/4) ↓ | 3.97±0.00011 | **3.44±0.11** |
-| mass-cons err ↓ | **3.052e-05±5.4e-06** | 1.561e+01±5.1e-01 |
-| periodic-BC res ↓ | **7.232e-02±6.4e-03** | 7.385e-02±5.7e-03 |
-| grad-energy | 1.037e-02±1.0e-04 | 1.066e-02±3.5e-04 |
+| rel-L2 ↓ | 3.792e-01±7.4e-04 | **1.605e-02±4.7e-03** |
+| MSE ↓ | 9.428e-02±6.9e-04 | **1.803e-04±1.0e-04** |
+| RMSE ↓ | 3.071e-01±1.1e-03 | **1.299e-02±3.8e-03** |
+| MAE ↓ | 2.998e-01±1.1e-03 | **8.279e-03±2.1e-03** |
+| L∞ ↓ | 5.327e-01±1.3e-02 | **8.856e-02±2.1e-02** |
+| PSNR(dB) ↑ | 8.43±0.31 | **36.2±2.6** |
+| SSIM ↑ | 0.803±0.0029 | **0.997±0.0018** |
+| hi-freq err frac ↓ | **4.105e-03±2.6e-04** | 5.883e-02±1.7e-02 |
+| rel-L2 @T/4 ↓ | 1.120e-01±3.4e-04 | **3.353e-03±4.0e-04** |
+| rel-L2 @T/2 ↓ | 2.164e-01±4.2e-04 | **4.808e-03±5.0e-04** |
+| rel-L2 @3T/4 ↓ | 3.066e-01±4.8e-04 | **7.497e-03±1.5e-03** |
+| rel-L2 @T ↓ | 3.792e-01±7.4e-04 | **1.605e-02±4.7e-03** |
+| err-growth T/(T/4) ↓ | **3.39±0.012** | 4.76±1.2 |
+| mass-cons err ↓ | **1.831e-05±2.5e-05** | 7.075e+02±6.4e+00 |
+| periodic-BC res ↓ | 8.164e-02±2.0e-03 | **5.703e-02±3.1e-03** |
+| grad-energy | 1.568e-02±6.0e-04 | 9.596e-03±4.7e-04 |
 | params ↓ | 4576 | **4544** |
-| train wall(s) ↓ | 9.95±0.49 | **9.21±0.39** |
-| infer s/step ↓ | **5.124e-04±2.0e-04** | 6.272e-04±8.7e-05 |
-| throughput cells/s ↑ | **4.31e+06** | 3.30e+06 |
+| train wall(s) ↓ | **14.3±0.17** | 14.4±0.23 |
+| infer s/step ↓ | 1.264e-03±4.4e-05 | **1.248e-03±7.1e-05** |
+| throughput cells/s ↑ | 1.46e+07 | **1.48e+07** |
 
 ### nagumo - rel-L2 with uncertainty and paired tests
 
-n = 16 paired evaluations (2 seed(s) x 8 held-out initial conditions). CIs are 10,000-sample percentile bootstraps. The paired column tests each architecture against **abl_residual** (best mean) on the SAME initial conditions, using Wilcoxon signed-rank with Holm-Bonferroni across the 1 comparisons in this table; `tie` means the difference is not resolvable at this sample size, not that the means are equal.
+n = 40 paired evaluations (5 seed(s) x 8 held-out initial conditions). CIs are 10,000-sample percentile bootstraps. The paired column tests each architecture against **abl_residual** (best mean) on the SAME initial conditions, using Wilcoxon signed-rank with Holm-Bonferroni across the 1 comparisons in this table; `tie` means the difference is not resolvable at this sample size, not that the means are equal.
 
 Note: the mean here is the unweighted mean of per-IC relative errors, while the ranking table above reports the batch-reduced ratio of norms (which weights high-energy initial conditions more heavily). The two are different estimators of the same quantity and will not print equal numbers; the paired tests need the per-IC form, so it is the one reported with uncertainty.
 
 | architecture | rel-L2 mean | 95% CI | median | vs abl_residual (mean diff) | p (Holm) | verdict |
 |---|---|---|---|---|---|---|
-| abl_residual | 1.3950e-02 | [1.309e-02, 1.491e-02] | 1.3868e-02 | - | - | **reference** |
-| abl_flux | 1.0947e-01 | [1.064e-01, 1.124e-01] | 1.0989e-01 | +9.552e-02 | 3.1e-05 | worse |
+| abl_residual | 1.5957e-02 | [1.464e-02, 1.733e-02] | 1.5707e-02 | - | - | **reference** |
+| abl_flux | 3.7922e-01 | [3.784e-01, 3.801e-01] | 3.7936e-01 | +3.633e-01 | 1.8e-12 | worse |
