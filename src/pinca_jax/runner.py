@@ -102,6 +102,9 @@ PROFILES = {
                   pinn_grid=12, pinn_iters=150, deeponet_seeds=1,
                   darcy_seeds=1, darcy_iters=60, darcy_ntrain=32,
                   jepa_epochs=30, probe_epochs=20,
+                  sweep_grid=12, sweep_epochs=6, sweep_jepa_epochs=6,
+                  sweep_probe_epochs=4, sweep_seeds=1,
+                  sweep_variants="fno_oneshot,fno_multi,nca_multi",
                   # A wiring check must still touch every phenomenon -- that is where
                   # shape and channel bugs live -- but it does not need every
                   # architecture, and running all fourteen turns "minutes" into an hour.
@@ -123,6 +126,12 @@ PROFILES = {
                   pinn_grid=32, pinn_iters=6000, deeponet_seeds=3,
                   darcy_seeds=3, darcy_iters=2000, darcy_ntrain=256,
                   jepa_epochs=800, probe_epochs=400,
+                  # The screen stays deliberately smaller than the headline
+                  # budget: its job is to rank ten variants and rule most of
+                  # them out, after which the survivor is worth the full
+                  # `jepa` stage at the paper budget.
+                  sweep_grid=32, sweep_epochs=400, sweep_jepa_epochs=300,
+                  sweep_probe_epochs=200, sweep_seeds=2, sweep_variants=None,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -137,6 +146,8 @@ PROFILES = {
                  pinn_grid=32, pinn_iters=8000, deeponet_seeds=3,
                  darcy_seeds=3, darcy_iters=3000, darcy_ntrain=512,
                  jepa_epochs=1200, probe_epochs=600,
+                 sweep_grid=48, sweep_epochs=800, sweep_jepa_epochs=600,
+                 sweep_probe_epochs=400, sweep_seeds=3, sweep_variants=None,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -146,7 +157,7 @@ PROFILES["bench"] = dict(PROFILES["paper"])
 
 # Ordered, with the one-line description printed by --list-stages.
 STAGES = [
-    ("gate", "correctness suite (205 tests) -- fatal, nothing downstream is trustworthy without it"),
+    ("gate", "correctness suite (245 tests) -- fatal, nothing downstream is trustworthy without it"),
     ("bench2d", "uniform 2-D matrix + ablations A1/A4/A5/A7 -- the only other fatal stage"),
     ("headline", "high-seed-count paired comparison on the three regime representatives"),
     ("teacher", "the reference solver's own error, and whether it converges at all"),
@@ -154,6 +165,7 @@ STAGES = [
     ("stability", "long-horizon failure rates with the divergence guard DISABLED"),
     ("scaling", "does the ranking survive a change of grid, horizon and training budget?"),
     ("jepa", "latent self-supervised pretraining vs distillation, same architecture"),
+    ("jepa_sweep", "OPT-IN (--only jepa_sweep): screen ten latent world-model variants"),
     ("bench3d", "the same comparison in three dimensions"),
     ("resolution", "train at one grid, evaluate at every other"),
     ("baselines", "PINN, DeepONet, Darcy, and the matched PINN-vs-emulator comparison"),
@@ -165,6 +177,10 @@ STAGES = [
     ("pdf", "compile paper/main.tex, if a LaTeX toolchain is installed"),
 ]
 FINALISATION = {"plots", "claims", "report", "pdf"}
+# Stages that run only when named in --only. A variant screen is exploratory: it is a
+# sized-to-fit-a-small-GPU ranking, not a paper number, and it must not silently add
+# hours to the one-command run that produces the paper.
+OPT_IN = {"jepa_sweep"}
 
 
 class Run:
@@ -440,6 +456,8 @@ def main():
             raise SystemExit(f"unknown stage {s!r}. Run --list-stages for the list.")
 
     def want(name):
+        if name in OPT_IN:
+            return bool(only) and name in only        # opt-in: never runs by default
         return (only is None or name in only) and name not in skip
 
     def res(*names):
@@ -525,6 +543,24 @@ def main():
                          "--eval", P["eval"], "--n-eval", P["n_eval"],
                          "--seeds", min(3, P["seeds"])],
                         fatal=False, outputs=res(f"jepa_{pde}.json"))
+
+        if want("jepa_sweep"):
+            # Screens several latent world models against the two controls that decide
+            # whether any of them has promise: the distillation control of the same
+            # architecture (does pretraining pay?) and the collapse floor of the same
+            # architecture (did the representation learn anything?). Resumable per
+            # variant, because this is the stage most likely to be interrupted.
+            for pde in HEADLINE_PDES.split(","):
+                r.stage(f"latent world-model variant screen: {pde}", "jepa",
+                        ["--sweep", "--pde", pde, "--grid", P["sweep_grid"],
+                         "--epochs", P["sweep_epochs"],
+                         "--jepa-epochs", P["sweep_jepa_epochs"],
+                         "--probe-epochs", P["sweep_probe_epochs"],
+                         "--batch", P["batch"], "--rollout", P["rollout"],
+                         "--eval", P["eval"], "--n-eval", P["n_eval"],
+                         "--seeds", P["sweep_seeds"]]
+                        + (["--variants", P["sweep_variants"]] if P.get("sweep_variants") else []),
+                        fatal=False, outputs=res(f"jepa_sweep_{pde}.json"))
 
         if want("bench3d"):
             # Non-fatal on purpose: a 3-D out-of-memory error must not discard a completed

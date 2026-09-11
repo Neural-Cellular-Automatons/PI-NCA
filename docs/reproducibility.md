@@ -45,7 +45,7 @@ Verified stack: jax 0.10.1, flax 0.12.7, optax 0.2.8, numpy, scipy, matplotlib, 
 python -m pytest tests/ -q
 ```
 
-205 tests. It asserts the JAX ports equal the verbatim PyTorch references to tolerance, the
+245 tests. It asserts the JAX ports equal the verbatim PyTorch references to tolerance, the
 NHWC isotropy fix, structural conservation, the Gray–Scott `dt=2.0` and Cahn–Hilliard
 `dt=0.5` instabilities, the statistical machinery (bootstrap coverage, Holm correction,
 paired tests), the closed-form solver references, the bounded mass projection, and the

@@ -125,7 +125,7 @@ src/pinca_jax/          the implementation (this is the canonical code)
   scaling.py matched.py                  rank stability; the matched PINN comparison
   claims.py bib.py paper.py              generate the audit, the bibliography, the paper
   runner.py             one command that runs the lot
-tests/                  the correctness gate (205 tests)
+tests/                  the correctness gate (245 tests)
 results/                raw JSON + generated Markdown tables
 docs/                   reports, figures, runbook, paper source
 paper/                  the submission source; every table and number generated

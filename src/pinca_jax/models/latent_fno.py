@@ -42,8 +42,33 @@ import jax
 import jax.numpy as jnp
 
 from .fno import FNO2d
+from .hybrids import MultiScaleFluxNCA
+from .nca import NCA
 
 _HE = nn.initializers.he_normal()
+
+# Latent predictors. All three are residual with a zero-initialised head, so every
+# variant starts as the identity in latent space and therefore as the identity in field
+# space -- the property that makes a low-epoch comparison measure learning rather than
+# initialisation. They are named "predictor" regardless of class, because the frozen-probe
+# machinery in `pinca_jax.jepa` selects the frozen subtree by parameter path.
+#
+# Why more than one: this project's own 4090 run measured global spectral mixing losing
+# to a local conservative automaton on Cahn-Hilliard (FNO twelfth of fourteen there).
+# A latent predictor inherits that regime dependence, so the local and conservative
+# alternatives are built rather than argued about.
+PREDICTORS = {
+    "fno": lambda d, m: FNO2d(out_channels=d, width=m.width, modes=m.modes,
+                              depth=m.depth, residual=True, name="predictor"),
+    "nca": lambda d, m: NCA(out_channels=d, perceive_features=m.width,
+                            hidden_features=2 * m.width, name="predictor"),
+    # Conservative in the *latent* channels, which is not field-space mass conservation
+    # (the decoder is a learned map). It is an inductive bias towards transport-like
+    # latent dynamics, and it is labelled as exactly that -- no conservation claim.
+    "flux": lambda d, m: MultiScaleFluxNCA(out_channels=d, features=m.width,
+                                           hidden_features=2 * m.width, conserve=True,
+                                           name="predictor"),
+}
 
 
 def largest_patch(size: int, wanted: int) -> int:
@@ -66,14 +91,16 @@ class LatentFNOEmulator(nn.Module):
     width: int = 32
     modes: int = 6          # latent grid is size/patch, so few modes are available
     depth: int = 4
+    predictor: str = "fno"  # "fno" | "nca" | "flux" -- see PREDICTORS
 
     def setup(self):
         p = self.patch
         self.enc = nn.Conv(self.latent_dim, (p, p), strides=(p, p), padding="CIRCULAR",
                            kernel_init=_HE, name="encoder")
-        self.pred = FNO2d(out_channels=self.latent_dim, width=self.width,
-                          modes=self.modes, depth=self.depth, residual=True,
-                          name="predictor")
+        if self.predictor not in PREDICTORS:
+            raise ValueError(f"unknown latent predictor {self.predictor!r}; "
+                             f"expected one of {sorted(PREDICTORS)}")
+        self.pred = PREDICTORS[self.predictor](self.latent_dim, self)
         # Pointwise to p*p*C, then pixel shuffle back to full resolution. Zero-init so
         # the whole model starts as the identity in field space.
         self.dec = nn.Conv(self.out_channels * p * p, (1, 1), name="decoder",
@@ -169,6 +196,21 @@ def demo():
         raise AssertionError("indivisible grid silently accepted")
     assert largest_patch(18, 4) == 3 and largest_patch(48, 4) == 4
     assert largest_patch(7, 4) == 1
+    # every latent predictor satisfies the same interface and the same identity-at-init
+    x = jax.random.normal(key, (2, 24, 24, 1))
+    for name in PREDICTORS:
+        m = LatentFNOEmulator(out_channels=1, patch=4, latent_dim=8, width=8, modes=3,
+                              depth=2, predictor=name)
+        p = m.init(key, x)
+        assert np.allclose(np.asarray(m.apply(p, x)), np.asarray(x), atol=1e-6), name
+        z = m.apply(p, x, method=m.encode)
+        assert m.apply(p, z, method=m.predict).shape == z.shape, name
+    try:
+        LatentFNOEmulator(predictor="nope").init(key, x)
+    except ValueError as e:
+        assert "unknown latent predictor" in str(e)
+    else:
+        raise AssertionError("unknown predictor silently accepted")
     print("latent_fno.demo OK")
 
 

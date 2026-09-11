@@ -45,7 +45,21 @@ The study compares three regimes for the *same architecture and parameter count*
 `distill` is the one to beat. If `jepa_ft` does not beat it, the pretraining bought
 nothing on this task, and that is a reportable result.
 
-    python -m pinca_jax.jepa --pde heat --allow-cpu
+**The objective as originally specified was inconsistent with the interface it is
+evaluated through.** One predictor application was matched to the encoding of the state
+`k_steps` ahead, but `__call__` applies `predict` once per solver step and the probe
+rolls that out -- so a predictor trained as a twelve-step operator was being used as a
+one-step map. The default objective now composes the predictor in latent space and
+supervises every intermediate horizon (`objective="multi"`); the original is kept as
+`objective="oneshot"` so the size of the mismatch is measured rather than asserted. It is
+the first variant in the screen for exactly that reason.
+
+`--sweep` screens several latent world models at once (`--list-variants` prints the set),
+sharing each architecture's two controls and resuming per variant:
+
+    python -m pinca_jax.jepa --pde heat --allow-cpu               # one architecture
+    python -m pinca_jax.jepa --sweep --pde heat --grid 32         # the variant screen
+    python -m pinca_jax.jepa --list-variants
 """
 from __future__ import annotations
 
@@ -53,6 +67,7 @@ import argparse
 import functools
 import json
 import os
+import shutil
 import time
 
 import jax
@@ -62,7 +77,7 @@ import optax
 
 from . import bench, env, ic, metrics, stats
 from .equations import pdes
-from .harness import (EmuConfig, effective_clip, evaluate_emulator, field_bounds,
+from .harness import (EmuConfig, effective_clip, evaluate_emulator,
                       train_emulator, _emu_traj)
 from .models.latent_fno import LatentFNOEmulator, largest_patch, latent_rollout
 
@@ -128,44 +143,97 @@ def latent_loss(pred, target, kind="mse", var_weight=0.0):
 
 
 # ------------------------------------------------------------------ training ---
-def _make_model(pde, grid, latent_dim, patch, width, modes, depth):
+def _make_model(pde, grid, latent_dim, patch, width, modes, depth, predictor="fno"):
     C = pdes.REGISTRY[pde].channels
-    return LatentFNOEmulator(out_channels=C, latent_dim=latent_dim,
-                             patch=largest_patch(grid, patch), width=width,
-                             modes=modes, depth=depth)
+    p = largest_patch(grid, patch)
+    if modes == "full":
+        # Every mode the latent grid can supply. `modes` is an *index*-space truncation,
+        # so a fixed count keeps a shrinking fraction of the physical bandwidth as the
+        # grid grows; "full" removes that confound from the resolution question at the
+        # cost of more spectral parameters, which the parameter column reports.
+        modes = max(1, (grid // p) // 2)
+    return LatentFNOEmulator(out_channels=C, latent_dim=latent_dim, patch=p, width=width,
+                             modes=modes, depth=depth, predictor=predictor)
 
 
 def jepa_pretrain(pde, grid, *, epochs=800, batch=32, k_steps=12, lr=1e-3, seed=42,
                   ema=0.99, loss_kind="mse", var_weight=0.0, latent_dim=32, patch=4,
-                  width=32, modes=6, depth=4, preseed=10, verbose=False):
+                  width=32, modes=6, depth=4, predictor="fno", objective="multi",
+                  preseed=10, verbose=False):
     """Train encoder + predictor by latent matching against an EMA target encoder.
 
     The decoder receives no gradient here at all: `_normalise` and the loss touch only
     latents, so the decoder's zero-initialised weights are still zero afterwards. That
     is deliberate -- it is what makes `fit_decoder` a probe of the representation rather
     than a continuation of training.
+
+    `objective` decides *what the predictor is taught to be*, and it matters more than
+    any architectural knob here:
+
+    ``oneshot``
+        One predictor application is matched to the encoding of the state `k_steps`
+        solver steps ahead. This is the objective as originally specified, and it is
+        **inconsistent with the interface the model is then evaluated through**:
+        ``__call__`` applies `predict` once per solver step, and `fit_decoder` rolls that
+        out, so a predictor trained as a `k_steps`-step operator is used as a one-step
+        map. Kept as a variant precisely because the size of that mismatch is worth
+        measuring rather than asserting.
+    ``final``
+        The predictor is composed `k_steps` times in latent space and only the endpoint
+        is matched. One application is now one solver step, so the pretrained operator
+        and the evaluated interface agree, but nothing constrains the intermediate
+        latents.
+    ``multi`` (default)
+        Composed the same way, with the encoding of *every* intermediate teacher state
+        as a target. This is the objective that actually asks the predictor to be a
+        one-step latent operator that composes, which is the property both the per-step
+        interface and `latent_rollout` depend on.
     """
     spec = pdes.STABLE.get(pde, pdes.REGISTRY[pde])
     key = jax.random.PRNGKey(seed)
     key, ik = jax.random.split(key)
-    model = _make_model(pde, grid, latent_dim, patch, width, modes, depth)
+    model = _make_model(pde, grid, latent_dim, patch, width, modes, depth, predictor)
     dummy = ic.make_state(ik, pde, 1, grid)
     params = model.init(ik, dummy)
     target = jax.tree_util.tree_map(jnp.copy, params)      # EMA copy, encoder is what matters
 
     opt = optax.adamw(lr, weight_decay=1e-5)
     opt_state = opt.init(params)
+    if objective not in ("oneshot", "final", "multi"):
+        raise ValueError(f"unknown objective {objective!r}")
 
     def loss_fn(p, tgt_params, k):
         x0 = ic.make_state(k, pde, batch, grid)
         if preseed > 0:
             x0 = pdes.rollout(spec, x0, preseed)
-        xk = pdes.rollout(spec, x0, k_steps)
         z_ctx = model.apply(p, x0, method=model.encode)
-        s = model.apply(p, z_ctx, method=model.predict)
+        if objective == "oneshot":
+            xk = pdes.rollout(spec, x0, k_steps)
+            s = model.apply(p, z_ctx, method=model.predict)
+            z_tgt = jax.lax.stop_gradient(
+                model.apply(tgt_params, xk, method=model.encode))
+            return latent_loss(s, z_tgt, kind=loss_kind, var_weight=var_weight)
+
+        # One predictor application == one solver step, composed k_steps times, so the
+        # pretrained operator is the same map the emulator interface applies.
+        traj = pdes.rollout_trajectory(spec, x0, k_steps)          # (K,B,H,W,C)
+        K, B = traj.shape[0], traj.shape[1]
+        flat = traj.reshape((K * B,) + traj.shape[2:])
+        # One encoder call for every horizon: the target encoder is a convolution, so
+        # batching the horizons is strictly cheaper than K separate applications.
         z_tgt = jax.lax.stop_gradient(
-            model.apply(tgt_params, xk, method=model.encode))
-        return latent_loss(s, z_tgt, kind=loss_kind, var_weight=var_weight)
+            model.apply(tgt_params, flat, method=model.encode))
+        z_tgt = z_tgt.reshape((K, B) + z_tgt.shape[1:])
+
+        def body(z, _):
+            z = model.apply(p, z, method=model.predict)
+            return z, z
+
+        _, zs = jax.lax.scan(body, z_ctx, xs=None, length=k_steps)  # (K,B,H',W',d)
+        hz = range(K) if objective == "multi" else [K - 1]
+        terms = [latent_loss(zs[j], z_tgt[j], kind=loss_kind, var_weight=var_weight)
+                 for j in hz]
+        return sum(terms) / len(terms)
 
     @functools.partial(jax.jit, donate_argnums=(0, 1, 2))
     def step(params, target, opt_state, k):
@@ -252,6 +320,10 @@ def fit_decoder(pre, pde, grid, *, epochs=400, batch=32, rollout_steps=12, lr=1e
         if preseed > 0:
             x0 = pdes.rollout(spec, x0, preseed)
         tgt = pdes.rollout(spec, x0, rollout_steps)
+        # No divergence guard inside the training rollout, unlike `train_emulator`. The
+        # probe and its floor both come through this function, so the probe-versus-floor
+        # comparison is recipe-matched; probe-versus-distill is a comparison of two
+        # protocols by construction and is reported as such.
         pred = _emu_traj(model, p, x0, rollout_steps, None)[-1]
         return jnp.mean((pred - tgt) ** 2)
 
@@ -266,7 +338,8 @@ def fit_decoder(pre, pde, grid, *, epochs=400, batch=32, rollout_steps=12, lr=1e
     losses = []
     for i in range(epochs):
         params, opt_state, l = step(params, opt_state, keys[i])
-        losses.append(float(l))
+        losses.append(l)                 # kept on device; float() here would sync per epoch
+    losses = [float(v) for v in losses]
     assert _encoder_fingerprint(params) == enc_before, (
         "the decoder-only mask leaked gradient into the encoder; the probe would then be "
         "fine-tuning and could not be compared with the frozen protocol")
@@ -340,13 +413,14 @@ def _cfg(pde, grid, epochs, rollout, eval_steps, batch, n_eval, seed):
 
 def study(pde, *, grid=48, epochs=1200, jepa_epochs=800, probe_epochs=400, batch=32,
           rollout=12, eval_steps=48, n_eval=8, seeds=(0, 1, 2), latent_dim=32, patch=4,
-          width=32, modes=6, depth=4, var_weight=0.0, loss_kind="mse", verbose=False):
+          width=32, modes=6, depth=4, predictor="fno", objective="multi", ema=0.99,
+          var_weight=0.0, loss_kind="mse", verbose=False):
     """distill vs jepa_probe vs jepa_ft, same architecture, same parameter count."""
     out = {k: [] for k in ("distill", "jepa_probe", "jepa_ft", "constant_encoder")}
     for seed in seeds:
         cfg = _cfg(pde, grid, epochs, rollout, eval_steps, batch, n_eval, seed)
-        bounds = field_bounds(pde, grid)
-        ctor = lambda: _make_model(pde, grid, latent_dim, patch, width, modes, depth)
+        ctor = lambda: _make_model(pde, grid, latent_dim, patch, width, modes, depth,
+                                   predictor)
 
         # 1. control: the protocol every other architecture in the benchmark uses.
         tr = train_emulator(ctor, cfg)
@@ -394,31 +468,23 @@ def study(pde, *, grid=48, epochs=1200, jepa_epochs=800, probe_epochs=400, batch
 
 
 def _finetune(pre, cfg: EmuConfig):
-    """End-to-end distillation starting from the JEPA-pretrained weights."""
-    spec = cfg.spec()
-    model, params = pre["model"], jax.tree_util.tree_map(jnp.copy, pre["params"])
-    opt = optax.adamw(cfg.lr, weight_decay=cfg.weight_decay)
-    opt_state = opt.init(params)
+    """End-to-end distillation starting from the JEPA-pretrained weights.
 
-    def loss_fn(p, k):
-        x0 = ic.make_state(k, cfg.pde, cfg.batch, cfg.grid_size)
-        if cfg.preseed_steps > 0:
-            x0 = pdes.rollout(spec, x0, cfg.preseed_steps)
-        tgt = pdes.rollout(spec, x0, cfg.rollout_steps)
-        pred = _emu_traj(model, p, x0, cfg.rollout_steps, None)[-1]
-        return jnp.mean((pred - tgt) ** 2)
+    This delegates to `train_emulator` rather than reimplementing it, and that is the
+    whole point. A hand-rolled fine-tuning loop here differed from the control in three
+    ways at once -- no LR warmup, no divergence guard inside the training rollout, and a
+    Python epoch loop instead of one jitted scan -- so "pretraining versus the control"
+    was partly a comparison of two training recipes, with the wall-clock column
+    misleading on top. Sharing the function makes the two regimes differ only in where
+    the weights came from, which is the thing being measured.
 
-    @functools.partial(jax.jit, donate_argnums=(0, 1))
-    def step(params, opt_state, k):
-        l, g = jax.value_and_grad(loss_fn)(params, k)
-        upd, opt_state = opt.update(g, opt_state, params)
-        return optax.apply_updates(params, upd), opt_state, l
-
-    t0 = time.time()
-    keys = jax.random.split(jax.random.PRNGKey(cfg.seed + 3), cfg.epochs)
-    for i in range(cfg.epochs):
-        params, opt_state, l = step(params, opt_state, keys[i])
-    return {"model": model, "params": params, "wall_s": time.time() - t0}
+    The copy is load-bearing: `train_emulator` donates its parameter buffers to XLA, so
+    handing it `pre["params"]` directly *deletes* the pretrained weights that the probe
+    and the collapse floor still read afterwards. Without it, `study` raises
+    "Array has been deleted" on the regime that runs next.
+    """
+    return train_emulator(lambda: pre["model"], cfg,
+                          init_params=jax.tree_util.tree_map(jnp.copy, pre["params"]))
 
 
 def _degenerate(pre):
@@ -522,6 +588,340 @@ def to_markdown(pde, agg, note=""):
     return "\n".join(L) + "\n"
 
 
+# ------------------------------------------------------------------- variants ---
+# What a latent world model can be varied along, and which variations are worth the
+# compute. Each entry overrides the defaults below; anything unspecified is shared, so
+# the rows differ only in what the name says they differ in.
+DEFAULT_ARCH = dict(latent_dim=32, patch=4, width=32, modes=6, depth=4, predictor="fno")
+DEFAULT_OBJ = dict(objective="multi", ema=0.99, loss_kind="mse", var_weight=0.0)
+
+VARIANTS: dict[str, dict] = {
+    # --- what the predictor is taught to be (the axis that matters most) ---
+    "fno_oneshot": dict(obj=dict(objective="oneshot"), note=(
+        "the objective as originally specified: one predictor application matched to a "
+        "state k_steps ahead, then used as a one-step map by the interface it is "
+        "evaluated through. Included to measure that mismatch, not because it is expected "
+        "to win")),
+    "fno_final": dict(obj=dict(objective="final"), note=(
+        "predictor composed k_steps times, endpoint supervised only: consistent with the "
+        "interface, nothing constrains the intermediate latents")),
+    "fno_multi": dict(note=(
+        "predictor composed k_steps times with every intermediate teacher state as a "
+        "target: asks for a one-step latent operator that composes, which is what both "
+        "the per-step interface and latent rollout need")),
+    # --- what the predictor is (this project's own data says spectral is regime-dependent) ---
+    "nca_multi": dict(arch=dict(predictor="nca"), note=(
+        "local residual automaton in the latent, no spectral mixing. The 4090 run has the "
+        "full-resolution FNO twelfth of fourteen on Cahn-Hilliard behind a local "
+        "conservative automaton, so the local latent predictor is the regime hedge")),
+    "flux_multi": dict(arch=dict(predictor="flux"), note=(
+        "multi-scale conservative flux predictor in the latent. Conserves latent channel "
+        "sums, which is NOT field-space mass conservation -- the decoder is a learned map "
+        "-- so this is a transport-like inductive bias and is claimed as nothing more. "
+        "Note that a constant latent channel sum is a hard constraint on the "
+        "representation and there is no reason a decaying field's encoding should satisfy "
+        "it, so a loss here is ambiguous between 'locality is wrong' and 'the constraint "
+        "is wrong in this space'. `nca_multi` is the clean test of locality alone")),
+    # --- structural questions the proposal raises ---
+    "fno_nopatch": dict(arch=dict(patch=1), note=(
+        "patch 1: latent at full resolution, so the latent objective is separated from "
+        "the downsampling. Same parameter count to within the 1x1 encoder and decoder, "
+        "but none of the p^2 compute saving -- the control for 'is the win the objective "
+        "or the smaller grid?'")),
+    "fno_fullband": dict(arch=dict(modes="full"), note=(
+        "every Fourier mode the latent grid supplies. Mode truncation is fixed in index "
+        "space, so a fixed count keeps a shrinking share of the physical bandwidth as the "
+        "grid grows; this is the variant that removes that confound from the "
+        "resolution-independence claim")),
+    # --- does the anti-collapse machinery earn its place? ---
+    "fno_simsiam": dict(obj=dict(ema=0.0), note=(
+        "no EMA: the target becomes the online encoder under a stop-gradient, lagged by "
+        "exactly one step because the EMA update runs after the parameter update. Tests "
+        "whether the momentum target is load-bearing here or decorative")),
+    "fno_vicreg": dict(obj=dict(var_weight=1.0), note=(
+        "explicit VICReg-style variance hinge on top of the EMA target. Tests whether an "
+        "anti-collapse term is necessary rather than assuming EMA suffices")),
+    "fno_cosine": dict(obj=dict(loss_kind="cosine"), note=(
+        "cosine rather than squared-error latent matching: direction only, scale free")),
+}
+
+
+def variant_spec(name):
+    v = VARIANTS[name]
+    return ({**DEFAULT_ARCH, **v.get("arch", {})},
+            {**DEFAULT_OBJ, **v.get("obj", {})}, v.get("note", ""))
+
+
+def arch_key(arch) -> str:
+    """Short stable label for an architecture, used to share its controls."""
+    return (f"{arch['predictor']}-d{arch['latent_dim']}-p{arch['patch']}"
+            f"-w{arch['width']}-m{arch['modes']}-x{arch['depth']}")
+
+
+def _fresh(pde, grid, arch, seed):
+    """An untrained model of this architecture: the input to the collapse floor."""
+    model = _make_model(pde, grid, **arch)
+    k = jax.random.PRNGKey(seed)
+    return {"model": model, "params": model.init(k, ic.make_state(k, pde, 1, grid))}
+
+
+def sweep(pde, *, grid=32, variants=None, seeds=(0, 1), epochs=400, jepa_epochs=300,
+          probe_epochs=200, batch=16, rollout=12, eval_steps=48, n_eval=8,
+          with_ft=True, out_path=None, verbose=True):
+    """Screen several latent world models, sharing each architecture's controls.
+
+    Every variant is scored the same way as everything else in this benchmark: frozen,
+    decoder fitted, evaluated in field space. Two controls are computed *per
+    architecture* rather than per variant, because they depend only on the architecture:
+
+    * ``distill`` -- the same end-to-end protocol every other architecture uses. The
+      number pretraining has to beat to have bought anything.
+    * ``floor`` -- encoder zeroed, decoder fitted alone. The number a probe has to beat
+      to have learned anything a decoder could not infer without it.
+
+    Variants that share an architecture therefore share both controls, which is most of
+    the saving that makes a ten-variant screen affordable on a small GPU.
+
+    Resumable at variant granularity: if `out_path` already holds a finished variant
+    computed at the same grid, seeds and epoch budget, it is reused. A screening sweep on
+    a laptop GPU gets interrupted, and losing eight finished variants to the ninth's
+    out-of-memory error is not acceptable.
+    """
+    names = list(variants or VARIANTS)
+    cond = {"pde": pde, "grid": grid, "seeds": list(seeds), "epochs": epochs,
+            "jepa_epochs": jepa_epochs, "probe_epochs": probe_epochs, "batch": batch,
+            "rollout": rollout, "eval_steps": eval_steps, "n_eval": n_eval,
+            "with_ft": with_ft}
+    done = _load_sweep(out_path, cond)
+    out = {"cond": cond, "variants": done.get("variants", {}),
+           "controls": done.get("controls", {}), "notes": {}}
+    for n in names:
+        out["notes"][n] = variant_spec(n)[2]
+
+    def control(arch):
+        """distill + floor for one architecture, computed once and cached on disk."""
+        ak = arch_key(arch)
+        if ak in out["controls"]:
+            return ak
+        dist, floor = [], []
+        for seed in seeds:
+            cfg = _cfg(pde, grid, epochs, rollout, eval_steps, batch, n_eval, seed)
+            tr = train_emulator(lambda: _make_model(pde, grid, **arch), cfg)
+            ev = evaluate(tr["model"], tr["params"], cfg)
+            ev["train_wall_s"] = tr["wall_s"]
+            dist.append(ev)
+            fl = fit_decoder(_degenerate(_fresh(pde, grid, arch, seed)), pde, grid,
+                             epochs=probe_epochs, batch=batch, rollout_steps=rollout,
+                             seed=seed, preseed=cfg.preseed_steps)
+            ev = evaluate(fl["model"], fl["params"], cfg)
+            ev["train_wall_s"] = fl["wall_s"]
+            floor.append(ev)
+        out["controls"][ak] = {"arch": arch, "distill": _agg(dist), "floor": _agg(floor)}
+        _save_sweep(out_path, out)
+        return ak
+
+    for i, name in enumerate(names, 1):
+        arch, obj, _ = variant_spec(name)
+        ak = control(arch)
+        if name in out["variants"]:
+            if verbose:
+                print(f"[sweep] {i}/{len(names)} {name}: reusing finished result")
+            continue
+        t0 = time.time()
+        probe, ft = [], []
+        for seed in seeds:
+            cfg = _cfg(pde, grid, epochs, rollout, eval_steps, batch, n_eval, seed)
+            pre = jepa_pretrain(pde, grid, epochs=jepa_epochs, batch=batch,
+                                k_steps=rollout, seed=seed, preseed=cfg.preseed_steps,
+                                **arch, **obj)
+            pr = fit_decoder(pre, pde, grid, epochs=probe_epochs, batch=batch,
+                             rollout_steps=rollout, seed=seed,
+                             preseed=cfg.preseed_steps)
+            ev = evaluate(pr["model"], pr["params"], cfg)
+            ev["train_wall_s"] = pre["wall_s"] + pr["wall_s"]
+            ev["jepa"] = {"latent_loss_final": pre["losses"][-1],
+                          "collapse": pre["collapse"],
+                          "decoder_untouched": pre["decoder_untouched"],
+                          "probe_trainable_params": pr["trainable_params"]}
+            probe.append(ev)
+            if with_ft:
+                f = _finetune(pre, cfg)
+                ev = evaluate(f["model"], f["params"], cfg)
+                ev["train_wall_s"] = pre["wall_s"] + f["wall_s"]
+                ft.append(ev)
+        out["variants"][name] = {"arch_key": ak, "arch": arch, "objective": obj,
+                                 "probe": _agg(probe),
+                                 "ft": _agg(ft) if ft else None}
+        _save_sweep(out_path, out)
+        if verbose:
+            p = out["variants"][name]["probe"]
+            f = out["variants"][name]["ft"]
+            ftxt = f"{f['rel_l2']['mean']:.4e}" if f else "skipped"
+            print(f"[sweep] {i}/{len(names)} {name}: probe "
+                  f"{p['rel_l2']['mean']:.4e} | ft {ftxt} | "
+                  f"eff_rank {p['eff_rank']:.3f} | {time.time() - t0:.0f}s")
+    return out
+
+
+def _sweep_path(pde, out_path=None):
+    return out_path or os.path.join(RES, f"jepa_sweep_{pde}.json")
+
+
+def _load_sweep(path, cond):
+    """Reuse a partial sweep only if it was produced under the same conditions.
+
+    Existence-based resume is how a run ends up half at one scale and half at another;
+    the recorded conditions are compared instead.
+    """
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            prev = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if prev.get("cond") != cond:
+        print(f"[sweep] {path} was produced under different conditions; starting fresh")
+        return {}
+    n = len(prev.get("variants", {}))
+    if n:
+        print(f"[sweep] resuming: {n} variant(s) already finished in {path}")
+    return prev
+
+
+def _save_sweep(path, out):
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=1)
+
+
+def sweep_markdown(pde, sw):
+    """The screening table, plus the two paired tests that decide what has promise."""
+    cond, V, C = sw["cond"], sw["variants"], sw["controls"]
+    names = [n for n in VARIANTS if n in V]
+    L = [f"### Latent world-model variants - {pde}", "",
+         f"Screening sweep: grid {cond['grid']}, {len(cond['seeds'])} seeds, "
+         f"{cond['jepa_epochs']} pretraining / {cond['probe_epochs']} probe / "
+         f"{cond['epochs']} distillation epochs. **A screen, not a headline result** -- "
+         f"the budget is set to fit a small GPU, so it ranks variants and rules some out; "
+         f"whatever survives is worth running at the paper budget.", "",
+         "`probe` freezes the pretrained encoder and predictor and fits only the decoder. "
+         "`ft` pretrains and then runs the identical end-to-end distillation as the "
+         "control. Both are evaluated in field space through the same harness, the same "
+         "paired statistics and against the same identity floor as every other "
+         "architecture in the study.", "",
+         "| variant | probe rel-L2 | ft rel-L2 | distill (control) | floor | "
+         "latent-rollout rel-L2 | eff. rank | params | wall (s) |",
+         "|---|---|---|---|---|---|---|---|---|"]
+    for n in names:
+        v = V[n]
+        ctl = C[v["arch_key"]]
+        p, f = v["probe"], v["ft"]
+        ftxt = f"{f['rel_l2']['mean']:.4e}" if f else "--"
+        L.append(
+            f"| `{n}` | {p['rel_l2']['mean']:.4e} | {ftxt} | "
+            f"{ctl['distill']['rel_l2']['mean']:.4e} | "
+            f"{ctl['floor']['rel_l2']['mean']:.4e} | "
+            f"{p['latent_rollout_rel_l2']['mean']:.4e} | {p['eff_rank']:.3f} | "
+            f"{p['params']} | {p['train_wall_s']:.0f} |")
+    L += ["", "Architectures and their shared controls:", "",
+          "| arch | predictor | patch | latent dim | width | modes | depth | "
+          "distill rel-L2 | floor rel-L2 |", "|---|---|---|---|---|---|---|---|---|"]
+    for ak, c in C.items():
+        a = c["arch"]
+        L.append(f"| `{ak}` | {a['predictor']} | {a['patch']} | {a['latent_dim']} | "
+                 f"{a['width']} | {a['modes']} | {a['depth']} | "
+                 f"{c['distill']['rel_l2']['mean']:.4e} | "
+                 f"{c['floor']['rel_l2']['mean']:.4e} |")
+
+    # Two paired families, Holm-corrected within each and reported separately: pooling
+    # them would inflate the correction and pretend they answer the same question.
+    L += _sweep_tests(V, C, names)
+    L += ["", "What each variant is, and why it is in the sweep:", ""]
+    for n in names:
+        L.append(f"* `{n}` --- {sw['notes'].get(n, '')}")
+    L += ["", "Caveats that survive any result here: the probe measures what a "
+              "fixed-capacity decoder can read out of a representation, so `ft` is "
+              "reported beside it; patch-based encoding is equivariant only to shifts "
+              "that are multiples of the patch, which the out-of-distribution "
+              "translation control will show; and no conservation claim attaches to any "
+              "of these rows, including `flux_multi`, whose conservation is of latent "
+              "channel sums and not of field-space mass."]
+    return "\n".join(L) + "\n"
+
+
+def _sweep_tests(V, C, names):
+    """Paired verdicts: does pretraining beat distillation, and does the probe beat the floor?"""
+    L = []
+    for label, regime, ref_kind, question in (
+            ("Does pretraining pay?", "ft", "distill",
+             "each variant's fine-tuned model against the distillation control of its own "
+             "architecture, on the same initial conditions"),
+            ("Did the representation learn anything?", "probe", "floor",
+             "each variant's frozen probe against the collapse floor of its own "
+             "architecture, on the same initial conditions")):
+        samples, refs = {}, {}
+        for n in names:
+            a = V[n].get(regime)
+            if not a:
+                continue
+            samples[n] = a["per_ic_rel_l2"]
+            refs[n] = C[V[n]["arch_key"]][ref_kind]["per_ic_rel_l2"]
+        if not samples:
+            continue
+        # Each variant has its own reference, so `compare_archs` (single reference) does
+        # not apply; the paired tests are run individually and Holm is applied across the
+        # family here.
+        tests = {n: stats.paired_test(samples[n], refs[n], lower_is_better=True)
+                 for n in samples}
+        rej = stats.holm_bonferroni([tests[n]["p_value"] for n in samples])
+        L += ["", f"**{label}** Paired Wilcoxon, {question}; Holm-corrected across the "
+                  f"{len(samples)} variants in this family.", "",
+              f"| variant | {regime} rel-L2 | {ref_kind} rel-L2 | mean diff | p (Holm) | "
+              f"verdict |", "|---|---|---|---|---|---|"]
+        for n, ok in zip(samples, rej):
+            t = tests[n]
+            sig = bool(ok and t["significant"])
+            verdict = ("better" if sig and t["better"] == "a" else
+                       "worse" if sig else "tie")
+            L.append(f"| `{n}` | {np.mean(samples[n]):.4e} | {np.mean(refs[n]):.4e} | "
+                     f"{t['mean_diff']:+.3e} | {t['p_value']:.2g} | {verdict} |")
+    return L
+
+
+def _run_sweep(args, seeds):
+    names = [n.strip() for n in args.variants.split(",")] if args.variants else list(VARIANTS)
+    unknown = [n for n in names if n not in VARIANTS]
+    if unknown:
+        raise SystemExit(f"unknown variant(s) {unknown}; --list-variants shows the set")
+    path = _sweep_path(args.pde)
+    # Checkpoints go to a separate `.partial.json`, and the real output appears only when
+    # the sweep finishes. The runner's stage-level resume is existence-based, so writing
+    # progress to the final path would make an interrupted sweep look complete and get
+    # skipped -- and a half-finished variant screen is worse than none.
+    part = path.replace(".json", ".partial.json")
+    if os.path.exists(path) and not os.path.exists(part):
+        shutil.copyfile(path, part)          # let a finished sweep be extended
+    print(f"[sweep] {args.pde}: grid {args.grid}, {len(seeds)} seeds, "
+          f"{len(names)} variants, ft={'off' if args.no_ft else 'on'} -> {path}")
+    sw = sweep(args.pde, grid=args.grid, variants=names, seeds=seeds,
+               epochs=args.epochs, jepa_epochs=args.jepa_epochs,
+               probe_epochs=args.probe_epochs, batch=args.batch,
+               rollout=args.rollout, eval_steps=args.eval, n_eval=args.n_eval,
+               with_ft=not args.no_ft, out_path=part, verbose=True)
+    sw["device"] = env.provenance("jepa_sweep")
+    _save_sweep(path, sw)
+    md = sweep_markdown(args.pde, sw)
+    with open(path.replace(".json", ".md"), "w", encoding="utf-8") as f:
+        f.write(md)
+    if os.path.exists(part):
+        os.remove(part)
+    print("\n" + md)
+    print(f"[sweep] wrote {path} / .md")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pde", default="heat")
@@ -539,27 +939,54 @@ def main():
     ap.add_argument("--var-weight", type=float, default=0.0,
                     help="VICReg-style variance hinge; 0 tests whether EMA alone holds")
     ap.add_argument("--loss", default="mse", choices=["mse", "cosine"])
+    ap.add_argument("--objective", default="multi",
+                    choices=["multi", "final", "oneshot"],
+                    help="what the predictor is taught to be; see jepa_pretrain")
+    ap.add_argument("--predictor", default="fno", choices=["fno", "nca", "flux"])
     ap.add_argument("--allow-cpu", action="store_true")
+    # --- variant screen ---
+    ap.add_argument("--sweep", action="store_true",
+                    help="screen several latent world models instead of one; shares each "
+                         "architecture's controls and resumes per variant")
+    ap.add_argument("--variants", default=None,
+                    help="comma-separated subset of --list-variants (default: all)")
+    ap.add_argument("--no-ft", action="store_true",
+                    help="skip the fine-tuning regime: roughly halves a sweep")
+    ap.add_argument("--list-variants", action="store_true")
     args = ap.parse_args()
+    if args.list_variants:
+        for n in VARIANTS:
+            arch, obj, note = variant_spec(n)
+            print(f"{n:14s} {arch_key(arch):24s} {obj['objective']:8s} "
+                  f"ema={obj['ema']:<5} loss={obj['loss_kind']:6s} "
+                  f"var={obj['var_weight']}\n               {note}")
+        return
     env.require_gpu("jepa", allow_cpu=args.allow_cpu)
     seeds = tuple(range(args.seeds))
+    if args.sweep:
+        return _run_sweep(args, seeds)
     print(f"[jepa] {args.pde}: grid {args.grid}, patch {args.patch}, "
-          f"{len(seeds)} seeds, loss={args.loss}, var_weight={args.var_weight}")
+          f"{len(seeds)} seeds, predictor={args.predictor}, "
+          f"objective={args.objective}, loss={args.loss}, "
+          f"var_weight={args.var_weight}")
     raw = study(args.pde, grid=args.grid, epochs=args.epochs,
                 jepa_epochs=args.jepa_epochs, probe_epochs=args.probe_epochs,
                 batch=args.batch, rollout=args.rollout, eval_steps=args.eval,
                 n_eval=args.n_eval, seeds=seeds, patch=args.patch,
                 latent_dim=args.latent_dim, var_weight=args.var_weight,
-                loss_kind=args.loss, verbose=True)
+                loss_kind=args.loss, predictor=args.predictor,
+                objective=args.objective, verbose=True)
     agg = {k: _agg(v) for k, v in raw.items() if v}
     os.makedirs(RES, exist_ok=True)
     base = os.path.join(RES, f"jepa_{args.pde}")
     with open(base + ".json", "w", encoding="utf-8") as f:
         json.dump({"pde": args.pde, "grid": args.grid, "patch": args.patch,
                    "seeds": list(seeds), "loss_kind": args.loss,
+                   "objective": args.objective, "predictor": args.predictor,
                    "var_weight": args.var_weight, "results": agg,
                    "device": env.provenance("jepa")}, f, indent=1)
     note = (f"(grid={args.grid}, patch={args.patch}, seeds={list(seeds)}, "
+            f"predictor={args.predictor}, objective={args.objective}, "
             f"loss={args.loss}, var_weight={args.var_weight})")
     md = to_markdown(args.pde, agg, note)
     with open(base + ".md", "w", encoding="utf-8") as f:

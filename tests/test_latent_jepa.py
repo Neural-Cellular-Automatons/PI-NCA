@@ -13,6 +13,8 @@ the selected leaves and passes the remaining updates through *untouched*, so the
 """
 from __future__ import annotations
 
+import json
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -21,7 +23,7 @@ import pytest
 from pinca_jax import ic, jepa, metrics
 from pinca_jax.equations import pdes
 from pinca_jax.models import registry
-from pinca_jax.models.latent_fno import (LatentFNOEmulator, largest_patch,
+from pinca_jax.models.latent_fno import (PREDICTORS, LatentFNOEmulator, largest_patch,
                                          latent_rollout)
 
 
@@ -191,3 +193,190 @@ def test_latent_rollout_cost_is_measured_not_assumed():
     cost = jepa.rollout_cost(pre["model"], pre["params"], x, 8, n=2)
     assert cost["per_step"] > 0 and cost["latent"] > 0
     assert cost["speedup"] == pytest.approx(cost["per_step"] / cost["latent"], rel=1e-6)
+
+
+# ------------------------------------------------------------- latent predictors ---
+@pytest.mark.parametrize("name", sorted(PREDICTORS))
+def test_every_latent_predictor_satisfies_the_interface_and_starts_as_identity(name):
+    """Swapping the latent predictor must not change the contract the harness relies on."""
+    key = jax.random.PRNGKey(0)
+    x = jax.random.normal(key, (2, 24, 24, 1))
+    m = LatentFNOEmulator(out_channels=1, patch=4, latent_dim=8, width=8, modes=3,
+                          depth=2, predictor=name)
+    p = m.init(key, x)
+    assert m.apply(p, x).shape == x.shape
+    assert np.allclose(np.asarray(m.apply(p, x)), np.asarray(x), atol=1e-6)
+    z = m.apply(p, x, method=m.encode)
+    assert m.apply(p, z, method=m.predict).shape == z.shape
+    # the frozen-probe machinery selects by parameter path, so the name must not drift
+    assert any("predictor" in str(k) for path, _ in
+               jax.tree_util.tree_flatten_with_path(p)[0] for k in path)
+
+
+def test_unknown_predictor_raises():
+    key = jax.random.PRNGKey(0)
+    with pytest.raises(ValueError, match="unknown latent predictor"):
+        LatentFNOEmulator(predictor="nope").init(
+            key, jax.random.normal(key, (1, 16, 16, 1)))
+
+
+def test_full_bandwidth_modes_resolve_against_the_latent_grid():
+    """`modes="full"` must become a concrete count, not reach the module as a string."""
+    m = jepa._make_model("heat", 48, 8, 4, 8, "full", 2)
+    assert m.modes == 6                      # latent grid 12 -> 12//2
+    key = jax.random.PRNGKey(0)
+    x = jax.random.normal(key, (1, 48, 48, 1))
+    assert m.apply(m.init(key, x), x).shape == x.shape
+
+
+# -------------------------------------------------------------------- objectives ---
+def test_the_three_objectives_coincide_at_a_single_step():
+    """At k_steps=1 there is nothing to compose, so all three must be the same objective.
+
+    This is the invariant that pins the composition logic: if `multi` or `final` differed
+    from `oneshot` here, the difference would be in the plumbing rather than in the
+    horizon, and the variant comparison would be measuring a bug.
+    """
+    out = {}
+    for obj in ("oneshot", "final", "multi"):
+        pre = jepa.jepa_pretrain("heat", 16, epochs=2, batch=2, k_steps=1, preseed=0,
+                                 latent_dim=8, patch=4, width=8, modes=3, depth=1,
+                                 objective=obj, seed=3)
+        out[obj] = pre["losses"]
+    assert out["oneshot"] == pytest.approx(out["final"], rel=1e-5)
+    assert out["oneshot"] == pytest.approx(out["multi"], rel=1e-5)
+
+
+def test_multi_step_objective_differs_from_oneshot_at_a_real_horizon():
+    """And at k_steps>1 they must genuinely differ -- one is a k-step map, one is not."""
+    kw = dict(epochs=3, batch=2, k_steps=4, preseed=0, latent_dim=8, patch=4, width=8,
+              modes=3, depth=1, seed=3)
+    a = jepa.jepa_pretrain("heat", 16, objective="oneshot", **kw)["losses"]
+    b = jepa.jepa_pretrain("heat", 16, objective="multi", **kw)["losses"]
+    assert not np.allclose(a, b, rtol=1e-3)
+
+
+def test_unknown_objective_raises():
+    with pytest.raises(ValueError, match="unknown objective"):
+        jepa.jepa_pretrain("heat", 16, epochs=1, batch=2, k_steps=1, preseed=0,
+                           latent_dim=8, patch=4, width=8, modes=3, depth=1,
+                           objective="nope")
+
+
+def test_multi_objective_still_leaves_the_decoder_untouched():
+    """The probe protocol must survive the objective change, or probe numbers are void."""
+    pre = jepa.jepa_pretrain("heat", 16, epochs=3, batch=2, k_steps=3, preseed=0,
+                             latent_dim=8, patch=4, width=8, modes=3, depth=1,
+                             objective="multi")
+    assert pre["decoder_untouched"] is True
+
+
+# ----------------------------------------------------------------------- variants ---
+def test_every_variant_spec_is_buildable_and_names_a_known_axis():
+    key = jax.random.PRNGKey(0)
+    x = jax.random.normal(key, (1, 24, 24, 1))
+    for name in jepa.VARIANTS:
+        arch, obj, note = jepa.variant_spec(name)
+        assert note, f"{name} has no stated reason to exist"
+        assert obj["objective"] in ("oneshot", "final", "multi")
+        m = jepa._make_model("heat", 24, **arch)
+        assert m.apply(m.init(key, x), x).shape == x.shape
+
+
+def test_variants_sharing_an_architecture_share_its_key():
+    """The saving that makes the sweep affordable: one control per architecture."""
+    keys = {n: jepa.arch_key(jepa.variant_spec(n)[0]) for n in jepa.VARIANTS}
+    fno_objective_variants = ["fno_oneshot", "fno_final", "fno_multi", "fno_simsiam",
+                              "fno_vicreg", "fno_cosine"]
+    assert len({keys[n] for n in fno_objective_variants}) == 1
+    # and the architectural variants must NOT collide with it
+    for n in ("nca_multi", "flux_multi", "fno_nopatch", "fno_fullband"):
+        assert keys[n] != keys["fno_multi"], n
+
+
+def test_collapse_floor_does_not_depend_on_the_predictor():
+    """Zeroing the encoder feeds every predictor the same zeros, so the floor is shared.
+
+    Asserted rather than assumed, because the sweep reports one floor per architecture
+    and a predictor that broke this (a non-residual one, say) would make those rows
+    silently incomparable.
+    """
+    x = ic.make_state(jax.random.PRNGKey(0), "heat", 2, 16)
+    outs = []
+    for name in sorted(PREDICTORS):
+        arch = dict(latent_dim=8, patch=4, width=8, modes=3, depth=1, predictor=name)
+        deg = jepa._degenerate(jepa._fresh("heat", 16, arch, 0))
+        outs.append(np.asarray(deg["model"].apply(deg["params"], x)))
+    for o in outs[1:]:
+        assert np.allclose(outs[0], o, atol=1e-6)
+
+
+def _sweep_kw(tmp_path, **over):
+    kw = dict(grid=12, seeds=(0,), epochs=2, jepa_epochs=2, probe_epochs=2, batch=2,
+              rollout=2, eval_steps=4, n_eval=2, with_ft=False,
+              out_path=str(tmp_path / "sw.json"), verbose=False)
+    kw.update(over)
+    return kw
+
+
+def test_sweep_shares_controls_and_renders(tmp_path):
+    sw = jepa.sweep("heat", variants=["fno_multi", "fno_cosine", "nca_multi"],
+                    **_sweep_kw(tmp_path))
+    assert set(sw["variants"]) == {"fno_multi", "fno_cosine", "nca_multi"}
+    # two variants share the fno architecture, the third does not: two controls, not three
+    assert len(sw["controls"]) == 2
+    for v in sw["variants"].values():
+        assert v["arch_key"] in sw["controls"]
+        assert v["ft"] is None                      # with_ft=False
+        assert v["probe"]["rel_l2"]["mean"] > 0
+    md = jepa.sweep_markdown("heat", sw)
+    assert "Does pretraining pay?" not in md        # no ft regime was run
+    assert "Did the representation learn anything?" in md
+    assert "`fno_multi`" in md and "floor" in md
+
+
+def test_sweep_resumes_finished_variants_and_refuses_a_changed_condition(tmp_path):
+    kw = _sweep_kw(tmp_path)
+    jepa.sweep("heat", variants=["fno_multi"], **kw)
+    with open(kw["out_path"], encoding="utf-8") as f:
+        first = json.load(f)
+    # same conditions: the finished variant is reused verbatim
+    again = jepa.sweep("heat", variants=["fno_multi"], **kw)
+    assert (again["variants"]["fno_multi"]["probe"]["rel_l2"]["mean"]
+            == first["variants"]["fno_multi"]["probe"]["rel_l2"]["mean"])
+    # a different scale must NOT be mixed into the same file
+    fresh = jepa.sweep("heat", variants=["fno_multi"], **_sweep_kw(tmp_path, grid=16))
+    assert fresh["cond"]["grid"] == 16
+    assert (fresh["variants"]["fno_multi"]["probe"]["rel_l2"]["mean"]
+            != first["variants"]["fno_multi"]["probe"]["rel_l2"]["mean"])
+
+
+def test_finetune_uses_the_same_recipe_as_its_own_control(tmp_path):
+    """`jepa_ft` must differ from `distill` only in where the weights came from.
+
+    The first implementation hand-rolled the fine-tuning loop and so differed from the
+    control in three ways at once: no LR warmup, no divergence guard in the training
+    rollout, and a Python epoch loop rather than one jitted scan. That made the headline
+    comparison partly a comparison of two training recipes. It now delegates to
+    `train_emulator`, and this pins both halves of that: the shared function is used, and
+    it really does start from the supplied weights.
+    """
+    from pinca_jax.harness import train_emulator
+
+    pre = _tiny_pretrain()
+    cfg = jepa._cfg("heat", 16, 0, 2, 4, 2, 2, 0)          # zero epochs: plumbing only
+    # `train_emulator` donates its parameter buffers, so the caller must hand it a copy;
+    # this is the assertion that caught it deleting the pretrained weights in place.
+    copy = jax.tree_util.tree_map(jnp.copy, pre["params"])
+    out = train_emulator(lambda: pre["model"], cfg, init_params=copy)
+    for a, b in zip(jax.tree_util.tree_leaves(out["params"]),
+                    jax.tree_util.tree_leaves(pre["params"])):
+        assert np.array_equal(np.asarray(a), np.asarray(b))
+    ft = jepa._finetune(pre, cfg)
+    assert ft["model"] is pre["model"]
+    for a, b in zip(jax.tree_util.tree_leaves(ft["params"]),
+                    jax.tree_util.tree_leaves(pre["params"])):
+        assert np.array_equal(np.asarray(a), np.asarray(b))
+    # and the pretrained weights survive fine-tuning, because the regimes that run after
+    # it in `study` (the probe's floor) read them
+    assert jepa._encoder_fingerprint(pre["params"])

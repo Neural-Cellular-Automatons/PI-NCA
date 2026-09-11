@@ -365,7 +365,7 @@ Every result in this paper was produced by one command on one machine. The run e
 failed (Appendix~\ref{sec:notmeasured}) and one was skipped; the per-stage timings, exit
 codes, and failures are recorded in the run manifest that accompanies the artifact.
 
-The run begins with a correctness gate of 205 tests that must pass before any benchmark
+The run begins with a correctness gate of 245 tests that must pass before any benchmark
 executes. The gate asserts that the JAX ports equal verbatim PyTorch references to
 tolerance, and it includes regression tests for two defects found during the migration:
 a periodic Laplacian that differenced the wrong axes for the array layout the training

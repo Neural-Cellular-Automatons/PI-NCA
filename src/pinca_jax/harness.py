@@ -114,14 +114,21 @@ def _emu_traj(model, params, x0, steps, clip=None):
     return traj  # (steps, B, H, W, C)
 
 
-def train_emulator(model_ctor, cfg: EmuConfig, verbose=False):
-    """Train one emulator. model_ctor() -> Flax module with __call__(state)->state."""
+def train_emulator(model_ctor, cfg: EmuConfig, verbose=False, init_params=None):
+    """Train one emulator. model_ctor() -> Flax module with __call__(state)->state.
+
+    `init_params` starts from existing weights instead of a fresh initialisation. That
+    exists so a pretrained model can be fine-tuned by *exactly* this recipe rather than a
+    near-copy of it: warmup schedule, divergence guard and jitted epoch scan included.
+    A near-copy is how a pretraining-versus-control comparison quietly becomes a
+    comparison of two training recipes.
+    """
     spec = cfg.spec()
     key = jax.random.PRNGKey(cfg.seed)
     key, ik = jax.random.split(key)
     model = model_ctor()
     dummy = ic.make_state(ik, cfg.pde, 1, cfg.grid_size)
-    params = model.init(ik, dummy)
+    params = model.init(ik, dummy) if init_params is None else init_params
 
     # LR warmup then constant (matches the originals' warmup_epochs/warmup_lr).
     if cfg.warmup_epochs > 0:

@@ -9,6 +9,10 @@
 # Anything you pass is forwarded to `python -m pinca_jax.runner`, so
 # `--only`, `--skip`, `--force`, `--no-gate` all work. `--list-stages` prints the names.
 #
+#   bash run_paper.sh --only jepa_sweep    # opt-in: screen the latent world-model
+#                                          # variants. Sized for a small GPU, resumable
+#                                          # per variant, and never part of the run above.
+#
 # Safe to interrupt. Every benchmark checkpoints per (pde, architecture) cell and the
 # runner skips whole stages whose outputs already exist, so re-running this exact command
 # after a crash, a Ctrl-C or a reboot continues instead of starting over.

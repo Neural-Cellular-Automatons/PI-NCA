@@ -206,6 +206,35 @@ three least central studies and roughly a fifth of the trainings. The claims aud
 then correctly report the corresponding claims as NOT_YET_MEASURED rather than pretending
 they were.
 
+### On a small GPU: the latent world-model screen
+
+`jepa_sweep` is the one **opt-in** stage: it never runs as part of the command above, and
+it is the one sized to fit a card much smaller than the one the paper was produced on.
+
+```bash
+bash run_paper.sh --only jepa_sweep                    # all three regime representatives
+python -m pinca_jax.jepa --list-variants               # the ten variants and what each is
+```
+
+Driving it directly gives finer control over the budget, which is what you want on 4–8 GB
+of VRAM. Start with two variants to calibrate the wall clock on your card, then let the
+rest run — it resumes per variant, so the second command picks up where the first stopped:
+
+```bash
+python -m pinca_jax.jepa --sweep --pde heat --grid 32 --batch 16 --seeds 2 \
+    --epochs 400 --jepa-epochs 300 --probe-epochs 200 \
+    --variants fno_oneshot,fno_multi
+python -m pinca_jax.jepa --sweep --pde heat --grid 32 --batch 16 --seeds 2 \
+    --epochs 400 --jepa-epochs 300 --probe-epochs 200
+```
+
+Every flag must match between the two calls: the resume compares the recorded conditions
+and starts fresh rather than mixing two scales into one table. If VRAM is tight, `--batch
+8` first and `--grid 24` second; `--no-ft` drops the fine-tuning regime and roughly halves
+the cost, at the price of the "does pretraining pay?" table. `fno_nopatch` is by far the
+most expensive variant (a full-resolution latent), so `--variants` without it is a
+reasonable first pass.
+
 ---
 
 ## 4. What the run guarantees
