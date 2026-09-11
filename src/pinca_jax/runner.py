@@ -30,7 +30,8 @@ Design notes, all of which exist because this runs unattended for many hours:
 * **The paper artifacts are always regenerated**, even if a measurement stage failed
   earlier, so what is on disk always reflects what was actually measured. That happens in
   a `finally` block.
-* **Timings, failures and provenance go to results/run_manifest.json**, so the run can be
+* **Timings, failures and provenance go to results/run_manifest_<backend>.json**, so a
+  CPU wiring check cannot overwrite the record of a GPU run, and the run can be
   audited afterwards without scrolling the log.
 
 Know the cost before starting it:
@@ -100,6 +101,7 @@ PROFILES = {
                   scal_grids="12,16", scal_rollouts="2,3", scal_epochs="15,25",
                   pinn_grid=12, pinn_iters=150, deeponet_seeds=1,
                   darcy_seeds=1, darcy_iters=60, darcy_ntrain=32,
+                  jepa_epochs=30, probe_epochs=20,
                   # A wiring check must still touch every phenomenon -- that is where
                   # shape and channel bugs live -- but it does not need every
                   # architecture, and running all fourteen turns "minutes" into an hour.
@@ -120,6 +122,7 @@ PROFILES = {
                   scal_epochs="300,600,1200",
                   pinn_grid=32, pinn_iters=6000, deeponet_seeds=3,
                   darcy_seeds=3, darcy_iters=2000, darcy_ntrain=256,
+                  jepa_epochs=800, probe_epochs=400,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -133,6 +136,7 @@ PROFILES = {
                  scal_epochs="500,1000,2000",
                  pinn_grid=32, pinn_iters=8000, deeponet_seeds=3,
                  darcy_seeds=3, darcy_iters=3000, darcy_ntrain=512,
+                 jepa_epochs=1200, probe_epochs=600,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -149,6 +153,7 @@ STAGES = [
     ("ood", "held-out initial-condition families, PDE coefficients and horizons"),
     ("stability", "long-horizon failure rates with the divergence guard DISABLED"),
     ("scaling", "does the ranking survive a change of grid, horizon and training budget?"),
+    ("jepa", "latent self-supervised pretraining vs distillation, same architecture"),
     ("bench3d", "the same comparison in three dimensions"),
     ("resolution", "train at one grid, evaluate at every other"),
     ("baselines", "PINN, DeepONet, Darcy, and the matched PINN-vs-emulator comparison"),
@@ -184,7 +189,7 @@ class Run:
             cmd.append("--force")
         if self.allow_cpu and module in ("bench_all", "bench3d", "res_study", "ood",
                                          "stability", "teacher_error", "matched",
-                                         "scaling"):
+                                         "scaling", "jepa"):
             cmd.append("--allow-cpu")
         return cmd
 
@@ -225,8 +230,12 @@ class Run:
         return ok
 
     def write_manifest(self):
+        # Suffixed by backend. A CPU wiring check writing to a shared filename silently
+        # destroys the manifest of the GPU run the paper cites -- which happened once
+        # here, and cost a restore from a copy that happened to still exist.
         total = sum(m["seconds"] for m in self.manifest)
-        bench.save_results(os.path.join(RES, "run_manifest.json"),
+        backend = env.provenance("runner")["backend"]
+        bench.save_results(os.path.join(RES, f"run_manifest_{backend}.json"),
                            {"results": {}, "stages": self.manifest,
                             "total_seconds": round(total, 1),
                             "failures": self.failures, "skipped": self.skipped,
@@ -500,6 +509,22 @@ def main():
                          "--epochs", P["epochs"], "--eval", P["eval"],
                          "--batch", P["batch"], "--n-eval", P["n_eval"]],
                         fatal=False, outputs=res(f"scaling_{pde}.json"))
+
+        if want("jepa"):
+            # A latent training objective cannot be scored by its own loss against the
+            # field-space errors in every other table, so this stage freezes the
+            # pretrained encoder, fits only the decoder, and evaluates in field space
+            # through the same harness. It also carries its own floor: a deliberately
+            # constant encoder, which bounds what a collapsed representation scores.
+            for pde in HEADLINE_PDES.split(","):
+                r.stage(f"JEPA latent pretraining vs distillation: {pde}", "jepa",
+                        ["--pde", pde, "--grid", P["grid"], "--epochs", P["epochs"],
+                         "--jepa-epochs", P["jepa_epochs"],
+                         "--probe-epochs", P["probe_epochs"],
+                         "--batch", P["batch"], "--rollout", P["rollout"],
+                         "--eval", P["eval"], "--n-eval", P["n_eval"],
+                         "--seeds", min(3, P["seeds"])],
+                        fatal=False, outputs=res(f"jepa_{pde}.json"))
 
         if want("bench3d"):
             # Non-fatal on purpose: a 3-D out-of-memory error must not discard a completed

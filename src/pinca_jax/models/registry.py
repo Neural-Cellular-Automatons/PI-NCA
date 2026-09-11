@@ -21,6 +21,7 @@ from .fno import FNO2d
 from .hybrids import BoundedConsFluxNCA, SpectralFluxNCA, MultiScaleFluxNCA
 from .ablation_nca import AblationNCA
 from .baselines import ResNetEmulator, UNetEmulator, IdentityEmulator
+from .latent_fno import LatentFNOEmulator, largest_patch
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,25 @@ REGISTRY: dict[str, ArchSpec] = {
         lambda C, bounds=None: (lambda: MultiScaleFluxNCA(
             out_channels=C, conserve=True, bounds=bounds or (-1.0, 1.0))),
         note="UNIFIED: multi-scale perception + bounded + mass-conserving (stiff bounded fields)"),
+
+    # --- latent-space operator: encode, evolve spectrally in the latent, decode ---
+    # The architecture a JEPA-style latent objective needs. Registered so that it is
+    # measured by the same harness, the same paired statistics, and against the same
+    # identity floor as everything else -- a latent training objective is evaluated in
+    # field space or not at all (see pinca_jax.jepa). `patch` is resolved against the
+    # grid at construction time, so an indivisible grid degrades rather than crops.
+    "latent_fno": ArchSpec(
+        "latent_fno",
+        lambda C, bounds=None, grid=48: (lambda: LatentFNOEmulator(
+            out_channels=C, latent_dim=32, patch=largest_patch(grid, 4),
+            width=32, modes=6, depth=4)),
+        note="patch-encode -> latent FNO -> pixel-shuffle decode (~2.3e5 params)"),
+    "latent_fno_iso": ArchSpec(
+        "latent_fno_iso",
+        lambda C, bounds=None, grid=48: (lambda: LatentFNOEmulator(
+            out_channels=C, latent_dim=8, patch=largest_patch(grid, 4),
+            width=8, modes=4, depth=2)),
+        note="iso-parameter latent FNO control (~6e3, matched to the NCA budget)"),
 }
 
 # The bounded variants take their range from the caller. Benchmark drivers pass the
@@ -145,7 +165,9 @@ BUDGET_CLASS = {
     "mc_flux_nca": "small",
     "resnet": "medium",
     "abl_proj_uniform": "small", "abl_proj_headroom": "small", "abl_proj_none": "small",
+    "latent_fno_iso": "small",
     "spectral_flux_nca": "large", "unet": "large", "fno": "large",
+    "latent_fno": "large",
 }
 
 

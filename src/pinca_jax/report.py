@@ -110,8 +110,23 @@ def arch_table():
     return _table(["Name in code", "What it is", "Params (heat)"], rows)
 
 
+def _load_manifest():
+    """The manifest for the backend these results came from.
+
+    Manifests are backend-scoped so a CPU wiring check cannot overwrite the record of a
+    GPU run. Prefer the GPU one when both are present, since that is the run the tables
+    come from; fall back to the legacy unsuffixed name for older result directories.
+    """
+    for name in ("run_manifest_gpu.json", "run_manifest_cpu.json",
+                 "run_manifest.json"):
+        d = _load(name)
+        if d:
+            return d
+    return None
+
+
 def run_info():
-    man = _load("run_manifest.json")
+    man = _load_manifest()
     dev = None
     for f in sorted(glob.glob(os.path.join(RES, "bench_*_full.json"))):
         d = _load(os.path.basename(f))

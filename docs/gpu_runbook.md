@@ -309,7 +309,7 @@ Only the measurement stages are fatal. Everything downstream is recorded and ski
 ```bash
 cat results/bench_heat_full.md      # one phenomenon, every model, winner bolded
 ls docs/figures/bench/              # 14 benchmark plots
-cat results/run_manifest.json       # per-stage timings, failures, device stamp
+cat results/run_manifest_gpu.json   # per-stage timings, failures, device stamp
 ```
 
 The report regenerates itself from the results, so its tables cannot disagree with the

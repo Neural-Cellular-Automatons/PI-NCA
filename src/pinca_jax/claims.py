@@ -52,7 +52,8 @@ def inventory() -> dict:
            "files": 0, "ood_pdes": set(), "stability_pdes": set(),
            "resolution_pdes": set(), "ablations": set(), "has_teacher_error": False,
            "n_eval_ics": set(), "has_matched": False, "scaling_pdes": set(),
-           "unstable_rank_axes": [], "by_backend": {},
+           "unstable_rank_axes": [], "by_backend": {}, "jepa_pdes": set(),
+           "jepa_has_floor": None,
            "teacher_all_converging": None, "teacher_not_converging": []}
     for path in sorted(glob.glob(os.path.join(RES, "*.json"))):
         d = _load(path)
@@ -61,6 +62,10 @@ def inventory() -> dict:
         inv["files"] += 1
         name = os.path.basename(path)[:-5]
         dev = d.get("device") or {}
+        if name.startswith("run_manifest"):
+            # Run metadata, not a measurement. Including it in the backend inventory
+            # would make a CPU wiring check look like a mixed-backend results directory.
+            continue
         if dev.get("backend"):
             inv["backends"].add(dev["backend"])
             inv["by_backend"].setdefault(dev["backend"], []).append(name)
@@ -78,6 +83,14 @@ def inventory() -> dict:
             inv["teacher_all_converging"] = not bad
         elif name.startswith("matched_"):
             inv["has_matched"] = True
+        elif name.startswith("jepa_"):
+            inv["jepa_pdes"].add(name[len("jepa_"):])
+            # A representation-learning study is only interpretable with a degenerate
+            # baseline, so record whether one is present rather than trusting it is.
+            res = d.get("results") or {}
+            inv["jepa_has_floor"] = bool(
+                inv.get("jepa_has_floor", True) is not False
+                and "constant_encoder" in res and "distill" in res)
         elif name.startswith("scaling_"):
             inv["scaling_pdes"].add(name[len("scaling_"):])
             for axis, b in (d.get("results") or {}).items():
@@ -106,7 +119,7 @@ def inventory() -> dict:
             inv["seeds"][name] = list(d["seeds"])
     for k in ("pdes_2d", "pdes_3d", "archs_2d", "archs_3d", "grids", "backends",
               "ood_pdes", "stability_pdes", "resolution_pdes", "ablations",
-              "n_eval_ics", "scaling_pdes"):
+              "n_eval_ics", "scaling_pdes", "jepa_pdes"):
         inv[k] = sorted(inv[k])
     inv["n_pdes_2d"] = len(inv["pdes_2d"])
     inv["n_pdes_3d"] = len(inv["pdes_3d"])
@@ -167,6 +180,10 @@ CLAIMS = [
      lambda i: i["teacher_all_converging"] if i["has_teacher_error"] else None),
     ("C14", "A matched PINN-vs-emulator comparison is reported with both cost structures.",
      lambda i: i["has_matched"] or None),
+    ("C16", "Any representation-learning objective is scored in field space against the "
+            "same identity floor as the rest of the matrix, and carries a degenerate "
+            "baseline of its own.",
+     lambda i: i["jepa_has_floor"] if i["jepa_pdes"] else None),
     ("C15", "Headline rankings are stable under changes of grid, horizon and training "
             "budget (otherwise they must be quoted with their operating point).",
      lambda i: (not i["unstable_rank_axes"]) if i["scaling_pdes"] else None),
@@ -264,6 +281,9 @@ def to_markdown(inv=None) -> str:
             "  **teacher NOT converging on: " +
             ", ".join(inv["teacher_not_converging"]) + "**"),
          f"- Matched PINN comparison: {'yes' if inv['has_matched'] else 'no'}",
+         f"- Latent / JEPA studies: {', '.join(inv['jepa_pdes']) or 'none'}"
+         + ("" if not inv["jepa_pdes"] else
+            f"  (degenerate baseline present: {inv['jepa_has_floor']})"),
          f"- Scaling studies: {', '.join(inv['scaling_pdes']) or 'none'}"
          + ("" if not inv["unstable_rank_axes"] else
             "  **ranking NOT stable along: " + ", ".join(inv["unstable_rank_axes"]) + "**"),
