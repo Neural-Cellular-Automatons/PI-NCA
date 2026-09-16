@@ -1,4 +1,48 @@
-# ICLR manuscript revision — rewritten against the GPU run
+# ICLR manuscript revision — PI-NCA as the contribution
+
+## This revision (framing)
+
+The paper is now a method paper. PI-NCA (a neural cellular automaton whose shared rule
+predicts fluxes, so every field is conserved exactly for any weights) is the main
+contribution; MC-PI-NCA is its per-field extension to coupled systems; the
+headroom projection is the bound-preserving component. The benchmark is the evidence
+for them rather than the subject.
+
+No measurement changed. What changed is which comparisons are foregrounded, and two
+pairs of tests the run did not tabulate were added, recomputed from the saved
+per-initial-condition errors by `pinca_tests.py` with the run's own paired test and Holm
+correction:
+
+- `table-pinca.tex` — each PI-NCA model against the strongest baseline outside its
+  family (10 tests, all Holm-significant).
+- `table-vsnca.tex` — PI-NCA against the standard NCA on all ten phenomena (better on 7,
+  tie on 1, worse on the 2 non-conservative reaction systems).
+
+Other changes:
+
+- Three propositions (exact conservation, per-field conservation, bounded mass-exact
+  projection) stated in Section 3 with proofs in a new appendix section.
+- New main-text figure `pinca-figure.tex`; model display names (PI-NCA, MC-PI-NCA,
+  PI-NCA-B, PI-NCA-MS, PI-NCA-MS-B, PI-NCA-Spec) used consistently in every table, with
+  the mapping to code names in the appendix.
+- `table-regime2d` gains a "best PI-NCA (rank)" column.
+- Fixed: the previous draft `\input` several tables from both `main.tex` and
+  `appendix.tex`, printing them twice with clashing labels. Each table is now input once,
+  and `check_manuscript.py` fails on duplicate inputs or labels.
+- Clarified a point a reviewer would raise: the unbounded model's mass drift on
+  Cahn--Hilliard comes from the evaluation's divergence guard clamping the state, not from
+  the flux update.
+- Internal history of earlier drafts (withdrawn reduced-scale claims) removed from the
+  manuscript; it remains below and in the repository.
+- The limitations still state the three unmeasured axes, the teacher-error ceiling on heat
+  and advection--diffusion, the regimes where PI-NCA is the wrong prior, and that the 3-D
+  suite does not favour it.
+- Wording avoids "state-of-the-art": the solvers are our own, so the defensible claim is
+  "best of fourteen architectures in this benchmark", which the paper states with tests.
+
+---
+
+## Previous revision — rewritten against the GPU run
 
 ## What changed and why
 

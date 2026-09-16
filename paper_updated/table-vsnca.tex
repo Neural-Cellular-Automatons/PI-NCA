@@ -1,0 +1,27 @@
+\begin{table}[t]
+\centering
+\caption{PI-NCA against the standard NCA it is built from, on every phenomenon (five
+seeds, $n=40$ paired evaluations each, Holm--Bonferroni across the ten tests). PI-NCA
+uses $4{,}576$ parameters on single-field problems against the standard NCA's
+$6{,}784$. The two losses are the two reaction systems that create and destroy their
+fields, which is where an exact conservation law is the wrong assumption; everywhere the
+target conserves a quantity, the flux-divergence rule is better.}
+\label{tab:vsnca}
+\small
+\begin{tabular}{lccrcl}
+\toprule
+Phenomenon & PI-NCA & NCA & Ratio & Win & Verdict \\
+\midrule
+Heat              & \textbf{0.00684} & 0.0542  & $7.9\times$  & 1.00 & PI-NCA better \\
+Advection--diff.  & \textbf{0.00150} & 0.00600 & $4.0\times$  & 1.00 & PI-NCA better \\
+Shallow water     & \textbf{0.00709} & 0.0164  & $2.3\times$  & 1.00 & PI-NCA better \\
+Gray--Scott       & \textbf{0.388}   & 0.595   & $1.5\times$  & 0.62 & PI-NCA better \\
+Wave              & \textbf{0.0135}  & 0.0204  & $1.5\times$  & 1.00 & PI-NCA better \\
+Navier--Stokes    & \textbf{0.390}   & 0.492   & $1.3\times$  & 0.90 & PI-NCA better \\
+Cahn--Hilliard    & \textbf{0.541}   & 0.636   & $1.2\times$  & 0.80 & PI-NCA better \\
+Allen--Cahn       & 0.0473           & 0.0465  & $1.0\times$  & 0.57 & tie \\
+Nagumo            & 0.379            & \textbf{0.0149}  & $0.04\times$ & 0.00 & NCA better \\
+FitzHugh--Nagumo  & 0.992            & \textbf{0.0529}  & $0.05\times$ & 0.00 & NCA better \\
+\bottomrule
+\end{tabular}
+\end{table}

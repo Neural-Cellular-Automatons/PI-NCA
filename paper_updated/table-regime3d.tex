@@ -12,12 +12,12 @@ independent samples of the same population, so no ranking here transfers.}
 \toprule
 Phenomenon & Best in 3-D & Best in 2-D & 3-D $\relerr$ & Agreement \\
 \midrule
-Heat             & \model{fno}       & \model{fno}         & 0.00405 & same family \\
-Advection--diff. & \model{fno}       & \model{fno}         & 0.00161 & same family \\
-Allen--Cahn      & \model{fno}       & \model{spectral\_flux\_nca} & 0.00898 & both spectral \\
-Nagumo           & \model{plain\_nca}& \model{unet}        & 0.0273  & differs; both unconstrained \\
-Gray--Scott      & \model{plain\_nca}& \model{unet}        & 0.602   & differs; both unconstrained \\
-FitzHugh--Nagumo & \model{fno}       & \model{plain\_nca}  & 0.152   & \textbf{differs} \\
+Heat             & FNO       & FNO         & 0.00405 & same family \\
+Advection--diff. & FNO       & FNO         & 0.00161 & same family \\
+Allen--Cahn      & FNO       & PI-NCA-Spec & 0.00898 & both spectral \\
+Nagumo           & NCA& U-Net        & 0.0273  & differs; both unconstrained \\
+Gray--Scott      & NCA& U-Net        & 0.602   & differs; both unconstrained \\
+FitzHugh--Nagumo & FNO       & NCA  & 0.152   & \textbf{differs} \\
 \bottomrule
 \end{tabularx}
 \end{table}

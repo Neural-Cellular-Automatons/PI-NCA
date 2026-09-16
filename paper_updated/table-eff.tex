@@ -13,25 +13,25 @@ with inductive bias, which is why the classes are separated.}
 Budget & Architecture & $\relerr$ & Params & Infer.\ (ms/step) \\
 \midrule
 \multirow{2}{*}{floor}
- & \model{identity}                 & 0.1889   & 1       & 3.00 \\
+ & Identity                 & 0.1889   & 1       & 3.00 \\
 \midrule
 \multirow{8}{*}{small}
- & \model{multiscale\_flux\_nca}    & 0.003699 & 5{,}520 & 1.79 \\
- & \model{mc\_flux\_nca}            & 0.003766 & 9{,}936 & 1.32 \\
- & \model{resnet\_iso}              & 0.005559 & 5{,}364 & 1.27 \\
- & \model{fno\_small}               & 0.005616 & 8{,}433 & 3.39 \\
- & \model{bounded\_cons\_nca}       & 0.005720 & 4{,}576 & 1.25 \\
- & \model{bounded\_multiscale\_nca} & 0.005867 & 5{,}520 & 1.88 \\
- & \model{pi\_nca}                  & 0.006057 & 4{,}576 & 1.23 \\
- & \model{unet\_iso}                & 0.007381 & 7{,}464 & 1.58 \\
- & \model{plain\_nca}               & 0.05614  & 6{,}784 & 1.48 \\
+ & PI-NCA-MS    & 0.003699 & 5{,}520 & 1.79 \\
+ & MC-PI-NCA            & 0.003766 & 9{,}936 & 1.32 \\
+ & ResNet-S              & 0.005559 & 5{,}364 & 1.27 \\
+ & FNO-S               & 0.005616 & 8{,}433 & 3.39 \\
+ & PI-NCA-B       & 0.005720 & 4{,}576 & 1.25 \\
+ & PI-NCA-MS-B & 0.005867 & 5{,}520 & 1.88 \\
+ & PI-NCA                  & 0.006057 & 4{,}576 & 1.23 \\
+ & U-Net-S                & 0.007381 & 7{,}464 & 1.58 \\
+ & NCA               & 0.05614  & 6{,}784 & 1.48 \\
 \midrule
-medium & \model{resnet}             & 0.006070 & 74{,}336 & 1.67 \\
+medium & ResNet             & 0.006070 & 74{,}336 & 1.67 \\
 \midrule
 \multirow{3}{*}{large}
- & \model{fno}                      & 0.001447 & 592{,}897 & 4.17 \\
- & \model{spectral\_flux\_nca}      & 0.003405 & 134{,}225 & 2.77 \\
- & \model{unet}                     & 0.004081 & 265{,}104 & 1.80 \\
+ & FNO                      & 0.001447 & 592{,}897 & 4.17 \\
+ & PI-NCA-Spec      & 0.003405 & 134{,}225 & 2.77 \\
+ & U-Net                     & 0.004081 & 265{,}104 & 1.80 \\
 \bottomrule
 \end{tabular}
 \end{table}

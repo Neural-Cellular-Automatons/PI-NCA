@@ -1,29 +1,29 @@
 \begin{table}[t]
 \centering
-\caption{Two-dimensional regime map. Grid $48^2$, 1{,}200 epochs, 12 training steps,
-48 evaluation steps, \textbf{five seeds} per cell, all on one NVIDIA RTX 4090.
-``Best'' is the lowest mean per-initial-condition relative $L^2$ error among the
-fourteen architectures measured on every phenomenon. \emph{Floor} is the do-nothing
+\caption{Two-dimensional results across all ten phenomena. Grid $48^2$, 1{,}200 epochs,
+12 training steps, 48 evaluation steps, five seeds per cell. Errors are mean
+per-initial-condition relative $L^2$. ``Best PI-NCA'' is the strongest member of the
+PI-NCA family with its rank among all fourteen architectures. \emph{Floor} is the
 identity emulator $g(x)=x$; \emph{teacher} is the reference solver's own
-discretization error over the same horizon (Table~\ref{tab:teacher}). Every winner
-beats its floor. Rankings are conditional on this operating point
-(Section~\ref{sec:scaling}).}
+discretization error over the same horizon (Table~\ref{tab:teacher}). A PI-NCA model is
+first on three phenomena and first or second on six; it ranks low only on the two
+non-conservative reaction systems and on Gray--Scott.}
 \label{tab:regime2d}
 \small
-\begin{tabularx}{\linewidth}{@{}lXlccc@{}}
+\resizebox{\linewidth}{!}{\begin{tabular}{llllcllcc}
 \toprule
-Phenomenon & Structure & Best architecture & $\relerr$ & Floor & Teacher \\
+Phenomenon & Structure & Best overall & $\relerr$ & & Best PI-NCA & $\relerr$ (rank) & Floor & Teacher \\
 \midrule
-Heat              & conservative, smooth, local        & \model{fno}                    & 0.00157 & 0.191 & 0.00114 \\
-Advection--diff.  & conservative, transported          & \model{fno}                    & 0.00123 & 0.228 & 0.00472 \\
-Wave              & 2-field, dispersive                & \model{unet}                   & 0.0129  & 0.0507 & 0.00061 \\
-Allen--Cahn       & bounded, sharp interfaces          & \model{spectral\_flux\_nca}    & 0.00382 & 0.0549 & 0.00017 \\
-Cahn--Hilliard    & 4th-order, stiff, bounded          & \model{bounded\_multiscale\_nca} & 0.353 & 0.918 & 0.0441 \\
-Gray--Scott       & 2-field reaction--diffusion        & \model{unet}                   & 0.138   & 0.345 & 0.00497 \\
-Shallow water     & 3-field, conservative              & \model{pi\_nca}                & 0.00709 & 0.0518 & $9.7\!\times\!10^{-7}$ \\
-FitzHugh--Nagumo  & 2-field excitable, non-conservative& \model{plain\_nca}             & 0.0529  & 1.135 & 0.00601 \\
-Nagumo            & bistable, non-conservative         & \model{unet}                   & 0.00751 & 0.380 & 0.00282 \\
-Navier--Stokes    & globally coupled, turbulent        & \model{fno}                    & 0.0730  & 0.450 & 0.0251 \\
+Shallow water    & 3-field, conservative              & PI-NCA      & \textbf{0.00709} & & PI-NCA      & 0.00709 (1) & 0.0518 & $9.7\!\times\!10^{-7}$ \\
+Cahn--Hilliard   & 4th-order, stiff, bounded          & PI-NCA-MS-B & \textbf{0.353}   & & PI-NCA-MS-B & 0.353 (1)   & 0.918  & 0.0441 \\
+Allen--Cahn      & bounded, sharp interfaces          & PI-NCA-Spec & \textbf{0.00382} & & PI-NCA-Spec & 0.00382 (1) & 0.0549 & 0.00017 \\
+Heat             & conservative, smooth               & FNO         & 0.00157 & & MC-PI-NCA   & 0.00370 (2) & 0.191  & 0.00114 \\
+Advection--diff. & conservative, transported          & FNO         & 0.00123 & & PI-NCA      & 0.00150 (2) & 0.228  & 0.00472 \\
+Navier--Stokes   & globally coupled, turbulent        & FNO         & 0.0730  & & PI-NCA-Spec & 0.0826 (2)  & 0.450  & 0.0251 \\
+Wave             & 2-field, dispersive                & U-Net       & 0.0129  & & PI-NCA-Spec & 0.0133 (4)  & 0.0507 & 0.00061 \\
+Gray--Scott      & 2-field reaction--diffusion        & U-Net       & 0.138   & & PI-NCA-MS-B & 0.290 (6)   & 0.345  & 0.00497 \\
+Nagumo           & bistable, non-conservative         & U-Net       & 0.00751 & & PI-NCA-MS   & 0.379 (8)   & 0.380  & 0.00282 \\
+FitzHugh--Nagumo & 2-field excitable, non-conservative& NCA         & 0.0529  & & PI-NCA-Spec & 0.991 (8)   & 1.135  & 0.00601 \\
 \bottomrule
-\end{tabularx}
+\end{tabular}}
 \end{table}

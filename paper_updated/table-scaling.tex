@@ -12,13 +12,13 @@ the scale at which it was measured rather than as a property of the architecture
 \toprule
 Phenomenon & Axis & $\tau$ & Winner at each end & Verdict \\
 \midrule
-Heat & grid $24\!\to\!48$      & 0.73 & \model{multiscale\_flux\_nca} $\to$ \model{fno} & \textbf{changes} \\
+Heat & grid $24\!\to\!48$      & 0.73 & PI-NCA-MS $\to$ FNO & \textbf{changes} \\
      & rollout $4\!\to\!12$    & 0.87 & unchanged & stable \\
      & epochs $300\!\to\!1200$ & 0.87 & unchanged & stable \\
 \midrule
-Cahn--Hilliard & grid $24\!\to\!48$      & 0.73 & \model{multiscale\_flux\_nca} $\to$ \model{pi\_nca} & \textbf{changes} \\
+Cahn--Hilliard & grid $24\!\to\!48$      & 0.73 & PI-NCA-MS $\to$ PI-NCA & \textbf{changes} \\
                & rollout $4\!\to\!12$    & 0.73 & unchanged & \textbf{changes} \\
-               & epochs $300\!\to\!1200$ & 0.60 & \model{multiscale\_flux\_nca} $\to$ \model{pi\_nca} & \textbf{changes} \\
+               & epochs $300\!\to\!1200$ & 0.60 & PI-NCA-MS $\to$ PI-NCA & \textbf{changes} \\
 \midrule
 Navier--Stokes & grid $24\!\to\!48$      & 0.87 & unchanged & stable \\
                & rollout $4\!\to\!12$    & 0.07 & unchanged & \textbf{changes} \\

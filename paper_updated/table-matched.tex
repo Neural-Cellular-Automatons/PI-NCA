@@ -14,7 +14,7 @@ construction and cheaper per initial condition than either surrogate.}
 \toprule
 Method & $\relerr$ & 95\% CI & Params & Fixed (s) & Per IC (s) & Total (s) \\
 \midrule
-Emulator (\model{multiscale\_flux\_nca}) & 0.0153 & [0.0144, 0.0165] & 5{,}520 & 27.2 & 0.055 & 28.9 \\
+Emulator (PI-NCA-MS) & 0.0153 & [0.0144, 0.0165] & 5{,}520 & 27.2 & 0.055 & 28.9 \\
 PINN, one run per initial condition      & 0.1235 & [0.118, 0.129]   & 14{,}209 & 0 & 389.8 & 12{,}474.3 \\
 Numerical solver (reference)             & 0 & --- & --- & 0 & 0.019 & 0.604 \\
 \bottomrule

@@ -1,0 +1,35 @@
+\begin{table}[t]
+\centering
+\caption{Where PI-NCA models outperform the strongest architecture outside their family.
+Each row is a paired Wilcoxon test on shared held-out initial conditions; the ten rows
+are Holm--Bonferroni corrected as one family and all ten remain significant. ``Win''
+is the fraction of initial conditions on which the PI-NCA model has lower error. Shallow
+water, Cahn--Hilliard and Allen--Cahn rows are against the best non-PI-NCA architecture
+of all fourteen; the heat and advection--diffusion rows are against the physics-free
+convolutional baselines, since the FNO leads on those two phenomena
+(Table~\ref{tab:regime2d}). Heat and Cahn--Hilliard use ten seeds ($n=80$), the rest
+five ($n=40$). Recomputed from the saved per-initial-condition errors by
+\texttt{pinca\_tests.py}.}
+\label{tab:pinca}
+\small
+\resizebox{\linewidth}{!}{\begin{tabular}{llrcllrcc}
+\toprule
+Phenomenon & PI-NCA model & Params & $\relerr$ & & Baseline & Params & $\relerr$ & Win \\
+\midrule
+Shallow water   & PI-NCA        & 5{,}280   & \textbf{0.00709} & vs & FNO    & 592{,}995 & 0.00869 & 0.85 \\
+                & MC-PI-NCA     & 10{,}992  & \textbf{0.00742} & vs & FNO    & 592{,}995 & 0.00869 & 0.95 \\
+                & MC-PI-NCA     & 10{,}992  & \textbf{0.00742} & vs & U-Net  & 265{,}584 & 0.00898 & 0.90 \\
+\midrule
+Cahn--Hilliard  & PI-NCA-MS-B   & 5{,}520   & \textbf{0.357}   & vs & ResNet & 74{,}336  & 0.465   & 0.99 \\
+                & PI-NCA-B      & 4{,}576   & \textbf{0.368}   & vs & FNO    & 592{,}897 & 0.650   & 1.00 \\
+\midrule
+Allen--Cahn     & PI-NCA-Spec   & 134{,}225 & \textbf{0.00382} & vs & FNO    & 592{,}897 & 0.00889 & 1.00 \\
+\midrule
+Heat            & PI-NCA-MS     & 5{,}520   & \textbf{0.00370} & vs & U-Net  & 265{,}104 & 0.00408 & 0.65 \\
+                & PI-NCA-MS     & 5{,}520   & \textbf{0.00370} & vs & ResNet & 74{,}336  & 0.00607 & 0.95 \\
+\midrule
+Advection--diff.& PI-NCA        & 4{,}576   & \textbf{0.00150} & vs & U-Net  & 265{,}104 & 0.00349 & 1.00 \\
+                & PI-NCA        & 4{,}576   & \textbf{0.00150} & vs & ResNet & 74{,}336  & 0.00461 & 1.00 \\
+\bottomrule
+\end{tabular}}
+\end{table}

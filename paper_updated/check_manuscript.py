@@ -16,7 +16,7 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SOURCES = ["main.tex", "appendix.tex", "intervention-figure.tex",
+SOURCES = ["main.tex", "appendix.tex", "intervention-figure.tex", "pinca-figure.tex",
            "architecture-diagrams.tex"] + sorted(
     os.path.basename(p) for p in glob.glob(os.path.join(HERE, "table-*.tex")))
 
@@ -48,6 +48,25 @@ def check_inputs(tex, fail):
         path = os.path.join(HERE, name if name.endswith(".tex") else name + ".tex")
         if not os.path.exists(path):
             fail(f"\\input{{{name}}} does not exist")
+
+
+def check_duplicates(fail):
+    """Each file \\input once and each label defined once.
+
+    Only files that are actually reached through \\input from main.tex are counted, so a
+    table is not flagged merely for existing. An earlier draft input several tables from
+    both main.tex and appendix.tex, printing them twice with clashing labels; a compile
+    only warns about that.
+    """
+    text = read("main.tex") + "\n" + read("appendix.tex")
+    names = re.findall(r"\\input\{([^}]+)\}", text)
+    for n in sorted({n for n in names if names.count(n) > 1}):
+        fail(f"\\input{{{n}}} appears {names.count(n)} times")
+    files = {n if n.endswith(".tex") else n + ".tex" for n in names} - {"appendix.tex"}
+    reached = [read(n) for n in files if os.path.exists(os.path.join(HERE, n))]
+    labels = re.findall(r"\\label\{([^}]+)\}", "\n".join([text] + reached))
+    for lab in sorted({lab for lab in labels if labels.count(lab) > 1}):
+        fail(f"label {lab} defined {labels.count(lab)} times")
 
 
 def check_refs(tex, fail):
@@ -173,6 +192,7 @@ def main():
     tex = all_tex()
     check_inputs(tex, fail)
     check_refs(tex, fail)
+    check_duplicates(fail)
     check_citations(tex, fail)
     check_environments(tex, fail)
     check_table_widths(fail)
