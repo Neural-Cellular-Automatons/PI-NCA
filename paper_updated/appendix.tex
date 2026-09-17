@@ -13,8 +13,7 @@ cells,
 \end{equation}
 because a sum over all cells is invariant under a permutation of the cells. Nothing in
 the argument depends on how $F_a$ was computed, so the identity holds for every parameter
-value, every state and every perception stencil, including the dilated perception of
-PI-NCA-MS. In floating point each sum is exact up to round-off, which is what the
+value, every state and every perception stencil. In floating point each sum is exact up to round-off, which is what the
 measured mass errors of order $10^{-7}$ relative reflect.
 
 \paragraph{Proposition~\ref{prop:perfield}.} Equation~\ref{eq:mc} applies the scalar
@@ -133,39 +132,24 @@ Cahn--Hilliard problems.
 \label{sec:architecture-details}
 The model names in the paper map to the released implementation as follows.
 \textbf{PI-NCA} is \model{DeepFluxNCA} (\model{pi\_nca}): a $3\times3$ circular
-perception convolution with 32 channels, a per-cell MLP with 64 and 32 hidden channels,
-and a zero-initialized flux head with $2C$ outputs. \textbf{MC-PI-NCA} is
-\model{MultiChannelFluxNCA} (\model{mc\_flux\_nca}), the same per-field construction with
-48 perception and 96 hidden channels. \textbf{PI-NCA-B} is \model{BoundedConsFluxNCA}
-(\model{bounded\_cons\_nca}), PI-NCA followed by the clip and headroom projection.
-\textbf{PI-NCA-MS} is \model{MultiScaleFluxNCA} (\model{multiscale\_flux\_nca}) with
-dilations $(1,2,4)$ and 24 features per dilation, and \textbf{PI-NCA-MS-B}
-(\model{bounded\_multiscale\_nca}) adds the projection. \textbf{PI-NCA-Spec} is
-\model{SpectralFluxNCA} (\model{spectral\_flux\_nca}), a local flux stream plus a
-two-layer Fourier stream of width 16 with 8 modes, followed by mass restoration.
-\textbf{NCA} is the standard residual NCA (\model{plain\_nca}); \textbf{FNO-S},
-\textbf{ResNet-S} and \textbf{U-Net-S} are the parameter-matched controls. On single-field
-problems PI-NCA and MC-PI-NCA differ only in width; the per-field divergence is what
-distinguishes MC-PI-NCA from a lumped construction on multi-field problems, and the
-compact PI-NCA configuration uses the same per-field divergence there.
+perception convolution with 32 channels, a per-cell MLP with 64 and 32 channels, and a
+zero-initialized flux head with $2C$ outputs, followed by the per-field divergence.
+\textbf{Bounded PI-NCA} is the same network with the clip and headroom projection appended
+(\model{BoundedConsFluxNCA}, \model{bounded\_cons\_nca}); the projection has no parameters,
+so both configurations have $4{,}576$ parameters on a single field. \textbf{MC-PI-NCA} is
+\model{MultiChannelFluxNCA} (\model{mc\_flux\_nca}), the per-field construction with 48
+perception and 96 hidden channels. On a single field PI-NCA and MC-PI-NCA differ only in
+width.
 
-For a fixed architecture width and stencil, local convolutional update cost scales
-linearly with the number of cells. Exact FLOP counts also depend on channel widths,
-MLP depth, and stencil support; parameter count alone is not a runtime model.
-The update heads are reported to be zero-initialized to start residual emulator
-maps at the identity. This initialization statement is not intended to describe
-the native prediction functions of the continuous PINN or DeepONet.
-
-The multi-scale update can be written as
-\begin{equation}
- s_{t+1}=\mathcal{C}\!\left[s_t+D_hF_\theta
- \bigl([P_1(s_t)\Vert P_2(s_t)\Vert P_4(s_t)]\bigr)\right],
-\end{equation}
-where $\mathcal{C}$ is the identity when \model{bounds=None} and the reported
-clipping/restoration operation when bounds are enabled. In the source discussion,
-\model{bounds=(-1,1)} is reported to match the CH winner with approximately
-$6\times$ lower variance; the supporting variance panel is not supplied, so this
-remains a contextual observation rather than a headline result.
+\textbf{NCA} is the standard residual NCA (\model{plain\_nca}), Equation~\ref{eq:plain},
+with 48 perception and 64 hidden channels. \textbf{ResNet} is a residual CNN with circular
+padding (width 32, depth 4) and \textbf{U-Net} a two-level U-Net with mean-pool
+downsampling (width 24); \textbf{ResNet-S} (width 12, depth 2) and \textbf{U-Net-S} (width
+4) match the NCA parameter budget. \textbf{FNO} has width 24, 8 modes and depth 4, and
+\textbf{FNO-S} width 8, 4 modes and depth 2. Every learned model has a zero-initialized
+output head and therefore starts as the identity map. For a fixed width and stencil, the
+cost of a local convolutional update scales linearly with the number of cells; parameter
+count alone is not a runtime model.
 
 \paragraph{FNO.}
 A spectral layer combines a pointwise transformation with learned Fourier weights:
@@ -173,37 +157,12 @@ A spectral layer combines a pointwise transformation with learned Fourier weight
  v_{\ell+1}=\sigma\!\left(Wv_\ell+
  \mathcal{F}^{-1}\bigl(R_\ell\odot\mathcal{F}[v_\ell]\bigr)\right).
 \end{equation}
-The implementation truncates spectral mixing to the lowest $m\times m$ modes in
-2-D. Global mixing, mode truncation, and pointwise nonlinearities jointly determine
-its behavior. The present experiments neither imply that FNO always removes sharp
-features nor guarantee invariant accuracy across grids.
-
-\paragraph{PINN.}
-The continuous single-IVP baseline minimizes
-\begin{equation}
-\begin{split}
- \mathcal{L}_{\mathrm{PINN}}={}&\lambda_r\|\partial_tu_\phi-\mathcal{N}[u_\phi]\|^2
- +\lambda_b\|\mathcal{B}[u_\phi]\|^2\\
- &+\lambda_0\|u_\phi(\cdot,0)-u_0\|^2.
-\end{split}
-\end{equation}
-It uses the equation, boundary conditions, and initial condition without labeled
-interior solver pairs. Its continuous coordinate representation permits off-grid
-queries, but the experiment trains anew for each IVP.
-
-\paragraph{DeepONet.}
-The branch network encodes the input function at sensors and the trunk encodes the
-query coordinate, giving
-$G(a)(y)\approx\sum_k b_k(a)t_k(y)$. It is trained on solver-generated function
-pairs across initial conditions. Its supervised operator task differs from both the
-single-IVP PINN and the fixed-step autoregressive emulator.
+The implementation truncates spectral mixing to the lowest $m\times m$ modes in 2-D and
+uses the FNO as a residual one-step emulator, so it is trained and evaluated through the
+same interface as every other model.
 
 \input{table-axes}
 
-The schematics below retain the original architecture decompositions. Arrows
-describe computation, not guarantees of numerical stability. In particular,
-``restore mass'' denotes the reported correction routine; simultaneous bound and
-mass preservation requires checking that routine, not merely composing two labels.
 \input{architecture-diagrams}
 \clearpage
 
@@ -272,50 +231,42 @@ need not decrease when total error decreases.
 \paragraph{Heat.}
 Table~\ref{tab:heatms} gives the complete ten-seed ranking. Three observations that the
 main text compresses. First, the standard NCA is an order of magnitude behind every other
-learned model ($0.0561$ against $0.0074$ for the next worst) and its error-growth ratio
-is $22.9\times$, against $5.5\times$ for PI-NCA and $2$--$3\times$ for the other models;
-the deficit is rollout instability, not one-step accuracy. Second, three of the four
-architectures between $0.0034$ and $0.0041$ are PI-NCA models (PI-NCA-Spec, PI-NCA-MS and
-MC-PI-NCA), and the fourth is a U-Net with $265{,}104$ parameters, so within that accuracy
-band parameter count is not predictive. Third, at $n=80$ every difference against the FNO
-is Holm-significant.
+learned model ($0.0561$ against $0.0074$ for the next worst) and its error-growth ratio is
+$22.9\times$, against about $5.5\times$ for PI-NCA and MC-PI-NCA and $2$--$3\times$ for
+the convolutional and spectral baselines; the deficit is rollout instability, not one-step
+accuracy. Second, MC-PI-NCA is second overall with $9{,}936$ parameters, ahead of a U-Net
+with $265{,}104$. Third, at $n=80$ every difference against the FNO is Holm-significant.
 
 \input{table-heatms}
 
 \input{table-eff}
 
 \paragraph{Resource accounting.}
-Table~\ref{tab:eff} groups by parameter budget. The within-class comparison is the one
-that bears on inductive bias: at a matched small budget the conservative local models
-lead the physics-free controls ($0.003699$ for PI-NCA-MS against $0.005559$ for
-ResNet-S and $0.007381$ for U-Net-S).
-Across classes, a $107\times$ increase in parameters buys a factor of $2.6$ in error.
-Inference latency does not track parameter count: the $592{,}897$-parameter FNO costs
-$4.17$\,ms per step against $1.23$\,ms for PI-NCA and $1.79$\,ms for PI-NCA-MS,
-but the $265{,}104$-parameter U-Net costs $1.80$\,ms, because the FFT rather than the
-weight count dominates. Accuracy, size, and latency must be read separately, and none of
-these ratios establishes solver acceleration \citep{mcgreivy2024baselines}; the only
-statement about that is Table~\ref{tab:matched}.
+Table~\ref{tab:eff} groups by parameter budget. The within-budget comparison is the one
+that bears on the architectural prior: in the small budget MC-PI-NCA ($0.00377$) leads
+ResNet-S ($0.00556$), FNO-S ($0.00562$) and U-Net-S ($0.00738$). Across budgets, a
+$60\times$ increase in parameters from MC-PI-NCA to the FNO buys a factor of $2.6$ in
+error. Inference latency does not track parameter count: the $592{,}897$-parameter FNO
+costs $4.17$\,ms per step against $1.22$\,ms for PI-NCA and $1.32$\,ms for MC-PI-NCA,
+while the $265{,}104$-parameter U-Net costs $1.80$\,ms, because the FFT rather than the
+weight count dominates. Accuracy, size and latency must be read separately, and none of
+these ratios establishes acceleration over the solver \citep{mcgreivy2024baselines}.
 
 \paragraph{Ablation details.}
-All four ablations run at the headline protocol with five seeds. A4 and A5 hold the
-backbone fixed and change one component; A1 and A7 use an identical $5{,}520$-parameter
-backbone and identical measured bounds, differing only in whether the output is clipped
-and in how mass is restored afterwards. A4's parameter counts differ by $0.7\%$
-($4{,}576$ against $4{,}544$), which is the cost of a two-channel flux head versus a
-one-channel residual head and is far too small to explain a $4.6\times$ or $24\times$
-effect.
+A4 runs at the main protocol with five seeds on a matched backbone, changing only the
+output head. Its parameter counts differ by $0.7\%$ ($4{,}576$ against $4{,}544$), the cost
+of a two-channel flux head against a one-channel residual head, which is far too small to
+explain a $4.6\times$ or $24\times$ effect. A1 compares PI-NCA with bounded PI-NCA from the
+main matrix: identical networks, identical training, and the same measured bounds, so the
+only difference is the projection. The Cahn--Hilliard comparison uses the ten-seed runs
+and the other phenomena the five-seed runs; the paired tests are recomputed from the saved
+per-initial-condition errors.
 
-A7 deserves one clarification. Its three variants are indistinguishable in accuracy
-($0.3589$, $0.3614$, $0.3583$ on CH) and differ enormously in mass drift ($18.6$,
-$1.07\times10^{-4}$, $5.40\times10^{-5}$). The correct reading is that the clip supplies
-the stability and the projection supplies the conservation; they are separate mechanisms
-that happen to be applied in sequence. The headroom projection of
-Equation~\ref{eq:headroom} improves the drift by a further factor of two over the uniform
-one and, unlike the uniform one, cannot move a clipped cell back outside the bound. We
-present it as a guarantee obtained at no accuracy cost. The failure of the uniform
-offset is provable (Appendix~\ref{sec:proofs}) and is exhibited by a constructed state in
-the test suite; how often it occurs in trained rollouts at this scale is not measured.
+The headroom form of the projection is chosen on the strength of
+Proposition~\ref{prop:headroom}. The uniform offset fails the bound provably
+(Appendix~\ref{sec:proofs}), and a constructed state exhibiting the failure is part of the
+test suite; a separate experiment comparing the two corrections on PI-NCA is not part of
+this study.
 
 \section{Evaluation Axes Not Measured at This Scale}
 \label{sec:notmeasured}
@@ -347,64 +298,32 @@ accuracy protocol and is a weaker statement.
 \section{Rank Stability Under Scale}
 \label{sec:scaling-details}
 \input{table-scaling}
-Each sweep varies one axis with the others fixed at the headline operating point, using
-six architectures spanning the unconstrained local, conservative local, global spectral,
-and physics-free families, at one seed. Kendall's $\tau$ compares only the endpoints and
-treats all rank inversions as equal, including inversions between models whose intervals
-overlap; the per-setting errors in the released results distinguish the two cases.
+Each sweep varies one axis with the others fixed at the main operating point, using five
+models that span the unconstrained local, conservative local, global spectral and
+physics-free families, at one seed. Kendall's $\tau$ compares only the endpoints and treats
+all rank inversions as equal, including inversions between models whose errors are close;
+the per-setting errors in the released results distinguish the two cases.
 
-On heat the grid sweep changes the winner: at $24^2$ PI-NCA-MS leads, and at $48^2$ the
-FNO does. A local rule's reach per step is fixed in cells, so the number of steps it needs
-to communicate across the domain grows with the grid, and its advantage on small domains
-should not be extrapolated to large ones (Section~\ref{sec:scaling}). Cahn--Hilliard is
-the least stable ordering, with all three axes changing it, consistent with its being the
-stiffest system in the suite; at every one of its nine settings, however, the best of the
-six swept architectures is PI-NCA or PI-NCA-MS.
-
-\section{Matched Comparison Against a PINN and Against the Solver}
-\label{sec:operators}
-\input{table-matched}
-A PINN and an autoregressive emulator solve different problems, so the comparison fixes
-the task rather than the model: produce the solution at $T$ for $K=32$ initial conditions
-drawn from the same distribution, scored by the same metric against the same reference.
-The emulator trains once and rolls out 32 times; the PINN trains once per initial
-condition, at 6{,}000 iterations each. Costs are reported separately as a fixed component
-and a per-instance component, so the amortization crossover is a derived quantity rather
-than an assumption.
-
-The emulator is better on every one of the 32 initial conditions while receiving
-$431\times$ less total wall-clock, and the crossover is $K=1$. The solver row is included
-because a surrogate must clear the solver, not only the other surrogate: at $32^2$ the
-solver is roughly three times cheaper per initial condition than the emulator and exact
-by construction. At the benchmark's own $48^2$ grid the gap narrows to near parity and
-the emulator is faster on Gray--Scott and shallow water (Table~\ref{tab:teacher}). The
-regime in which a learned surrogate is worthwhile therefore begins beyond the scales
-measured here.
-
-Standalone PINN, DeepONet, and steady Darcy baselines were also executed in this run
-(284\,s, 3\,s, and 1{,}198\,s respectively) but write their results to the run log rather
-than to a results file, so their numbers are not reported in this manuscript. The PINN
-value that does appear, $0.1235$ in Table~\ref{tab:matched}, is from the matched
-comparison and is the one that is well posed against the emulator track.
+The winners are stable: FNO on heat and Navier--Stokes, and PI-NCA on Cahn--Hilliard, at
+all three settings of every axis. On Cahn--Hilliard PI-NCA leads at every setting without
+the bound projection, which is not part of the sweep. The orderings below the winner move
+most on Navier--Stokes, where changing the training horizon from 4 to 12 steps reorders
+the models ($\tau=0$).
 
 \section{Three-Dimensional Results}
 \label{sec:three-details}
 \input{table-regime3d}
 The 3-D suite uses $24^3$ grids, 600 epochs, eight-step training and 24-step evaluation
-horizons, a single seed, and seven architectures. It omits the physics-free ResNet and
-U-Net controls and the identity floor, both of which the 2-D matrix uses, so it cannot
-support the same kind of statement: with no floor, ``better than nothing'' is not
-checkable, and with no physics-free control a conservative model leading a field of
-conservative models would be uninformative.
+horizons, and a single seed. It omits the convolutional baselines and the identity floor,
+so with no floor ``better than nothing'' is not checkable, and it does not include shallow
+water or Cahn--Hilliard.
 
-Read with those caveats, the 2-D and 3-D winners agree in family on five of six
-phenomena. The FNO leads heat, advection--diffusion, Allen--Cahn, and FitzHugh--Nagumo;
-the unconstrained standard NCA leads Nagumo and Gray--Scott. FitzHugh--Nagumo is the one
-disagreement, where the 2-D winner is the standard NCA and the 3-D winner is the FNO.
-Conservative models remain clustered well behind on the reaction systems---on Nagumo all
-five conservative variants sit at $0.197$ against the standard NCA's $0.0273$---which is the
-same sign as the 2-D A4 ablation. Neither 3-D Navier--Stokes nor 3-D Cahn--Hilliard is
-tested.
+Read with those caveats, the 3-D results follow the 2-D pattern. The FNO leads heat,
+advection--diffusion, Allen--Cahn and FitzHugh--Nagumo, and a proposed model is second on
+heat and advection--diffusion, ahead of the standard NCA by $5\times$ and $3\times$. On the
+reaction systems the standard NCA leads Nagumo and Gray--Scott, and on Nagumo PI-NCA and
+MC-PI-NCA sit at $0.197$ against the standard NCA's $0.0273$, the same sign as the 2-D A4
+ablation. Neither 3-D Navier--Stokes nor 3-D Cahn--Hilliard is tested.
 
 \section{Reproduction Record}
 \label{sec:repro}

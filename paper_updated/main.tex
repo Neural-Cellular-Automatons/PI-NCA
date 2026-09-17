@@ -44,23 +44,26 @@
 \begin{abstract}
 Neural cellular automata (NCAs) are an appealing template for learned PDE emulators: one
 small local rule, shared by every cell, mirrors the locality of a differential operator.
-Used as-is, however, an NCA predicts free state increments, and on our benchmark it
-drifts in mass by tens of units and on Navier--Stokes is worse than predicting no change
-at all. We introduce the \emph{Physics-Informed Neural Cellular Automaton} (PI-NCA), in
-which the shared rule outputs a flux instead of an increment and the state is advanced
-by its periodic discrete divergence. Conservation then holds exactly for every value of
-the weights, without a penalty term or a post-hoc correction. MC-PI-NCA extends the rule
-to coupled systems by conserving each field separately, and a headroom-proportional
-projection lets PI-NCA respect hard state bounds while keeping mass exact. We evaluate
-the family against the Fourier neural operator (FNO), ResNet and U-Net surrogates at full
-and matched size, the standard NCA, and an identity floor, on ten 2-D phenomena with five
-to ten seeds and Holm-corrected paired tests. PI-NCA is the most accurate of fourteen
-architectures on the shallow-water equations with $112\times$ fewer parameters than the
-FNO; bounded PI-NCA variants take the top two places on Cahn--Hilliard, where the FNO is
-twelfth ($0.357$ against $0.650$); and a PI-NCA with a spectral correction is best on
-Allen--Cahn. Against the NCA it is built from, PI-NCA is better on seven of ten
-phenomena with a third fewer parameters, and on heat it runs $3.4\times$ faster per
-step than the FNO. Controlled ablations show why, and also where the prior should not be used.
+Used as-is, however, an NCA predicts free state increments; on our benchmark it drifts in
+mass by tens of units and on Navier--Stokes is worse than predicting no change at all. We
+introduce two architectures that remove this failure at its source. The
+\emph{Physics-Informed Neural Cellular Automaton} (PI-NCA) makes the shared rule output a
+flux rather than an increment and advances the state by the flux's periodic discrete
+divergence, so the total of the field is conserved exactly for every value of the
+weights. \emph{MC-PI-NCA} extends the construction to coupled systems, predicting one flux
+per field and conserving each field's total independently. Either model can append a
+parameter-free projection that enforces a hard state range while keeping mass exact. We
+compare both with the Fourier neural operator (FNO), ResNet and U-Net surrogates at full
+and matched size, the standard NCA and an identity floor, on ten 2-D phenomena with five
+to ten seeds and Holm-corrected paired tests. On the shallow-water equations PI-NCA and
+MC-PI-NCA are the two most accurate models, with $112\times$ and $54\times$ fewer
+parameters than the FNO; on Cahn--Hilliard, PI-NCA with the projection is the most
+accurate model ($0.368$ against $0.465$ for the best baseline and $0.650$ for the FNO);
+on heat and advection--diffusion they are second only to the FNO with $60$--$130\times$
+fewer parameters. PI-NCA improves on the standard NCA on seven of ten phenomena with a
+third fewer parameters, and trains $8.3\times$ faster than the FNO. Ablations isolate the
+flux head and the projection, and identify where the conservation prior should not be
+used.
 \end{abstract}
 
 \section{Introduction}
@@ -76,64 +79,69 @@ their end-of-rollout mass error is of order one or larger.
 Neural cellular automata \citep{mordvintsev2020growing} look like a better starting point.
 Their update is a single local rule applied identically at every cell, which is exactly
 the structure of an explicit finite-difference stencil, and a useful rule fits in a few
-thousand parameters. Recent work has shown that NCAs can be trained as autoregressive
-PDE surrogates \citep{richardson2024patterns,saha2026timestepping}. The standard NCA
-update, however, adds an unconstrained increment $f_\theta(s_t)$ to the state. That
-increment is free to create or destroy any quantity, and the consequence is visible in
-our benchmark: the standard NCA's heat error grows $22.9\times$ over the evaluation
-horizon, its mass drifts by $65$ units, and on Navier--Stokes it scores below a
-do-nothing identity emulator at ten seeds.
+thousand parameters. Recent work has shown that NCAs can be trained as autoregressive PDE
+surrogates \citep{richardson2024patterns,saha2026timestepping}. The standard NCA update,
+however, adds an unconstrained increment $f_\theta(s_t)$ to the state. That increment is
+free to create or destroy any quantity, and the consequence is visible in our benchmark:
+the standard NCA's heat error grows $22.9\times$ over the evaluation horizon, its total
+heat drifts by $65$ units, and on Navier--Stokes it scores below a do-nothing identity
+emulator at ten seeds.
 
-\paragraph{Idea.} We change \emph{what the rule predicts}. A PI-NCA cell emits a flux
+\paragraph{PI-NCA.} We change \emph{what the rule predicts}. A PI-NCA cell emits a flux
 along each spatial axis, and the state is updated by the periodic discrete divergence of
-that flux, as in a finite-volume scheme \citep{leveque2002finite}. Because every unit of
-flux leaving one cell enters its neighbour, the divergence sums to zero over the grid and
-the total of each conserved field cannot change. This holds at initialization, during
-training, and after training, for any weights. The rule stays as small and as local as
-the NCA it replaces.
+that flux, as in a finite-volume scheme \citep{leveque2002finite}. Every unit of flux
+leaving one cell enters its neighbour, so the divergence sums to zero over the grid and
+the total cannot change. This holds at initialization, during training and after
+training, for any weights, and the rule stays as small and as local as the NCA it
+replaces.
 
-Two extensions make the construction usable beyond a single scalar field.
-\textbf{MC-PI-NCA} handles coupled systems by predicting a separate flux pair for every
-field, so height and each momentum component of the shallow-water equations are conserved
-independently rather than as one lumped sum that would let one field borrow from another.
-\textbf{Admissible-state projection} handles fields with hard physical ranges. Clipping
-to the range breaks conservation, and the obvious uniform correction breaks the bound
-again; we distribute the mass deficit in proportion to each cell's remaining headroom,
-which restores mass exactly and cannot push any cell outside the range.
+\paragraph{MC-PI-NCA.} Physical systems usually carry several conserved fields that
+interact, such as fluid height and the two momentum components of the shallow-water
+equations. A single conserved sum is the wrong constraint for them, because it allows
+one field to gain what another loses. MC-PI-NCA perceives all fields jointly but predicts a
+separate flux pair for each, so every field's total is conserved independently while the
+fields remain coupled through the shared perception.
 
-\paragraph{Evidence.} We compare the PI-NCA family with thirteen other emulators under
-one training protocol, using an identity floor, physics-free ResNet and U-Net controls at
-full and matched parameter counts, and the reference solver's own discretization error
-to calibrate what the numbers can mean. Every comparison is a paired test on shared
-held-out initial conditions with Holm--Bonferroni correction. The main findings are:
+Both architectures can also respect a hard state range, such as the order parameter of a
+phase-field model. Clipping to the range breaks conservation, and the obvious uniform
+correction breaks the range again. We restore mass in proportion to each cell's remaining
+headroom, which is exact, cannot push a cell outside the range, and adds no parameters.
+
+\paragraph{Results in brief.} We compare the two architectures with seven learned baselines
+and an identity floor under one training protocol, using paired tests on shared held-out
+initial conditions with Holm--Bonferroni correction, and calibrate every result against
+the reference solver's own discretization error.
 \begin{itemize}
-\item \textbf{Accuracy where the physics is conservative.} PI-NCA is first of fourteen on
-the shallow-water equations ($5{,}280$ parameters, against the FNO's $592{,}995$), and
-MC-PI-NCA is statistically tied with it and significantly better than both the FNO and
-the U-Net. On advection--diffusion PI-NCA is second only to the FNO, and the gap between
-them is eighteen times smaller than the solver's own discretization error.
-\item \textbf{Stiff bounded dynamics.} With the admissible-state projection, PI-NCA
-variants take first and second place on Cahn--Hilliard at ten seeds; the FNO is twelfth.
-\item \textbf{A consistent improvement on the NCA.} PI-NCA beats the standard NCA on seven of
-ten phenomena with a third fewer parameters, ties on one, and loses only on the two
-reaction systems that do not conserve their fields.
-\item \textbf{Cost.} PI-NCA trains $8.3\times$ faster and infers $3.4\times$ faster per
-step than the FNO on heat, and its mass error is four orders of magnitude lower.
+\item \textbf{Coupled conservation laws.} On shallow water, PI-NCA ($5{,}280$ parameters)
+and MC-PI-NCA ($10{,}992$) are the two most accurate of eleven models. Both are
+significantly more accurate than the FNO ($592{,}995$ parameters), and MC-PI-NCA also
+than the U-Net.
+\item \textbf{Stiff bounded dynamics.} On Cahn--Hilliard, PI-NCA with the bound projection
+is the most accurate model at ten seeds, better than the FNO on every one of 80 initial
+conditions. The projection alone lowers PI-NCA's error by $30\%$.
+\item \textbf{Accuracy per parameter.} On heat MC-PI-NCA, and on advection--diffusion
+PI-NCA, are second only to an FNO $60$ and $130$ times larger; MC-PI-NCA is significantly
+better than the ResNet on heat, and PI-NCA than both the ResNet and the U-Net on
+advection--diffusion.
+\item \textbf{Over the standard NCA.} PI-NCA is more accurate on seven of ten phenomena
+with a third fewer parameters, and loses only on the two reaction systems that do not
+conserve their fields.
+\item \textbf{Cost and consistency.} On heat, PI-NCA trains $8.3\times$ and infers
+$3.4\times$ faster per step than the FNO, and its mass error is four orders of magnitude
+lower.
 \end{itemize}
 
 \paragraph{Contributions.}
 \begin{enumerate}
 \item \textbf{PI-NCA}, a neural cellular automaton whose shared local rule predicts
-fluxes, with exact per-step conservation for all parameters
-(Section~\ref{sec:method}, Proposition~\ref{prop:conservation}).
-\item \textbf{MC-PI-NCA}, the per-field extension to coupled multi-field systems, and a
-\textbf{headroom projection} that makes the update simultaneously bound-preserving and
-mass-exact whenever the target mass is feasible (Propositions~\ref{prop:perfield}
-and~\ref{prop:headroom}).
-\item \textbf{A controlled evaluation} on ten 2-D phenomena, with matched-capacity
-ablations that isolate the conservation head, the perception reach, the bound, and the
-choice of projection, and an explicit account of the regimes where the conservation
-prior is the wrong one (Sections~\ref{sec:results}--\ref{sec:scaling}).
+fluxes, with exact conservation for all parameters (Proposition~\ref{prop:conservation}).
+\item \textbf{MC-PI-NCA}, its extension to coupled multi-field systems with independent
+per-field conservation (Proposition~\ref{prop:perfield}), together with a parameter-free
+bound projection that keeps mass exact under a hard state range
+(Proposition~\ref{prop:headroom}).
+\item \textbf{A controlled evaluation} on ten 2-D phenomena with matched-capacity
+ablations of the flux head and the projection, and an explicit account of the regimes
+where the conservation prior is the wrong one.
 \end{enumerate}
 
 \section{Related Work}
@@ -150,15 +158,15 @@ a conservation law a structural property of the rule itself, and ask what that b
 \paragraph{Conservation by construction.}
 Finite-volume bookkeeping makes conservation a property of the update rather than of the
 loss \citep{leveque2002finite}. FINN brings this structure into learned models, composing
-modules that represent inter-cell fluxes so each quantity obeys its own balance law
+modules that represent inter-cell fluxes so that each quantity obeys its own balance law
 \citep{praditia2021finn,karlbauer2022composing}, and Neural Conservation Laws construct
 networks that satisfy the continuity equation exactly \citep{richterpowell2022conservation}.
 Other approaches enforce constraints by projection or correction after prediction
 \citep{hansen2023probconserv,liu2024clawno}. We build directly on the flux-form idea and
-do not claim it as new. PI-NCA differs in where the structure lives: the flux is produced
-by a single shared cellular-automaton rule that is applied unchanged across all ten
-equations we study, it is extended to per-field conservation for coupled systems, and it
-is paired with a projection that keeps conservation exact under hard state bounds.
+do not claim it as new. PI-NCA and MC-PI-NCA differ in where the structure lives: the flux
+is produced by a single shared cellular-automaton rule that is applied unchanged across
+all ten equations we study, conservation is held per field for coupled systems, and it is
+kept exact under hard state bounds by a projection with a feasibility guarantee.
 
 \paragraph{Learned discretizations and graph solvers.}
 PDE-Net constrains convolution filters to approximate differential operators
@@ -177,15 +185,14 @@ The FNO learns a global operator through truncated Fourier mixing
 \citep{li2021pino,wang2021pideeponet}. PINNs fit one initial-value problem per run
 \citep{raissi2019pinn} and have documented optimization and spectral-bias pathologies
 \citep{krishnapriyan2021failure,wang2024causality,rahaman2019spectral}. We use the FNO as
-the principal global baseline and compare against a PINN on a matched task in
-Appendix~\ref{sec:operators}. Autoregressive rollout error is a distinct failure mode from
-one-step accuracy \citep{lippe2023refiner,um2020solver}, which is why all models here are
-trained through the rollout. Weak baselines and reporting bias are recognized problems
-in scientific machine learning benchmarks \citep{mcgreivy2024baselines,pdebench,apebench},
+the principal global baseline. Autoregressive rollout error is a distinct failure mode from
+one-step accuracy \citep{lippe2023refiner,um2020solver}, which is why every model here is
+trained through the rollout. Weak baselines and reporting bias are recognized problems in
+scientific machine learning benchmarks \citep{mcgreivy2024baselines,pdebench,apebench},
 which is why we report a trivial floor, physics-free controls and the solver's own error
 next to every result.
 
-\section{PI-NCA}
+\section{Method}
 \label{sec:method}
 \label{sec:methods}
 \label{sec:arch}
@@ -193,7 +200,7 @@ Let $s_t\in\mathbb{R}^{H\times W\times C}$ be the discrete state on a periodic g
 one channel per physical field. An emulator $g_\theta$ approximates the one-step map of a
 numerical reference solver $\mathcal{S}_{\Delta t}$ and is applied recursively.
 
-\subsection{From state increments to fluxes}
+\subsection{PI-NCA: from state increments to fluxes}
 A standard NCA perceives each cell's neighbourhood with a learned circular convolution
 $P_\theta$, processes the percept with a per-cell MLP, and adds the result to the state:
 \begin{equation}
@@ -210,8 +217,11 @@ its periodic backward-difference divergence:
 \label{eq:flux}
 \end{equation}
 where $\operatorname{roll}_a$ shifts a field by one cell along axis $a$ with wrap-around.
-The quantity $F_a$ at a cell is the amount transferred across that cell's face on axis
-$a$; the same amount is subtracted on one side and added on the other.
+$F_a$ at a cell is the amount transferred across that cell's face on axis $a$; the same
+amount is subtracted on one side and added on the other. The network is a $3\times3$
+circular perception convolution with 32 channels, a per-cell MLP with 64 and 32 channels,
+and a zero-initialized flux head, $4{,}576$ parameters for a single field. Because the head
+starts at zero, PI-NCA starts as the identity map.
 
 \begin{proposition}[Exact conservation]
 \label{prop:conservation}
@@ -220,27 +230,27 @@ Equation~\ref{eq:flux} satisfies $\sum_{\mathrm{cells}}s_{t+1}=\sum_{\mathrm{cel
 \end{proposition}
 The proof is one line: $\operatorname{roll}_a$ permutes the cells, so
 $\sum\operatorname{roll}_a(F_a)=\sum F_a$ and each term of $D_hF$ sums to zero
-(Appendix~\ref{sec:proofs}). Two consequences matter in practice. First, conservation is
-not something the optimizer has to discover or maintain, so it cannot be traded against
-accuracy during training and cannot degrade over a long rollout. Second, the hypothesis
-class is smaller: of all local updates, PI-NCA can only represent those that
-redistribute. That restriction is the source of its advantage on conservative dynamics
-and of its failure on reaction systems, and Section~\ref{sec:ablation} measures both. In
-floating point the invariant holds to round-off, which on our grids is about $10^{-7}$
-relative per rollout. The flux head is zero-initialized, so PI-NCA starts as the identity
-map. The construction extends to three dimensions by adding the third axis to the sum.
+(Appendix~\ref{sec:proofs}). Two consequences matter in practice. Conservation is not
+something the optimizer has to discover or maintain, so it cannot be traded against
+accuracy during training and cannot degrade over a long rollout. And the hypothesis class
+is smaller: of all local updates, PI-NCA can represent only those that redistribute. That
+restriction is the source of its advantage on conservative dynamics and of its failure on
+reaction systems, and Section~\ref{sec:ablation} measures both. In floating point the
+invariant holds to round-off, about $10^{-7}$ relative over a rollout on our grids. The
+construction extends to three dimensions by adding the third axis to the sum.
 
 \input{pinca-figure}
 
 \subsection{MC-PI-NCA: conservation for coupled fields}
-For a system with $C$ fields, the rule predicts a flux pair for each field, $2C$ output
+For a system with $C$ fields, MC-PI-NCA predicts a flux pair for each field, $2C$ output
 channels in 2-D, and applies the divergence channel by channel:
 \begin{equation}
- s_{t+1}^{(c)}=s_t^{(c)}+D_hF^{(c)}_\theta(s_t),\qquad c=1,\dots,C,
+ s_{t+1}^{(c)}=s_t^{(c)}+D_hF^{(c)}_\theta(s_t),\qquad c=1,\dots,C.
 \label{eq:mc}
 \end{equation}
-where every $F^{(c)}$ is computed from the full multi-field neighbourhood, so the fields
-remain coupled through perception while their totals are held separately.
+Every $F^{(c)}$ is computed from the full multi-field neighbourhood, so the fields remain
+coupled through perception while their totals are held separately. MC-PI-NCA is sized for
+this joint perception, with 48 perception and 96 hidden channels.
 
 \begin{proposition}[Per-field conservation]
 \label{prop:perfield}
@@ -249,30 +259,29 @@ s^{(c)}_t$ for each field $c$ separately.
 \end{proposition}
 The distinction from conserving a single total is not cosmetic. A lumped constraint is
 satisfied by an update that adds mass to one field and removes the same amount from
-another, which is a violation for any system whose fields are distinct conserved
-quantities; in the shallow-water equations it would allow fluid height to be converted
-into momentum. MC-PI-NCA is the right prior for source-free conservation laws written in
-conserved variables. In our experiments the compact PI-NCA configuration is applied to
-multi-field phenomena through this same per-field construction, and MC-PI-NCA denotes
-the configuration with wider perception and hidden layers ($48/96$ rather than $32/64$
-channels) intended for coupled systems. On a single field the two differ only in width.
+another, which violates the physics of any system whose fields are distinct conserved
+quantities; in the shallow-water equations it would let fluid height be converted into
+momentum. MC-PI-NCA is the natural prior for source-free conservation laws written in
+conserved variables. When PI-NCA itself is applied to a multi-field problem in our
+experiments, it uses this same per-field divergence at its compact width, so on
+single-field problems the two architectures differ only in width and the comparison
+between them on coupled systems isolates the capacity of the joint perception.
 
-\subsection{Admissible states: bounds without losing mass}
+\subsection{Bound projection: hard ranges without losing mass}
 Phase-field models such as Cahn--Hilliard evolve an order parameter confined to a range
-$[\ell,h]$. Emulators that leave the range can diverge within a few steps, and clipping to
-the range is an effective stabilizer. Clipping, though, destroys conservation. PI-NCA-B
-therefore clips the candidate state and restores the recorded mass
-$M_t=\sum s_t$:
+$[\ell,h]$. Emulators that leave the range can diverge within a few steps, and clipping is
+an effective stabilizer, but clipping destroys conservation. With the projection enabled,
+PI-NCA clips the candidate state and restores the recorded mass $M_t=\sum s_t$:
 \begin{equation}
  \widetilde s=\operatorname{clip}\bigl(s_t+D_hF_\theta(s_t),\ell,h\bigr),
  \qquad s_{t+1}=\mathcal{R}_{M_t}(\widetilde s).
 \label{eq:bounded}
 \end{equation}
-The natural restoration $\mathcal{R}$, a uniform offset
-$(M_t-\sum\widetilde s)/N$ added to all $N$ cells, moves cells that the clip has just
-placed on a bound back outside it. We instead distribute the deficit
-$d=M_t-\sum_j\widetilde s_j$ in proportion to each cell's headroom, $r_i=h-\widetilde s_i$
-when mass must be added and $r_i=\widetilde s_i-\ell$ when it must be removed:
+The natural restoration, a uniform offset $(M_t-\sum\widetilde s)/N$ added to all $N$
+cells, moves cells that the clip has just placed on a bound back outside it. We instead
+distribute the deficit $d=M_t-\sum_j\widetilde s_j$ in proportion to each cell's headroom,
+$r_i=h-\widetilde s_i$ when mass must be added and $r_i=\widetilde s_i-\ell$ when it must
+be removed:
 \begin{equation}
  \mathcal{R}_{M_t}(\widetilde s)_i=\widetilde s_i
  +\operatorname{sign}(d)\,\min\!\Bigl(\tfrac{|d|}{C_r},1\Bigr)\,r_i,
@@ -287,22 +296,13 @@ $\mathcal{R}_{M_t}(\widetilde s)\in[\ell,h]^N$ and $\sum\mathcal{R}_{M_t}(\widet
 If $M_t$ lies outside that interval, the output stays in $[\ell,h]^N$ and saturates at
 the nearest bound.
 \end{proposition}
-The map is a single vectorized pass and is differentiable almost everywhere, so it
-trains end to end. The range $[\ell,h]$ is measured from a short solver rollout rather
-than fixed by hand. Ablation A7 compares it with clip-only and uniform restoration.
+The projection is a single vectorized pass with no parameters, differentiable almost
+everywhere, so it trains end to end. It is a configuration of the architecture rather than
+a different model, intended only for fields that have a physical range; the range is
+measured from a short solver rollout rather than fixed by hand. We refer to PI-NCA with
+the projection enabled as \emph{bounded PI-NCA}.
 
-\subsection{Reach and the PI-NCA family}
-A local rule moves information about one cell per step, which limits it on dynamics
-with long-range coupling. We examine two ways to extend reach on top of the same
-conservative core. \textbf{PI-NCA-MS} concatenates perception features at dilations 1, 2
-and 4 \citep{yu2016dilated}, reaching four cells per step for $5{,}520$ parameters.
-\textbf{PI-NCA-Spec} adds a global Fourier residual to the local flux update and applies
-mass restoration to the sum, so the combined update remains conservative. Suffix -B
-denotes the admissible-state projection. Table~\ref{tab:axes} in the appendix summarizes
-the structural properties of each member and of the baselines, and
-Appendix~\ref{sec:architecture-details} gives layer-level details.
-
-\paragraph{Training.} All models, PI-NCA and baselines alike, minimize the rollout loss
+\paragraph{Training.} Every model, proposed or baseline, minimizes the same rollout loss
 \begin{equation}
 \mathcal{L}_K(\theta)=\frac{1}{K}\sum_{\tau=1}^{K}
 \operatorname{MSE}\!\left(g_\theta^{\circ\tau}(s_0),
@@ -310,7 +310,7 @@ Appendix~\ref{sec:architecture-details} gives layer-level details.
 \label{eq:training}
 \end{equation}
 with gradients propagated through the model's own trajectory. No term of the loss refers
-to conservation; for the PI-NCA family it is already guaranteed.
+to conservation; for PI-NCA and MC-PI-NCA it is already guaranteed.
 
 \section{Experimental Setup}
 \label{sec:problem}
@@ -321,23 +321,25 @@ conservative multi-field law (shallow water), a stiff fourth-order bounded equat
 (Cahn--Hilliard), a bounded reaction--diffusion equation (Allen--Cahn), a dispersive
 system (wave), globally coupled flow (Navier--Stokes in vorticity form), and three
 reaction systems whose fields are created and destroyed (Nagumo, FitzHugh--Nagumo,
-Gray--Scott). Equations and teacher settings are in Appendix~\ref{sec:equations}.
+Gray--Scott). Equations and solver settings are in Appendix~\ref{sec:equations}.
 
-\paragraph{Baselines.} The FNO \citep{li2020fno} at its standard size and at the NCA
-parameter budget; a residual CNN and a U-Net, each at full size and matched to between
-$5{,}364$ and $7{,}464$ parameters; the standard NCA of Equation~\ref{eq:plain}; and an
-identity emulator $g(x)=x$ as a floor, which makes ``learned worse than nothing'' a
-reportable outcome. All learned models have zero-initialized output heads and therefore
-start as the identity. With the six PI-NCA configurations, this gives fourteen
-architectures, each trained on every phenomenon.
+\paragraph{Models.} The proposed models are PI-NCA, bounded PI-NCA and MC-PI-NCA. The
+baselines are the FNO \citep{li2020fno} at its standard size and at the NCA parameter
+budget (FNO-S); a residual CNN (ResNet) and a U-Net, each at full size and at a matched
+budget of $5{,}364$--$7{,}464$ parameters (ResNet-S, U-Net-S); the standard NCA of
+Equation~\ref{eq:plain}; and an identity emulator $g(x)=x$ as a floor, which makes
+``learned worse than nothing'' a reportable outcome. All learned models have
+zero-initialized output heads and start as the identity. The same run also trained
+further exploratory conservative variants that are outside the scope of this paper; they
+are not reported, and every rank we quote is among the eleven models listed here.
 
 \paragraph{Protocol.} One protocol for all 2-D results: a $48^2$ grid, batch 32, $K=12$
 training steps, 48 evaluation steps, 1{,}200 epochs of AdamW with warmup, He
-initialization, and teacher pre-evolution of training initial conditions (disabled on
+initialization, and solver pre-evolution of training initial conditions (disabled on
 Cahn--Hilliard, whose states coarsen too quickly for pre-evolved states to match
-evaluation). Every architecture is trained with five seeds on every phenomenon, and with
-ten seeds on heat, Cahn--Hilliard and Navier--Stokes. A single-seed 3-D suite is reported
-in Appendix~\ref{sec:three-details}.
+evaluation). Every model is trained with five seeds on every phenomenon, and with ten
+seeds on heat, Cahn--Hilliard and Navier--Stokes. A single-seed 3-D suite is reported in
+Appendix~\ref{sec:three-details}.
 
 \paragraph{Statistics.} All models are evaluated on the same held-out initial conditions
 in the same order, so comparisons are paired. The primary metric is per-initial-condition
@@ -349,10 +351,9 @@ mass error, error growth over the horizon, spectral error distribution, paramete
 training time and inference latency (Appendix~\ref{sec:metrics}).
 
 \paragraph{Calibration.} Emulators are trained and scored against the solver, so we also
-measure the solver's own error, against closed-form solutions for the linear problems
-and by timestep refinement otherwise (Table~\ref{tab:teacher}). Differences smaller than
-this error measure agreement with a particular discretization rather than physical
-accuracy.
+measure the solver's own error, against closed-form solutions for the linear problems and
+by timestep refinement otherwise (Table~\ref{tab:teacher}). Differences smaller than this
+error measure agreement with a particular discretization rather than physical accuracy.
 
 \paragraph{Compute.} All results come from one unattended 22.2-hour run on a single NVIDIA
 RTX 4090, preceded by a 245-test correctness gate. Each results file records the software
@@ -363,7 +364,7 @@ version, device and full configuration.
 
 \subsection{PI-NCA against the NCA it replaces}
 \label{sec:vsnca}
-The most direct test of the idea holds everything fixed except the update rule.
+The most direct test of the idea holds everything fixed except what the rule predicts.
 Table~\ref{tab:vsnca} compares PI-NCA with the standard NCA on all ten phenomena.
 
 \input{table-vsnca}
@@ -372,190 +373,178 @@ PI-NCA is significantly more accurate on seven phenomena, by a factor of $7.9$ o
 $4.0$ on advection--diffusion and $2.3$ on shallow water, while using $4{,}576$
 parameters to the NCA's $6{,}784$. The improvement is largest where the dynamics are
 conservative and smooth, and it persists on problems with more complex structure:
-Cahn--Hilliard, wave, Gray--Scott and Navier--Stokes. The flux form also changes how
-errors behave over time. On heat the NCA's error grows $22.9\times$ from the first quarter
-of the horizon to the end, against $5.5\times$ for PI-NCA (Table~\ref{tab:heat20}), and on
-Navier--Stokes at ten seeds the NCA falls below the identity floor ($0.528$ against
-$0.513$) while PI-NCA stays clearly above it ($0.441$, $p=3.1\times10^{-14}$). In these
-experiments, restricting the rule to redistribution acts as a strong stabilizer for
-autoregressive rollout.
+Cahn--Hilliard, wave, Gray--Scott and Navier--Stokes. The flux form also changes how errors
+evolve. On heat the NCA's error grows $22.9\times$ from the first quarter of the horizon to
+the end, against $5.5\times$ for PI-NCA (Table~\ref{tab:heat20}), and on Navier--Stokes at
+ten seeds the NCA falls below the identity floor ($0.528$ against $0.513$) while PI-NCA
+stays clearly above it ($0.441$, $p=3.1\times10^{-14}$). In these experiments, restricting
+the rule to redistribution acts as a strong stabilizer for autoregressive rollout.
 
 The two losses are informative rather than incidental. Nagumo and FitzHugh--Nagumo have
 reaction terms that create and destroy their fields, and a rule that can only move mass
 cannot represent them: on Nagumo PI-NCA stays at the identity floor, and on
-FitzHugh--Nagumo its error is $0.99$. We return to this in
-Section~\ref{sec:ablation}, where the same effect appears under a fully matched ablation.
+FitzHugh--Nagumo its error is $0.99$. Section~\ref{sec:ablation} shows the same effect under
+a fully matched ablation.
 
-\subsection{Where the PI-NCA family leads}
+\subsection{Where PI-NCA and MC-PI-NCA lead}
 \label{sec:leads}
-Table~\ref{tab:regime2d} places the best PI-NCA model among all fourteen architectures on
-each phenomenon, and Table~\ref{tab:pinca} gives the paired tests behind the main claims.
+Table~\ref{tab:regime2d} places the better proposed model among all eleven models on each
+phenomenon, and Table~\ref{tab:pinca} gives the paired tests behind the main claims.
 
 \input{table-regime2d}
 
-\paragraph{Conservation laws.} Shallow water is the equation the construction is
-designed for: three conserved fields, no sources, and coupling between them. Here PI-NCA
-is the most accurate architecture in the study at $0.00709$ with $5{,}280$ parameters.
-The FNO, with $592{,}995$ parameters, is third at $0.00869$, and PI-NCA has lower error on
-$85\%$ of initial conditions. MC-PI-NCA is statistically indistinguishable from PI-NCA
-($p=0.63$) and beats the FNO on $95\%$ of initial conditions and the U-Net on $90\%$. Both
-hold each field's mass to about $10^{-4}$ in absolute terms over the rollout, against
-$2.1$ for the FNO.
-
-\paragraph{Stiff, bounded dynamics.} Cahn--Hilliard is fourth order and stiff, and its
-order parameter is confined to a range. The two bounded PI-NCA variants take first and
-second place at ten seeds: PI-NCA-MS-B at $0.357$ and PI-NCA-B at $0.368$. The strongest
-model outside the family is the full-size ResNet at $0.465$, and the FNO is twelfth of
-fourteen at $0.650$, beaten by PI-NCA-B on every one of the 80 paired initial conditions.
-The solver's own error on this problem is $0.044$, so these differences are well above the
-calibration level. The same ordering holds in the independent five-seed matrix.
+\paragraph{Coupled conservation laws.} Shallow water is the problem the construction is
+built for: three conserved fields, no sources, and coupling between them. PI-NCA is the
+most accurate model at $0.00709$ with $5{,}280$ parameters, and MC-PI-NCA is second at
+$0.00742$, statistically indistinguishable from it ($p=0.63$). The FNO, with $592{,}995$
+parameters, is third at $0.00869$. PI-NCA has lower error than the FNO on $85\%$ of initial
+conditions, and MC-PI-NCA on $95\%$; MC-PI-NCA also beats the U-Net on $90\%$. Both proposed
+models hold each field's mass to about $10^{-4}$ in absolute terms over the rollout, against
+$2.1$ for the FNO and $3.0$ for the U-Net.
 
 \input{table-pinca}
 
-\paragraph{Sharp interfaces with global structure.} On Allen--Cahn the best model is
-PI-NCA-Spec, which pairs the conservative local update with a global spectral correction.
-Its error of $0.00382$ is $2.3$ times lower than the FNO's $0.00889$, with $4.4$ times
-fewer parameters, and it wins on every initial condition. On Navier--Stokes the same
-hybrid is second to the FNO ($0.0826$ against $0.0730$).
+\paragraph{Stiff, bounded dynamics.} Cahn--Hilliard is fourth order and stiff, and its
+order parameter is confined to a range. With the bound projection, PI-NCA is the most
+accurate model at ten seeds ($0.368$). The strongest baseline is the full-size ResNet at
+$0.465$, which bounded PI-NCA beats on $91\%$ of initial conditions with $16$ times fewer
+parameters; the FNO is ninth of eleven at $0.650$ and loses on all 80. The solver's own
+error on this problem is $0.044$, so these differences are well above the calibration
+level, and the independent five-seed matrix has the same leader and runner-up. Without
+the projection, PI-NCA ($0.528$) has a lower mean error than the U-Net and the FNO but
+trails the ResNet; the projection is what turns a competitive model into the best one
+(Section~\ref{sec:ablation}).
 
-\paragraph{Accuracy per parameter.} On heat the FNO remains the most accurate model.
-PI-NCA-MS is third of fourteen at $0.00370$ with ten seeds, and the only two models ahead
-of it are the FNO and PI-NCA-Spec, with $107$ and $24$ times as many parameters. At
-$5{,}520$ parameters PI-NCA-MS is significantly more accurate than the U-Net, which is
-$48$ times larger, and than the ResNet. On advection--diffusion PI-NCA is second with $4{,}576$
-parameters, $2.3\times$ more accurate than the U-Net and $3.1\times$ more accurate than
-the ResNet. Its gap to the FNO there, $2.7\times10^{-4}$, is eighteen times smaller than
-the solver's own discretization error of $0.0047$, and on heat the FNO's error is
-already within $30\%$ of the solver's. On these two problems the leading models have
-reached the limit of what distillation from this solver can resolve, and within that
-limit PI-NCA delivers comparable accuracy at two orders of magnitude fewer parameters.
-Table~\ref{tab:eff} in the appendix groups all heat results by parameter budget.
+\paragraph{Accuracy per parameter.} On heat and advection--diffusion the FNO is the most
+accurate model, and a proposed model is second on both. On heat MC-PI-NCA reaches $0.00377$
+with $9{,}936$ parameters, a sixtieth of the FNO's; it is significantly better than the
+full-size ResNet and the matched ResNet-S, and statistically tied with a U-Net $27$ times
+larger. On advection--diffusion PI-NCA reaches $0.00150$ with $4{,}576$ parameters, $130$
+times fewer than the FNO, and is $2.3\times$ more accurate than the U-Net and $3.1\times$
+more accurate than the ResNet. Both problems are close to the limit of what distillation
+from this solver can resolve: the FNO's heat error is within $30\%$ of the solver's own
+error, and on advection--diffusion PI-NCA's gap to the FNO, $2.7\times10^{-4}$, is eighteen
+times smaller than the solver's error of $0.0047$. Within that limit the proposed models
+deliver comparable accuracy at two orders of magnitude fewer parameters.
+Table~\ref{tab:eff} in the appendix groups the heat results by parameter budget; MC-PI-NCA
+is the most accurate model in the small budget.
 
 \subsection{Exact conservation in practice}
-Proposition~\ref{prop:conservation} is a statement about exact arithmetic; the question
-for practice is what it buys in a trained model over a long rollout. On heat, the
-absolute mass error at the end of the 48-step evaluation is $8.2\times10^{-5}$ for PI-NCA,
-$2.04$ for the FNO, $2.74$ for the U-Net and $65.3$ for the standard NCA
-(Table~\ref{tab:heat20}). The same separation holds on advection--diffusion, wave and
-shallow water: every PI-NCA model stays below $10^{-3}$, and every learned model outside
-the family, including the parameter-matched controls, is above $1$. The one setting in
-which an unbounded PI-NCA loses mass is when an external clamp intervenes, which is
-the Cahn--Hilliard case discussed under A1 below. For a conservative system this is not a
-secondary metric. A surrogate whose total mass drifts produces states that are
-physically inconsistent even when their pointwise error is small, and the drift
-compounds with horizon.
+Proposition~\ref{prop:conservation} is a statement about exact arithmetic; the practical
+question is what it buys in a trained model over a long rollout. On heat, the absolute mass
+error at the end of the 48-step evaluation is $8.2\times10^{-5}$ for PI-NCA and
+$6.1\times10^{-5}$ for MC-PI-NCA, against $2.04$ for the FNO, $2.74$ for the U-Net and
+$65.3$ for the standard NCA (Table~\ref{tab:heat20}). The same separation holds on
+advection--diffusion, wave and shallow water: both proposed models stay below $10^{-3}$,
+and every learned baseline, including the parameter-matched ones, is above $1$. For a
+conservative system this is not a secondary metric. A surrogate whose total drifts
+produces physically inconsistent states even when its pointwise error is small, and the
+drift compounds with horizon. The one setting in which an unbounded PI-NCA loses mass is
+when an external clamp intervenes, which is the Cahn--Hilliard case discussed under A1.
 
 \subsection{Why it works: controlled ablations}
 \label{sec:ablation}
 The comparisons above differ in more than one component. Table~\ref{tab:ablsummary}
-isolates the mechanisms, changing exactly one element at matched backbone width.
+isolates the two design choices, changing exactly one element at a time.
 
 \input{table-ablsummary}
 
-\paragraph{A4: the conservation head.} Replacing a free residual head with the PI-NCA
-flux head, with parameter counts within $1\%$, improves heat by $4.6\times$ ($0.00743$
-against $0.0339$). On Nagumo the same substitution makes the error $24\times$ worse
-($0.379$ against $0.0161$). The mass column explains both results. The flux head holds
-the total below $10^{-4}$ on both equations; on heat that is the correct physics, and on
-Nagumo, whose reaction term changes the total by design, it is precisely the wrong
-constraint. The prior is powerful because it is strong, and it should be applied where
-the target has the invariant.
+\paragraph{A4: the flux head.} Replacing a free residual head with the PI-NCA flux head, at
+a matched backbone and within $1\%$ of the parameter count, improves heat by $4.6\times$
+($0.00743$ against $0.0339$). On Nagumo the same substitution makes the error $24\times$
+worse ($0.379$ against $0.0161$). The mass column explains both. The flux head holds the
+total below $10^{-4}$ on both equations; on heat that is the correct physics, and on Nagumo,
+whose reaction term changes the total by design, it is precisely the wrong constraint. The
+prior is powerful because it is strong, and it belongs where the target has the invariant.
 
-\paragraph{A5: reach.} Widening perception from $3\times3$ to $5\times5$ to dilated
-$(1,2,4)$ improves heat monotonically ($0.00896\to0.00584\to0.00412$) and Navier--Stokes
-likewise ($0.679\to0.667\to0.583$). The local model's disadvantage on globally coupled
-flow is a receptive-field limitation that can be reduced without abandoning locality or
-conservation, which is the motivation for PI-NCA-MS.
-
-\paragraph{A1 and A7: bounds and projection.} On Cahn--Hilliard, adding the
-admissible-state projection to an identical $5{,}520$-parameter PI-NCA-MS backbone reduces
-error from $0.515$ to $0.358$ and mass drift from $19.9$ to $5.2\times10^{-5}$; on
-Allen--Cahn, whose states stay inside the range, it changes nothing. The drift of the
-unbounded model does not contradict Proposition~\ref{prop:conservation}: every model in
-the evaluation passes through a divergence guard that clamps states to $1.25$ times the
-solver's physical range, and on Cahn--Hilliard the unbounded rollouts reach that clamp,
-which removes mass the flux update had conserved. The projection is what makes bounding
-and conservation compatible. A7 separates the two
-parts of the projection. Clip-only, uniform restoration and headroom restoration have the
-same accuracy ($0.3589$, $0.3614$, $0.3583$), but their mass drifts are $18.6$,
-$1.07\times10^{-4}$ and $5.40\times10^{-5}$. The clip supplies stability, restoration
-supplies conservation, and the headroom form of Equation~\ref{eq:headroom} halves the
-remaining drift while being the only one that also guarantees the bound.
-Figure~\ref{fig:interventions} shows A4 and A1.
+\paragraph{A1: the bound projection.} On Cahn--Hilliard, enabling the projection on an
+otherwise identical $4{,}576$-parameter PI-NCA lowers error from $0.528$ to $0.368$, better
+on all 80 paired initial conditions, and lowers mass drift from $38.3$ to
+$5.5\times10^{-5}$. The drift of the unprojected model does not contradict
+Proposition~\ref{prop:conservation}: every model in the evaluation passes through a
+divergence guard that clamps states to $1.25$ times the solver's physical range, and on
+Cahn--Hilliard the unprojected rollouts reach that clamp, which removes mass the flux update
+had conserved. The projection makes bounding and conservation compatible. Its cost
+elsewhere is the expected one. On Allen--Cahn the error rises by $0.3\%$, small but
+significant; on shallow water, whose dynamics have no hard bound, enforcing a measured
+range more than doubles the error. The projection
+should be enabled only for fields with a genuine physical range.
+Figure~\ref{fig:interventions} shows A4 and the Cahn--Hilliard half of A1.
 
 \input{intervention-figure}
 
 \subsection{Cost}
 \label{sec:efficiency}
-PI-NCA is inexpensive to train and to run. On heat it trains in $12.9$\,s against
-$107.6$\,s for the FNO and infers in $1.23$\,ms per step at batch 8 against $4.17$\,ms, on
-the same GPU. Its cost scales linearly with the number of cells, with no Fourier
-transform. Against a physics-informed neural network on a matched task, PI-NCA-MS is more
-accurate on all 32 held-out initial conditions ($0.0153$ against $0.1235$) while using
-$431\times$ less total compute, because it trains once rather than once per initial
-condition (Table~\ref{tab:matched}). We report the solver in the same comparison: at the
-$32^2$ grid of that test it computes the exact reference in $19$\,ms per initial
-condition, against $55$\,ms for the emulator. As for any learned surrogate, the
-computational case for PI-NCA lies at larger grids, longer horizons and in
-differentiable pipelines, not at the small grids used to benchmark it.
+Both architectures are inexpensive to train and to run. On heat, PI-NCA trains in
+$12.9$\,s and MC-PI-NCA in $18.2$\,s, against $107.6$\,s for the FNO, and they infer in
+$1.22$ and $1.32$\,ms per step at batch 8 against $4.17$\,ms, on the same GPU. Their cost
+scales linearly with the number of cells and involves no Fourier transform. As for any
+learned surrogate, the computational case lies at larger grids, longer horizons and in
+differentiable pipelines rather than at the small grids used to benchmark it; at $48^2$ the
+reference solver itself costs $1.2$--$4.9$\,ms per step (Table~\ref{tab:teacher}).
 
-\subsection{Where PI-NCA is not the right model}
+\subsection{Where the conservation prior does not fit}
 \label{sec:scaling}
 \label{sec:teachererr}
-\label{sec:matched}
 \label{sec:spectral}
 \label{sec:threed}
-Three regimes fall outside the design. \textbf{Non-conservative reactions}: on Nagumo and
-FitzHugh--Nagumo every PI-NCA model is at or near the identity floor, and A4 attributes
-this directly to the conservation constraint. \textbf{Reaction--diffusion with physics-free
-winners}: on Gray--Scott, wave and Nagumo a U-Net is best, and on Gray--Scott the best
-PI-NCA model is sixth. \textbf{Global coupling and smooth transport}: on Navier--Stokes,
-heat and advection--diffusion the FNO leads, although PI-NCA-Spec is close on the first
-and PI-NCA is within the solver's error on the last.
+Three regimes fall outside the design. \textbf{Non-conservative reactions}: on Nagumo,
+FitzHugh--Nagumo and Gray--Scott the proposed models are far behind; on Gray--Scott they
+are worse than the identity floor and on Nagumo level with it; A4 attributes this directly to the
+conservation constraint. \textbf{Global coupling}: on Navier--Stokes the FNO and the U-Net
+lead, and the best proposed model is sixth, although still above the floor where the
+standard NCA is not. \textbf{Sharp interfaces with non-conserved dynamics}: on Allen--Cahn
+the FNO leads and MC-PI-NCA is fifth. On wave PI-NCA is sixth, though within $5\%$ of the
+best error.
 
-Rankings also depend on scale. We varied grid, training horizon and training budget
-around the main operating point for six representative architectures
-(Table~\ref{tab:scaling}). On heat the winner is PI-NCA-MS at a $24^2$ grid and the FNO
-at $48^2$: a local rule's reach is fixed in cells, so its relative advantage shrinks as
-the domain grows. On Cahn--Hilliard the ordering changes along every axis, but at all
-nine settings the best of the six swept architectures is a PI-NCA model. We therefore report every
-ranking with its operating point.
+The ranking is stable where the proposed models lead. We varied grid, training horizon and
+training budget around the main operating point for five representative models
+(Table~\ref{tab:scaling}). On Cahn--Hilliard PI-NCA is the best of the five at every one of
+the nine settings, even without the projection; on heat and Navier--Stokes the FNO is best
+at every setting. Orderings below the winner do change, most strongly on Navier--Stokes
+along the training horizon ($\tau=0$), so every ranking is quoted with its operating point.
 
 \section{Discussion and Limitations}
 \label{sec:discussion}
 \label{sec:limitations}
-PI-NCA turns a physical invariant into an architectural fact. The practical guidance
+PI-NCA and MC-PI-NCA turn a physical invariant into an architectural fact. The guidance
 that follows from the results is short. If the target conserves its fields, a
 flux-predicting rule is a better default than a free increment, and it is competitive
 with, or better than, models two orders of magnitude larger. If the fields are coupled,
-conserve them separately. If the state is bounded, restore mass by headroom rather than
-uniformly. If the dynamics create or destroy the quantity, do not use the constraint.
+conserve them separately. If the state has a hard range, enable the headroom projection;
+if it does not, leave it off. If the dynamics create or destroy the quantity, do not use
+the constraint.
 
 Several limitations bound these conclusions. \textbf{Three evaluation axes are not
 measured at this scale}: the out-of-distribution study, the long-horizon stability study
-with the divergence guard disabled, and resolution transfer did not complete in the
-GPU run, and we do not substitute reduced-scale results from other hardware
-(Appendix~\ref{sec:notmeasured}); in particular we make no claim about PI-NCA's
-robustness beyond the evaluation horizon or across resolutions. \textbf{Scope}: all domains
-are periodic and regular, so Proposition~\ref{prop:conservation} as stated does not cover
-non-periodic boundaries, which would need boundary fluxes. \textbf{Calibration}: on heat and
-advection--diffusion the leading models have reached the solver's discretization error,
-so small differences there are not measurements of physical accuracy. \textbf{3-D}: the
-3-D suite is single-seed, lacks the physics-free controls, and does not include the
-shallow-water or Cahn--Hilliard problems where PI-NCA is strongest; in it the FNO and
-the standard NCA lead. \textbf{Baselines}: PINO is not evaluated, and our solvers are our
-own, so numbers are not directly comparable to published PDEBench or APEBench results.
-Finally, the headroom projection guarantees bounds and mass only when the target mass is
-feasible for the range; otherwise the residual is reported rather than hidden.
+with the divergence guard disabled, and resolution transfer did not complete in the GPU
+run, and we do not substitute reduced-scale results from other hardware
+(Appendix~\ref{sec:notmeasured}); in particular we make no claim about robustness beyond
+the evaluation horizon or across resolutions. \textbf{Scope}: all domains are periodic and
+regular, so Proposition~\ref{prop:conservation} as stated does not cover non-periodic
+boundaries, which would need boundary fluxes. \textbf{Calibration}: on heat and
+advection--diffusion the leading models have reached the solver's discretization error, so
+small differences there are not measurements of physical accuracy. \textbf{Reach}: a
+$3\times3$ rule moves information one cell per step, which limits both architectures on
+globally coupled flow; wider perception, for instance through dilated stencils
+\citep{yu2016dilated}, is compatible with the flux construction and is outside the scope
+of this paper. \textbf{Projection}: its advantage over the uniform correction is
+established by Proposition~\ref{prop:headroom}, not by a separate experiment on these
+architectures. \textbf{3-D}: the 3-D suite is single-seed, lacks the convolutional controls,
+and does not include shallow water or Cahn--Hilliard, where the proposed models are
+strongest; there the proposed models are second on heat and advection--diffusion.
+\textbf{Baselines}: PINO is not evaluated, and our solvers are our own, so numbers are not
+directly comparable with published PDEBench or APEBench results.
 
 \section{Conclusion}
 We introduced PI-NCA, a neural cellular automaton whose shared local rule predicts fluxes
-and therefore conserves each field exactly, for any weights. With its multi-field
-extension and a bound-preserving mass projection, the PI-NCA family is the most accurate
-of fourteen architectures on shallow water, Cahn--Hilliard and Allen--Cahn, is first or
-second on six of ten phenomena, improves on the standard NCA on seven, and does so with a
-few thousand parameters and a fraction of the FNO's training and inference cost. The
-ablations show that the gains come from the conservation structure itself, and that the
+and therefore conserves exactly for any weights, and MC-PI-NCA, which extends that
+guarantee to each field of a coupled system. The two architectures are the most accurate
+of eleven models on the shallow-water equations and, with a parameter-free bound
+projection, on Cahn--Hilliard; they are second only to a far larger FNO on heat and
+advection--diffusion; and PI-NCA improves on the standard NCA on seven of ten phenomena,
+with a few thousand parameters and a fraction of the FNO's training and inference cost.
+Ablations show that the gains come from the conservation structure itself, and that the
 same structure is the wrong choice for dynamics that do not conserve. Making physical
 structure a property of the update, rather than a target for the optimizer, is a simple
 change with a large effect, and cellular automata are a natural place to make it.
@@ -568,9 +557,10 @@ Section~\ref{sec:method}, with proofs in Appendix~\ref{sec:proofs} and layer-lev
 in Appendix~\ref{sec:architecture-details}. Appendix~\ref{sec:repro} records software
 versions, the correctness gate and reproduction commands. Every result comes from a single
 unattended run of one command on one GPU; each results file records its backend, devices
-and exact configuration. The paired tests in Tables~\ref{tab:pinca} and~\ref{tab:vsnca},
-which compare pairs not tabulated by the run itself, are recomputed from the saved
-per-initial-condition errors by a script released with the paper.
+and exact configuration. Rankings over the reported models and the paired tests in
+Tables~\ref{tab:pinca}, \ref{tab:vsnca} and~\ref{tab:ablsummary}, which compare pairs not
+tabulated by the run itself, are recomputed from the saved per-initial-condition errors by
+a script released with the paper.
 
 \section*{AI Use Statement}
 An AI assistant was used to draft and revise this manuscript, to build and check parts of

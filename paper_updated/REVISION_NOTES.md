@@ -1,5 +1,36 @@
 # ICLR manuscript revision — PI-NCA as the contribution
 
+## Latest: two architectures only
+
+The paper now introduces exactly two architectures, **PI-NCA** and **MC-PI-NCA**. The
+dilated-perception and spectral hybrids (`multiscale_flux_nca`, `bounded_multiscale_nca`,
+`spectral_flux_nca`) are removed from every table, figure and ranking. The bound
+projection is kept as a parameter-free *configuration* of PI-NCA ("bounded PI-NCA", same
+4,576 parameters), not a third architecture.
+
+Consequences, all recomputed by `pinca_tests.py` over the eleven reported models:
+
+- Shallow water: PI-NCA 1st, MC-PI-NCA 2nd (unchanged).
+- Cahn--Hilliard: bounded PI-NCA 1st at ten seeds (previously 2nd behind the
+  multi-scale hybrid). Unprojected PI-NCA is 3rd, behind the ResNet.
+- Allen--Cahn: the win is gone (it belonged to the spectral hybrid); MC-PI-NCA is 5th.
+- Heat: MC-PI-NCA 2nd behind the FNO; advection--diffusion: PI-NCA 2nd.
+- A1 is now measured on the PI-NCA backbone itself (projection on/off), including its cost
+  on Allen--Cahn (+0.3%) and shallow water (more than doubles the error).
+- A5 (perception reach) and A7 (projection variants) are dropped: both used the
+  multi-scale backbone. The headroom projection is justified by Proposition 3; the
+  limitations say no separate experiment compares it with the uniform correction.
+- Scaling recomputed over the five models in the sweep that the paper reports: the heat
+  winner no longer flips (the flip was the multi-scale hybrid); PI-NCA wins Cahn--Hilliard
+  at all nine settings.
+- The matched PINN comparison is removed (its emulator was the multi-scale hybrid).
+- The setup section discloses that the run also trained exploratory variants that are not
+  reported, and that ranks are among the eleven reported models. This matters: with the
+  hybrids included, bounded PI-NCA would be second, not first, on Cahn--Hilliard, and the
+  released results files contain them.
+
+## Earlier in this revision
+
 ## This revision (framing)
 
 The paper is now a method paper. PI-NCA (a neural cellular automaton whose shared rule

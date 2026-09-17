@@ -1,21 +1,21 @@
 \begin{table}[t]
 \centering
-\caption{Structural properties of the PI-NCA family and the baselines. Perception extent
-is the reach of a single update, not the full receptive field after the divergence.
-Parameter counts are for the single-field heat configuration; on $C$-field problems the
-PI-NCA flux head grows by $2C$ output channels only. ``Exact'' conservation holds for
-any weights, at initialization and after training, up to floating-point round-off.}
+\caption{Structural properties of the two proposed architectures and the baselines.
+Perception extent is the reach of a single update, not the full receptive field after the
+divergence. Parameter counts are for the single-field heat configuration; on $C$-field
+problems the flux head grows by $2C$ output channels only. ``Exact'' conservation holds
+for any weights, at initialization and after training, up to floating-point round-off.}
 \label{tab:axes}
-\resizebox{\linewidth}{!}{\begin{tabular}{lcccccc}
+\resizebox{\linewidth}{!}{\begin{tabular}{lccccc}
 \toprule
-Property & NCA & PI-NCA & MC-PI-NCA & PI-NCA-MS(-B) & ResNet / U-Net & FNO \\
+Property & NCA & PI-NCA & MC-PI-NCA & ResNet / U-Net & FNO \\
 \midrule
-Perception extent  & $\pm1$ cell & $\pm1$ cell & $\pm1$ cell & $\pm4$ cells & local / pooled & global \\
-Mass conservation  & none & \textbf{exact} & \textbf{exact, per field} & \textbf{exact, per field} & none & none \\
-Admissible bounds  & no & no & no & \textbf{with -B} & no & no \\
-Params (heat)      & 6{,}784 & \textbf{4{,}576} & 9{,}936 & 5{,}520 & 74k / 265k & $5.9\!\times\!10^{5}$ \\
-Shared local rule  & yes & yes & yes & yes & no & no \\
-Boundary handling  & periodic & periodic & periodic & periodic & periodic (circ.) & periodic (FFT) \\
+Perception extent  & $\pm1$ cell & $\pm1$ cell & $\pm1$ cell & local / pooled & global \\
+Mass conservation  & none & \textbf{exact} & \textbf{exact, per field} & none & none \\
+Bound projection   & no & \textbf{optional, 0 params} & optional & no & no \\
+Params (heat)      & 6{,}784 & \textbf{4{,}576} & 9{,}936 & 74k / 265k & $5.9\!\times\!10^{5}$ \\
+Shared local rule  & yes & yes & yes & no & no \\
+Boundary handling  & periodic & periodic & periodic & periodic (circ.) & periodic (FFT) \\
 \bottomrule
 \end{tabular}}
 \end{table}

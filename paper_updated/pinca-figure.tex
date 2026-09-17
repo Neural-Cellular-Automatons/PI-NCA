@@ -2,12 +2,12 @@
 \centering
 \resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=5mm and 5mm]
   \node[box] (x) {state $s_t$\\$C$ fields};
-  \node[box, right=of x] (p) {perceive\\$3{\times}3$ circular\\(dilated in -MS)};
+  \node[box, right=of x] (p) {perceive\\$3{\times}3$ circular};
   \node[box, right=of p] (m) {shared\\per-cell MLP};
   \node[box, right=of m] (f) {flux head\\$2C$ channels\\zero-init};
   \node[box, right=of f] (d) {per-field\\divergence $D_h$};
   \node[op, right=5mm of d] (add) {$+$};
-  \node[box, right=of add] (b) {admissible-state\\projection\\(-B only)};
+  \node[box, right=of add] (b) {bound projection\\(optional,\\no parameters)};
   \node[box, right=of b] (o) {$s_{t+1}$};
   \draw[flow] (x) -- (p);
   \draw[flow] (p) -- (m);
@@ -18,18 +18,18 @@
   \draw[flow] (b) -- (o);
   \draw[flow] (x.south) to[out=-35,in=-145] (add.south);
   \node[font=\scriptsize, below=7mm of d, align=center] (n1)
-    {$\sum_{\mathrm{cells}} (D_hF)_c = 0$ for every field $c$\\and every $\theta$ (Prop.~\ref{prop:conservation})};
+    {$\sum_{\mathrm{cells}} (D_hF)_c = 0$ for every field $c$\\and every $\theta$ (Props.~\ref{prop:conservation},~\ref{prop:perfield})};
   \node[font=\scriptsize, below=7mm of b, align=center] (n2)
     {clip to $[\ell,h]$, then restore mass\\in proportion to headroom (Prop.~\ref{prop:headroom})};
   \draw[dashed,gray] (d.south) -- (n1.north);
   \draw[dashed,gray] (b.south) -- (n2.north);
 \end{tikzpicture}}
-\caption{One PI-NCA step. A single local rule, shared by every cell, maps the
-neighbourhood of each cell to a flux for each field rather than to a state increment.
-The periodic discrete divergence of that flux cannot change any field's total, whatever
-the weights are, so conservation is a property of the architecture and not of training.
-MC-PI-NCA is this construction for $C>1$; the suffix -MS widens perception with
-dilations $(1,2,4)$ and -B appends the bound-preserving projection of
-Equation~\ref{eq:headroom}.}
+\caption{One PI-NCA step. A single local rule, shared by every cell, maps each cell's
+neighbourhood to a flux rather than to a state increment. The periodic discrete
+divergence of that flux cannot change a field's total, whatever the weights are, so
+conservation is a property of the architecture and not of training. PI-NCA applies this
+to a conserved field; MC-PI-NCA predicts a separate flux pair for each of $C$ coupled
+fields and conserves each total independently. For fields with a hard physical range,
+either model can append the parameter-free bound projection.}
 \label{fig:pinca}
 \end{figure}

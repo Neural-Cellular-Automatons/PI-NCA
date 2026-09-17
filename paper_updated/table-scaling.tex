@@ -1,28 +1,27 @@
 \begin{table}[t]
 \centering
-\caption{Rank stability. Each axis is swept with everything else fixed at the headline
-operating point (grid $48^2$, rollout 12, 1{,}200 epochs, 48 evaluation steps), and we
-report Kendall's $\tau$ between the ordering of six architectures at the smallest and
-largest setting. $\tau=1$ means the ranking is unchanged. Four of the nine sweeps change
-the ordering, and two change the winner, so every ranking in this paper is reported with
-the scale at which it was measured rather than as a property of the architectures.}
+\caption{Rank stability. Each axis is swept with everything else fixed at the main
+operating point (grid $48^2$, rollout 12, 1{,}200 epochs, 48 evaluation steps, one seed),
+for five models: NCA, PI-NCA, FNO, ResNet-S and the identity floor. Kendall's $\tau$
+compares the ordering at the smallest and largest setting ($\tau=1$: unchanged). The
+winner is reported at all three settings of each axis.}
 \label{tab:scaling}
 \small
-\begin{tabularx}{\linewidth}{@{}llcXl@{}}
+\begin{tabularx}{\linewidth}{@{}llcX@{}}
 \toprule
-Phenomenon & Axis & $\tau$ & Winner at each end & Verdict \\
+Phenomenon & Axis & $\tau$ & Winner at all three settings \\
 \midrule
-Heat & grid $24\!\to\!48$      & 0.73 & PI-NCA-MS $\to$ FNO & \textbf{changes} \\
-     & rollout $4\!\to\!12$    & 0.87 & unchanged & stable \\
-     & epochs $300\!\to\!1200$ & 0.87 & unchanged & stable \\
+Heat & grid $24,32,48$           & 0.80 & FNO \\
+     & rollout $4,8,12$          & 0.80 & FNO \\
+     & epochs $300,600,1200$     & 0.80 & FNO \\
 \midrule
-Cahn--Hilliard & grid $24\!\to\!48$      & 0.73 & PI-NCA-MS $\to$ PI-NCA & \textbf{changes} \\
-               & rollout $4\!\to\!12$    & 0.73 & unchanged & \textbf{changes} \\
-               & epochs $300\!\to\!1200$ & 0.60 & PI-NCA-MS $\to$ PI-NCA & \textbf{changes} \\
+Cahn--Hilliard & grid $24,32,48$       & 0.80 & PI-NCA \\
+               & rollout $4,8,12$      & 0.60 & PI-NCA \\
+               & epochs $300,600,1200$ & 0.60 & PI-NCA \\
 \midrule
-Navier--Stokes & grid $24\!\to\!48$      & 0.87 & unchanged & stable \\
-               & rollout $4\!\to\!12$    & 0.07 & unchanged & \textbf{changes} \\
-               & epochs $300\!\to\!1200$ & 0.60 & unchanged & \textbf{changes} \\
+Navier--Stokes & grid $24,32,48$       & 1.00 & FNO \\
+               & rollout $4,8,12$      & 0.00 & FNO \\
+               & epochs $300,600,1200$ & 0.40 & FNO \\
 \bottomrule
 \end{tabularx}
 \end{table}
