@@ -87,8 +87,8 @@ results. One clean command from a fresh clone: `bash run_paper.sh`.
 
 [`docs/related_work.md`](related_work.md) replaces the survey with precise positioning, and
 [`bib.py`](../src/pinca_jax/bib.py) verifies **every** cited arXiv identifier against the
-arXiv API (52/52 resolve) and generates `paper/refs.bib` only from entries it confirmed, so
-a citation key with no verified entry is a build error rather than a wrong reference.
+arXiv API, including those in the manuscript's bibliography, so a wrong identifier is
+reported rather than printed.
 
 Doing this **narrowed the claim**, which was the point:
 
@@ -113,9 +113,9 @@ fifteen pre-registered claims, and a regex sweep for count claims in every docum
 `--strict-counts` fails the build on a disagreement. The stale "8-PDE suite" labels are
 fixed; `docs/claims_audit.md` currently reports 0 count mismatches.
 
-The paper goes further: [`paper.py`](../src/pinca_jax/paper.py) generates every table **and
-every quoted number** as a LaTeX macro, so a stale number cannot reach the PDF — it either
-regenerates or the build fails on an undefined macro.
+The manuscript in `paper_updated/` goes with a script,
+[`pinca_tests.py`](../paper_updated/pinca_tests.py), that recomputes every ranking and paired
+test its tables quote from the saved per-initial-condition errors.
 
 ### 7–16 and the rest
 
@@ -128,9 +128,9 @@ regenerates or the build fails on an undefined macro.
 | 11 | Fair efficiency claims | done | `BUDGET_CLASS` + iso-parameter controls + a budget-grouped efficiency table with params, train wall-clock and inference latency |
 | 12 | Ablations incomplete | done | A1, A2, A4, A5, A7 run; each of A4/A5/A7 on **two phenomena of opposite structure**, because a single-phenomenon ablation cannot test a regime-dependence claim |
 | 13 | Stability analysis | done | [`stability.py`](../src/pinca_jax/stability.py) runs with the divergence guard **disabled** — failure-rate curves vs horizon, median survival, perturbation amplification at t=0 and mid-rollout, timestep sensitivity, out-of-range cell fraction |
-| 14 | Paper quality | done | [`paper/main.tex`](../paper/main.tex) — ICLR-structured, no TOC, one falsifiable hypothesis stated so it can fail, engineering detail in appendices, a limitation next to each result section and a seven-item limitations section, every table generated |
+| 14 | Paper quality | done | [`paper_updated/main.tex`](../paper_updated/main.tex) — ICLR format, two proposed architectures with proofs, paired-test tables, limitations section |
 | 15 | Reproducible release | done | pyproject, LICENSE, CI on two Python versions, per-stage command table in [`reproducibility.md`](reproducibility.md), device stamps, per-cell checkpointing |
-| 16 | Reviewer-proof presentation | done | Leads with the hypothesis and the decision rule; `tests/test_paper.py` **fails the build** on the words "dominates", "dimension-independent", "state-of-the-art", "outperforms all", "proves that" outside passages that explicitly disclaim them |
+| 16 | Reviewer-proof presentation | done | Leads with the hypothesis and the decision rule; `paper_updated/check_manuscript.py` **fails the build** on the words "dominates", "dimension-independent", "state-of-the-art", "universally superior", "proves that" outside passages that explicitly disclaim them |
 
 ---
 

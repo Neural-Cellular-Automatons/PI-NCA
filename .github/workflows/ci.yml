@@ -54,10 +54,9 @@ jobs:
           bash run_gpu.sh --list-stages
           bash run_paper.sh --list-stages
 
-      # Regenerate the audit, the paper tables and every quoted number, and fail if any
-      # count in the prose disagrees with what is actually in results/.
+      # Regenerate the audit, and fail if any count in the prose disagrees with what is
+      # actually in results/ or the manuscript is structurally broken.
       - name: Documents must agree with the results
         run: |
           python -m pinca_jax.claims --strict-counts
-          python -m pinca_jax.paper
-          python -m pytest tests/test_paper.py -q
+          python paper_updated/check_manuscript.py

@@ -123,12 +123,12 @@ src/pinca_jax/          the implementation (this is the canonical code)
   stats.py              bootstrap CIs, paired tests, multiple-comparison control
   ood.py stability.py teacher_error.py   the studies that test the claims
   scaling.py matched.py                  rank stability; the matched PINN comparison
-  claims.py bib.py paper.py              generate the audit, the bibliography, the paper
+  claims.py bib.py                       generate the audit and the bibliography
   runner.py             one command that runs the lot
-tests/                  the correctness gate (245 tests)
+tests/                  the correctness gate (233 tests)
 results/                raw JSON + generated Markdown tables
-docs/                   reports, figures, runbook, paper source
-paper/                  the submission source; every table and number generated
+docs/                   reports, figures, runbook
+paper_updated/          the ICLR manuscript (PI-NCA and MC-PI-NCA)
 PI NCA_v1.py            LEGACY. The original PyTorch script, kept for provenance only.
 ```
 

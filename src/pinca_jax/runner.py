@@ -7,8 +7,8 @@ matrix, the ablations, the multi-seed headline comparison, the teacher-error stu
 out-of-distribution study, the stability stress test, the scaling / rank-stability study,
 the uniform 3-D matrix, the resolution study, the continuous and matched baselines,
 trajectory capture, the field figures, the benchmark plots, the claims audit, the
-bibliography check, the generated paper tables, the Markdown report and -- if a LaTeX
-toolchain is present -- the paper PDF.
+bibliography check, the manuscript checks and paired tests, the Markdown report and -- if
+a LaTeX toolchain is present -- the paper PDF.
 
 Design notes, all of which exist because this runs unattended for many hours:
 
@@ -67,7 +67,7 @@ from . import bench, env
 
 RES = bench.RESULTS_DIR
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-PAPER_DIR = os.path.join(ROOT, "paper")
+PAPER_DIR = os.path.join(ROOT, "paper_updated")
 REPORT_MD = os.path.join(ROOT, "docs", "PI-NCA_Architectures_and_Results.md")
 
 # The three regimes the regime map distinguishes: smooth diffusive, stiff bounded
@@ -157,7 +157,7 @@ PROFILES["bench"] = dict(PROFILES["paper"])
 
 # Ordered, with the one-line description printed by --list-stages.
 STAGES = [
-    ("gate", "correctness suite (245 tests) -- fatal, nothing downstream is trustworthy without it"),
+    ("gate", "correctness suite (233 tests) -- fatal, nothing downstream is trustworthy without it"),
     ("bench2d", "uniform 2-D matrix + ablations A1/A4/A5/A7 -- the only other fatal stage"),
     ("headline", "high-seed-count paired comparison on the three regime representatives"),
     ("teacher", "the reference solver's own error, and whether it converges at all"),
@@ -172,9 +172,9 @@ STAGES = [
     ("capture", "train once per phenomenon and archive raw trajectories for the figures"),
     ("figures", "field montages and 3-D volume renders, from the captured trajectories"),
     ("plots", "benchmark plots (runs twice: once early, once at the end)"),
-    ("claims", "claims audit, bibliography verification, generated paper tables"),
+    ("claims", "claims audit, bibliography verification, manuscript checks and paired tests"),
     ("report", "architecture diagrams + the Markdown/PDF architectures-and-results report"),
-    ("pdf", "compile paper/main.tex, if a LaTeX toolchain is installed"),
+    ("pdf", "compile paper_updated/main.tex, if a LaTeX toolchain is installed"),
 ]
 FINALISATION = {"plots", "claims", "report", "pdf"}
 # Stages that run only when named in --only. A variant screen is exploratory: it is a
@@ -382,31 +382,27 @@ def estimate(profile, allow_cpu=False):
 
 # ---------------------------------------------------------------------- paper ---
 def build_pdf(r: Run):
-    """Compile paper/main.tex if a LaTeX toolchain is installed; say so clearly if not."""
+    """Compile paper_updated/main.tex if a LaTeX toolchain is installed; say so if not.
+
+    The bibliography is an inline thebibliography, so two passes resolve every reference
+    and no bibtex step is needed.
+    """
     tex = shutil.which("pdflatex") or shutil.which("xelatex")
     if not tex:
         print("\n-- pdf: no pdflatex/xelatex on PATH; skipping the PDF build.\n"
-              "   Everything it needs is already generated:\n"
-              "     paper/main.tex, paper/appendix.tex, paper/refs.bib,\n"
-              "     paper/generated/*.tex  (all tables and every quoted number)\n"
-              "   Compile anywhere with:  cd paper && pdflatex main && bibtex main && "
-              "pdflatex main && pdflatex main")
+              "   Compile anywhere with:  cd paper_updated && pdflatex main && pdflatex main")
         r.skipped.append("pdf (no LaTeX toolchain)")
         return False
     name = os.path.basename(tex)
-    steps = [[tex, "-interaction=nonstopmode", "-halt-on-error", "main.tex"]]
-    if shutil.which("bibtex"):
-        steps.append(["bibtex", "main"])
-        steps.append([tex, "-interaction=nonstopmode", "-halt-on-error", "main.tex"])
-    steps.append([tex, "-interaction=nonstopmode", "-halt-on-error", "main.tex"])
-    for i, cmd in enumerate(steps, 1):
+    cmd = [tex, "-interaction=nonstopmode", "-halt-on-error", "main.tex"]
+    for i in (1, 2):
         rc = subprocess.call(cmd, cwd=PAPER_DIR,
-                             stdout=subprocess.DEVNULL if i < len(steps) else None)
-        if rc != 0 and cmd[0] != "bibtex":   # bibtex warns noisily on a first pass
-            print(f"!! pdf: {name} pass {i} failed (exit {rc}); see paper/main.log")
+                             stdout=subprocess.DEVNULL if i == 1 else None)
+        if rc != 0:
+            print(f"!! pdf: {name} pass {i} failed (exit {rc}); see paper_updated/main.log")
             r.failures.append("pdf")
             return False
-    print(f"-- pdf: wrote {os.path.join('paper', 'main.pdf')}")
+    print(f"-- pdf: wrote {os.path.join('paper_updated', 'main.pdf')}")
     return True
 
 
@@ -637,7 +633,13 @@ def main():
         r.stage("claims audit: prose vs measured inventory", "claims", fatal=False)
         r.stage("bibliography: re-verify every citation against arXiv", "bib",
                 fatal=False)
-        r.stage("paper: regenerate every table and every quoted number", "paper",
+        # The manuscript's tables are transcribed from these two scripts' output; running
+        # them here puts the numbers the paper quotes into the run log next to the results.
+        r.stage("paper: paired tests and rankings behind the manuscript tables", None,
+                raw=[sys.executable, os.path.join(PAPER_DIR, "pinca_tests.py"), RES],
+                fatal=False)
+        r.stage("paper: structural checks on the manuscript", None,
+                raw=[sys.executable, os.path.join(PAPER_DIR, "check_manuscript.py")],
                 fatal=False)
     if want("report"):
         r.stage("architecture diagrams", "arch_figs", fatal=False)
@@ -654,8 +656,8 @@ def main():
     print(f"  backend        {env.provenance('runner')['backend']}  "
           f"peak {env.peak_mem_mb():.0f} MB")
     print("\n  PAPER ARTIFACTS")
-    print("    paper/main.tex + paper/generated/*.tex   every table and quoted number")
-    print("    paper/main.pdf                           if a LaTeX toolchain was present")
+    print("    paper_updated/main.tex                   the manuscript")
+    print("    paper_updated/main.pdf                   if a LaTeX toolchain was present")
     print("    docs/claims_audit.md                     what the results actually support")
     print("    docs/bibliography.md                     every citation verified vs arXiv")
     print("\n  SUPPORTING")

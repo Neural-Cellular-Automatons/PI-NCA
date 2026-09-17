@@ -24,10 +24,10 @@ characterize **the regimes where PINNs, NCAs, operators, and hybrids each win.**
 | 6 | Performance benchmarks | `results/*.{json,md}` | uniform matrix, all phenomena |
 | 7 | Reproducibility guide | `docs/reproducibility.md`, `environment.md`, `gpu_runbook.md` | done |
 | 8 | Final paper-style summary | `docs/final_summary.md` | done |
-| 9 | **Submission paper source** | `paper/main.tex` (+ generated tables) | done; every number generated |
+| 9 | **Submission paper source** | `paper_updated/main.tex` | PI-NCA and MC-PI-NCA; tables from `paper_updated/pinca_tests.py` |
 | — | Running research log | `docs/research_log.md` | live |
 | + | **Claims audit (generated)** | `docs/claims_audit.md` | live; `python -m pinca_jax.claims` |
-| + | **Bibliography (arXiv-verified)** | `docs/bibliography.md`, `paper/refs.bib` | 52/52 resolve |
+| + | **Bibliography (arXiv-verified)** | `docs/bibliography.md` | `python -m pinca_jax.bib` |
 | + | **Conservation taxonomy** | `docs/conservation.md` | done |
 | + | **Legacy script defects** | `docs/legacy_pytorch.md` | done, line-referenced |
 | + | Master results (all tables) | `docs/master_results.md` | done |
@@ -49,9 +49,6 @@ operator); PINN + DeepONet (continuous/operator, heat).
 **Protocol:** single fixed seed (42) + He-init + zero-init heads + LR warmup + pre-seeding —
 the originals' "start from a better point" recipe (`docs/initialization_and_protocol.md`).
 **Architecture diagrams:** `docs/architecture_diagrams.md`.
-**Research paper (detailed, LaTeX in .txt):** `docs/research_paper.txt` — "No Universal Winner:
-When Physics-Informed Neural Cellular Automata Beat (and Lose to) PINNs and Neural Operators on
-PDEs" (14 sections, 8 tables, 39 references; rename to `.tex` to compile).
 **True-3D volume renders:** `docs/figures/<pde>_3d_volume.png` (`viz3d_volume.py`).
 
 ## Branch map (research trail)
@@ -72,7 +69,7 @@ research/jax-migration     foundation: lit review, JAX core (src/pinca_jax/), mi
 Heat · advection–diffusion · wave · Allen–Cahn · Cahn–Hilliard · Gray–Scott · shallow water ·
 FitzHugh–Nagumo · Nagumo · Navier–Stokes (2-D); six of them repeated in 3-D. Formulations,
 parameters and the two documented stability overrides (Gray–Scott `dt=2.0`, Cahn–Hilliard
-`dt=0.5` — both above their explicit limits) are in `paper/appendix.tex` §B and
+`dt=0.5` — both above their explicit limits) are in `paper_updated/appendix.tex` and
 `src/pinca_jax/equations/pdes.py`.
 
 ## Compute scope

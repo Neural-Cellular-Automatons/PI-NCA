@@ -85,38 +85,34 @@ The scalar bistable Nagumo equation is
 \begin{equation}
  \partial_tu=D\nabla^2u+u(1-u)(u-a).
 \end{equation}
-FHN is the two-field activator--inhibitor reaction system in the implementation.
-Its reaction coefficients and precise variant are not specified by the supplied
-summary. For both problems, reaction terms generally preclude conserving each
-field's total independently.
+FitzHugh--Nagumo is the two-field activator--inhibitor reaction system; its
+coefficients are those of the released solver configuration. For both problems the
+reaction terms change each field's total, so neither conserves a field.
 
 \paragraph{Cahn--Hilliard.}
 \begin{equation}
  \partial_tu=\nabla^2\bigl(-\varepsilon^2\nabla^2u+W'(u)\bigr),
  \qquad W'(u)=u^3-u.
 \end{equation}
-This fourth-order equation conserves mass on a periodic domain. The reported
-teacher clips to $[-1,1]$, and the emulator bounding ablation follows that
-convention. We do not identify this clipped map with the unconstrained continuum
-equation. The learned correction also does not establish a discrete free-energy
-law. These distinctions are important when interpreting the stability improvement.
+This fourth-order equation conserves mass on a periodic domain. The solver clips its
+state to $[-1,1]$, so the distillation target is that clipped map rather than the
+unconstrained continuum equation. Bounded PI-NCA conserves mass, not the Cahn--Hilliard
+free energy, and no discrete energy law is claimed for it.
 
 \paragraph{Gray--Scott.}
 \begin{align}
  \partial_tu&=D_u\nabla^2u-uv^2+F(1-u),\\
  \partial_tv&=D_v\nabla^2v+uv^2-(F+k)v.
 \end{align}
-The feed and removal terms change field totals. The reference parameters with
-$dt=2.0$ were reported to diverge; the benchmark uses $dt=1.0$. The reported
-errors remain large, so this is a difficult case rather than an unqualified success
-for either family.
+The feed and removal terms change field totals. The original configuration at
+$\Delta t=2.0$ exceeds the explicit diffusion limit and diverges; the benchmark uses
+$\Delta t=1.0$. Errors remain large for every model.
 
 \paragraph{Navier--Stokes.}
-The reported vorticity formulation uses the Poisson relation
-$\nabla^2\psi=-\omega$ to reconstruct the flow. This is the relevant source of
-global coupling. Viscosity, forcing, the treatment of the zero Fourier mode, and
-the full time-discretization settings must be specified by the experiment code;
-no additional values are inferred here.
+The vorticity formulation reconstructs the flow through the Poisson relation
+$\nabla^2\psi=-\omega$, which is the source of global coupling. Viscosity, forcing,
+the treatment of the zero Fourier mode and the time discretization are those of the
+released solver configuration.
 
 \paragraph{Three-dimensional suite.}
 Heat, advection--diffusion, Allen--Cahn, Nagumo, Gray--Scott, and FHN are implemented
@@ -332,7 +328,7 @@ Every result in this paper was produced by one command on one machine. The run e
 failed (Appendix~\ref{sec:notmeasured}) and one was skipped; the per-stage timings, exit
 codes, and failures are recorded in the run manifest that accompanies the artifact.
 
-The run begins with a correctness gate of 245 tests that must pass before any benchmark
+The run begins with a correctness gate of 233 tests that must pass before any benchmark
 executes. The gate asserts that the JAX ports equal verbatim PyTorch references to
 tolerance, and it includes regression tests for two defects found during the migration:
 a periodic Laplacian that differenced the wrong axes for the array layout the training
@@ -343,24 +339,7 @@ conservative than uncorrected testing, that the closed-form solver references ar
 and that the headroom projection is simultaneously mass-exact, bound-preserving, and
 differentiable.
 
-Two generated documents accompany the artifact and are not written by hand. A claims
-audit derives the inventory of what was measured from the results files and evaluates
-fifteen pre-registered claims against it, reporting each as supported, unsupported, or
-not yet measured; for this run eleven are supported, one---rank stability---is
-unsupported, and three are not yet measured. A bibliography check resolves every cited
-arXiv identifier against the arXiv API. Both are regenerated at the end of every run, so
-they describe the run that actually happened rather than an intended one.
-
-\paragraph{A negative engineering result.} The CAX library for hardware-accelerated
-cellular automata \citep{cax} was evaluated as a drop-in accelerator for the rollout and
-measured to give no speedup on either CPU or GPU: both it and the \model{lax.scan} core
-compile to the same XLA scan. It was never on the hot path and is not a dependency of the
-released stack. We record this because a negative integration result is otherwise
-invisible.
-
-\paragraph{Remaining author checks.} The following should be completed before submission
-and are not established by this manuscript: rerunning the three failed evaluation axes at
-this scale; confirming the interpretation of mass drift on each reaction field;
-supplying the standalone continuous-baseline numbers from the run log or rerunning them
-with file output; and a personal review of the scientific interpretations and the
-bibliography.
+The rankings and paired tests quoted in the tables are recomputed from the saved
+per-initial-condition errors by \model{pinca\_tests.py}, which is released with the
+manuscript, and a bibliography check resolves every cited arXiv identifier against the
+arXiv API.

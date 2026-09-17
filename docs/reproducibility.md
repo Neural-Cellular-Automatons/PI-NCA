@@ -45,7 +45,7 @@ Verified stack: jax 0.10.1, flax 0.12.7, optax 0.2.8, numpy, scipy, matplotlib, 
 python -m pytest tests/ -q
 ```
 
-245 tests. It asserts the JAX ports equal the verbatim PyTorch references to tolerance, the
+233 tests. It asserts the JAX ports equal the verbatim PyTorch references to tolerance, the
 NHWC isotropy fix, structural conservation, the Gray–Scott `dt=2.0` and Cahn–Hilliard
 `dt=0.5` instabilities, the statistical machinery (bootstrap coverage, Holm correction,
 paired tests), the closed-form solver references, the bounded mass projection, and the
@@ -71,8 +71,8 @@ anything.**
 | 3-D matrix | `python -m pinca_jax.bench3d --grid 32` | `results/bench3d_<pde>.{json,md}` |
 | Continuous baselines | `python -m pinca_jax.pinn_heat`, `.deeponet_heat`, `.darcy` | stdout + `results/` |
 | Claims audit | `python -m pinca_jax.claims` | `docs/claims_audit.md` |
-| Bibliography | `python -m pinca_jax.bib` | `docs/bibliography.{md,json}`, `paper/refs.bib` |
-| Paper tables | `python -m pinca_jax.paper` | `paper/generated/*.tex` |
+| Bibliography | `python -m pinca_jax.bib` | `docs/bibliography.{md,json}` |
+| Paper tables | `python paper_updated/pinca_tests.py` | rankings and paired tests, printed |
 | Figures / plots / report | `python -m pinca_jax.capture`, `.viz`, `.plots`, `.report` | `docs/figures/`, `docs/*.md` |
 
 ## 4. Determinism and seeds
@@ -142,7 +142,7 @@ results JSON under `"device"`, so a GPU run can be told from a CPU one after the
 ```bash
 python -m pinca_jax.claims --strict   # fails if prose and results/ disagree
 python -m pinca_jax.bib --strict      # fails if any cited arXiv id does not resolve
-python -m pytest tests/test_paper.py  # fails if the paper quotes an ungenerated number
+python paper_updated/check_manuscript.py  # fails on a broken ref, citation or table
 ```
 
 `docs/claims_audit.md` is generated, never written by hand. It lists what was measured,
@@ -153,10 +153,10 @@ matrix cell, and any count in the prose that disagrees with `results/`.
 
 | Artifact | Path |
 |---|---|
-| Paper source (ICLR-structured) | `paper/main.tex`, `paper/appendix.tex` |
-| Paper tables and quoted numbers (generated) | `paper/generated/` (`pinca_jax.paper`) |
+| Paper source (ICLR) | `paper_updated/main.tex`, `paper_updated/appendix.tex` |
+| Numbers behind the paper's tables | `paper_updated/pinca_tests.py` |
 | Claims audit (generated) | `docs/claims_audit.md` (`pinca_jax.claims`) |
-| Bibliography (arXiv-verified) | `docs/bibliography.md`, `paper/refs.bib` (`pinca_jax.bib`) |
+| Bibliography (arXiv-verified) | `docs/bibliography.md` (`pinca_jax.bib`) |
 | Related work and novelty positioning | `docs/related_work.md` |
 | Conservation taxonomy | `docs/conservation.md` |
 | Legacy PyTorch script defects | `docs/legacy_pytorch.md` |

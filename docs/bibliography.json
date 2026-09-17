@@ -598,238 +598,299 @@
     "Hao Wang"
    ],
    "published": "2026-08-31"
+  },
+  "1511.07122": {
+   "id": "1511.07122",
+   "title": "Multi-Scale Context Aggregation by Dilated Convolutions",
+   "authors": [
+    "Fisher Yu",
+    "Vladlen Koltun"
+   ],
+   "published": "2015-11-23"
+  },
+  "2007.00016": {
+   "id": "2007.00016",
+   "title": "Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers",
+   "authors": [
+    "Kiwon Um",
+    "Robert Brand",
+    " Yun",
+    " Fei",
+    "Philipp Holl",
+    "Nils Thuerey"
+   ],
+   "published": "2020-06-30"
+  },
+  "2109.01050": {
+   "id": "2109.01050",
+   "title": "Characterizing possible failure modes in physics-informed neural networks",
+   "authors": [
+    "Aditi S. Krishnapriyan",
+    "Amir Gholami",
+    "Shandian Zhe",
+    "Robert M. Kirby",
+    "Michael W. Mahoney"
+   ],
+   "published": "2021-09-02"
+  },
+  "2302.11002": {
+   "id": "2302.11002",
+   "title": "Learning Physical Models that Can Respect Conservation Laws",
+   "authors": [
+    "Derek Hansen",
+    "Danielle C. Maddix",
+    "Shima Alizadeh",
+    "Gaurav Gupta",
+    "Michael W. Mahoney"
+   ],
+   "published": "2023-02-21"
+  },
+  "2312.11176": {
+   "id": "2312.11176",
+   "title": "Harnessing the Power of Neural Operators with Automatically Encoded Conservation Laws",
+   "authors": [
+    "Ning Liu",
+    "Yiming Fan",
+    "Xianyi Zeng",
+    "Milan Kl\u00f6wer",
+    "Lu Zhang",
+    "Yue Yu"
+   ],
+   "published": "2023-12-18"
+  },
+  "2507.08861": {
+   "id": "2507.08861",
+   "title": "On the under-reaching phenomenon in message-passing neural PDE solvers: revisiting the CFL condition",
+   "authors": [
+    "Lucas Tesan",
+    "Mikel M. Iparraguirre",
+    "David Gonzalez",
+    "Pedro Martins",
+    "Elias Cueto"
+   ],
+   "published": "2025-07-09"
   }
  },
  "cited": {
   "1003.1983": [
    "docs\\architecture_report.md:37",
    "docs\\literature_review.md:47",
-   "docs\\literature_review.md:114",
-   "docs\\research_paper.txt:1286"
+   "docs\\literature_review.md:114"
+  ],
+  "1511.07122": [
+   "paper_updated\\references.tex:189"
   ],
   "1710.09668": [
    "docs\\related_work.md:17",
-   "docs\\related_work.md:112"
+   "docs\\related_work.md:112",
+   "paper_updated\\references.tex:75"
   ],
   "1711.10561": [
    "docs\\architecture_report.md:56",
    "docs\\literature_review.md:81",
-   "docs\\related_work.md:120",
-   "docs\\research_paper.txt:1308"
-  ],
-  "1711.10566": [
-   "docs\\research_paper.txt:1310"
+   "docs\\related_work.md:120"
   ],
   "1812.04426": [
    "docs\\related_work.md:112"
   ],
   "1910.03193": [
    "docs\\literature_review.md:166",
-   "docs\\related_work.md:115",
-   "docs\\research_paper.txt:1340"
+   "docs\\related_work.md:115"
   ],
   "2002.09405": [
-   "docs\\related_work.md:117"
+   "docs\\related_work.md:117",
+   "paper_updated\\references.tex:150"
   ],
   "2006.09535": [
-   "docs\\literature_review.md:180",
-   "docs\\research_paper.txt:1348"
+   "docs\\literature_review.md:180"
+  ],
+  "2007.00016": [
+   "paper_updated\\references.tex:170"
   ],
   "2010.03409": [
-   "docs\\related_work.md:117"
+   "docs\\related_work.md:117",
+   "paper_updated\\references.tex:100"
   ],
   "2010.08895": [
    "docs\\architecture_report.md:47",
    "docs\\literature_review.md:139",
    "docs\\related_work.md:113",
-   "docs\\research_paper.txt:1330"
+   "paper_updated\\references.tex:50"
   ],
   "2104.06010": [
    "docs\\iclr_audit_response.md:100",
    "docs\\related_work.md:32",
-   "docs\\related_work.md:110"
+   "docs\\related_work.md:110",
+   "paper_updated\\references.tex:126"
   ],
   "2107.07562": [
    "docs\\architecture_report.md:47",
-   "docs\\literature_review.md:139",
-   "docs\\research_paper.txt:1334"
+   "docs\\literature_review.md:139"
   ],
   "2108.08481": [
    "docs\\literature_review.md:139",
-   "docs\\research_paper.txt:1332"
+   "paper_updated\\references.tex:32"
+  ],
+  "2109.01050": [
+   "paper_updated\\references.tex:38"
   ],
   "2111.03794": [
    "docs\\architecture_report.md:47",
    "docs\\literature_review.md:140",
    "docs\\literature_review.md:206",
    "docs\\related_work.md:114",
-   "docs\\research_paper.txt:1338"
+   "paper_updated\\references.tex:56"
   ],
   "2111.11798": [
    "docs\\related_work.md:33",
-   "docs\\related_work.md:110"
+   "docs\\related_work.md:110",
+   "paper_updated\\references.tex:132"
   ],
   "2111.13545": [
-   "docs\\literature_review.md:48",
-   "docs\\research_paper.txt:1290"
+   "docs\\literature_review.md:48"
   ],
   "2201.05624": [
-   "docs\\literature_review.md:82",
-   "docs\\research_paper.txt:1312"
+   "docs\\literature_review.md:82"
   ],
   "2202.03376": [
-   "docs\\related_work.md:116"
+   "docs\\related_work.md:116",
+   "paper_updated\\references.tex:13"
   ],
   "2205.01681": [
-   "docs\\literature_review.md:49",
-   "docs\\research_paper.txt:1294"
+   "docs\\literature_review.md:49"
   ],
   "2207.05748": [
-   "docs\\literature_review.md:167",
-   "docs\\research_paper.txt:1342"
+   "docs\\literature_review.md:167"
   ],
   "2209.04934": [
    "docs\\related_work.md:118"
   ],
   "2209.05150": [
-   "docs\\literature_review.md:139",
-   "docs\\research_paper.txt:1336"
+   "docs\\literature_review.md:139"
   ],
   "2210.01741": [
    "docs\\iclr_audit_response.md:101",
    "docs\\related_work.md:39",
-   "docs\\related_work.md:111"
+   "docs\\related_work.md:111",
+   "paper_updated\\references.tex:138"
   ],
   "2210.07182": [
-   "docs\\related_work.md:121"
+   "docs\\related_work.md:121",
+   "paper_updated\\references.tex:157"
   ],
   "2211.11417": [
-   "docs\\literature_review.md:48",
-   "docs\\research_paper.txt:1292"
+   "docs\\literature_review.md:48"
   ],
   "2302.10197": [
-   "docs\\literature_review.md:49",
-   "docs\\research_paper.txt:1296"
+   "docs\\literature_review.md:49"
+  ],
+  "2302.11002": [
+   "paper_updated\\references.tex:19"
   ],
   "2302.14227": [
    "docs\\architecture_report.md:56",
    "docs\\literature_review.md:83",
-   "docs\\literature_review.md:99",
-   "docs\\research_paper.txt:1320"
+   "docs\\literature_review.md:99"
   ],
   "2305.01240": [
-   "docs\\literature_review.md:83",
-   "docs\\research_paper.txt:1328"
+   "docs\\literature_review.md:83"
   ],
   "2308.05732": [
-   "docs\\related_work.md:119"
+   "docs\\related_work.md:119",
+   "paper_updated\\references.tex:63"
   ],
   "2310.14809": [
    "docs\\iclr_audit_response.md:98",
    "docs\\related_work.md:27",
    "docs\\related_work.md:108"
   ],
+  "2312.11176": [
+   "paper_updated\\references.tex:69"
+  ],
   "2401.11037": [
-   "docs\\literature_review.md:180",
-   "docs\\research_paper.txt:1350"
+   "docs\\literature_review.md:180"
   ],
   "2402.00531": [
    "docs\\literature_review.md:83",
-   "docs\\literature_review.md:98",
-   "docs\\research_paper.txt:1326"
+   "docs\\literature_review.md:98"
   ],
   "2404.06279": [
    "docs\\architecture_report.md:25",
    "docs\\literature_review.md:48",
    "docs\\literature_review.md:114",
-   "docs\\related_work.md:109",
-   "docs\\research_paper.txt:1288"
+   "docs\\related_work.md:109"
   ],
   "2406.06718": [
    "docs\\literature_review.md:187",
-   "docs\\literature_review.md:206",
-   "docs\\research_paper.txt:1352"
+   "docs\\literature_review.md:206"
   ],
   "2407.06151": [
-   "docs\\literature_review.md:114",
-   "docs\\research_paper.txt:1360"
+   "docs\\literature_review.md:114"
   ],
   "2407.13010": [
-   "docs\\literature_review.md:167",
-   "docs\\research_paper.txt:1344"
+   "docs\\literature_review.md:167"
   ],
   "2410.02651": [
    "docs\\cax_evaluation.md:4",
    "docs\\literature_review.md:51",
-   "docs\\literature_review.md:188",
-   "docs\\research_paper.txt:1136",
-   "docs\\research_paper.txt:1306"
+   "docs\\literature_review.md:188"
   ],
   "2410.03496": [
    "docs\\literature_review.md:83",
-   "docs\\literature_review.md:97",
-   "docs\\research_paper.txt:1322"
+   "docs\\literature_review.md:97"
   ],
   "2411.00180": [
    "docs\\literature_review.md:34",
    "docs\\literature_review.md:66",
    "docs\\literature_review.md:188",
    "docs\\related_work.md:121",
-   "docs\\research_paper.txt:1358"
+   "paper_updated\\references.tex:25"
   ],
   "2411.18240": [
-   "docs\\literature_review.md:82",
-   "docs\\research_paper.txt:1316"
+   "docs\\literature_review.md:82"
   ],
   "2503.18181": [
-   "docs\\literature_review.md:82",
-   "docs\\research_paper.txt:1314"
+   "docs\\literature_review.md:82"
   ],
   "2504.02260": [
    "docs\\architecture_report.md:37",
    "docs\\literature_review.md:115",
    "docs\\literature_review.md:187",
-   "docs\\literature_review.md:205",
-   "docs\\research_paper.txt:1354"
+   "docs\\literature_review.md:205"
   ],
   "2504.03503": [
    "docs\\literature_review.md:167",
-   "docs\\literature_review.md:186",
-   "docs\\research_paper.txt:1346"
+   "docs\\literature_review.md:186"
   ],
   "2505.13058": [
-   "docs\\literature_review.md:50",
-   "docs\\research_paper.txt:1300"
+   "docs\\literature_review.md:50"
   ],
   "2505.14595": [
    "docs\\literature_review.md:115",
-   "docs\\literature_review.md:187",
-   "docs\\research_paper.txt:1356"
+   "docs\\literature_review.md:187"
   ],
   "2506.04912": [
-   "docs\\literature_review.md:50",
-   "docs\\research_paper.txt:1304"
+   "docs\\literature_review.md:50"
   ],
   "2506.22899": [
    "docs\\architecture_report.md:25",
-   "docs\\literature_review.md:50",
-   "docs\\research_paper.txt:1298"
+   "docs\\literature_review.md:50"
+  ],
+  "2507.08861": [
+   "paper_updated\\references.tex:163"
   ],
   "2510.06684": [
    "docs\\architecture_report.md:56",
    "docs\\literature_review.md:83",
-   "docs\\literature_review.md:98",
-   "docs\\research_paper.txt:1318"
+   "docs\\literature_review.md:98"
   ],
   "2601.16096": [
-   "docs\\literature_review.md:50",
-   "docs\\research_paper.txt:1302"
+   "docs\\literature_review.md:50"
   ],
   "2602.19265": [
    "docs\\literature_review.md:83",
    "docs\\literature_review.md:97",
-   "docs\\literature_review.md:155",
-   "docs\\research_paper.txt:1324"
+   "docs\\literature_review.md:155"
   ],
   "2602.23113": [
    "docs\\literature_review.md:186"
@@ -837,10 +898,11 @@
   "2608.30328": [
    "docs\\iclr_audit_response.md:95",
    "docs\\related_work.md:14",
-   "docs\\related_work.md:107"
+   "docs\\related_work.md:107",
+   "paper_updated\\references.tex:143"
   ]
  },
  "unresolved": [],
- "n_cited": 52,
- "n_resolved": 52
+ "n_cited": 57,
+ "n_resolved": 57
 }

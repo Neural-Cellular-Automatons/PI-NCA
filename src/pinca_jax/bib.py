@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DOCS = os.path.join(ROOT, "docs")
 CACHE = os.path.join(DOCS, "bibliography.json")
-API = "http://export.arxiv.org/api/query?id_list={}&max_results=100"
+API = "https://export.arxiv.org/api/query?id_list={}&max_results=100"
 ATOM = "{http://www.w3.org/2005/Atom}"
 
 ID_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5})(v\d+)?", re.I)
@@ -38,6 +38,7 @@ def scan(paths=None) -> dict[str, list[str]]:
     """{arxiv_id: [file:line, ...]} for every identifier cited in the repository."""
     paths = paths or (sorted(glob.glob(os.path.join(DOCS, "**", "*.md"), recursive=True)) +
                       sorted(glob.glob(os.path.join(DOCS, "**", "*.txt"), recursive=True)) +
+                      sorted(glob.glob(os.path.join(ROOT, "paper_updated", "*.tex"))) +
                       [os.path.join(ROOT, "README.md")])
     found: dict[str, list[str]] = {}
     for path in paths:
@@ -62,7 +63,9 @@ def fetch(ids, batch=40, pause=3.0) -> dict[str, dict]:
         chunk = ids[i:i + batch]
         url = API.format(",".join(chunk))
         try:
-            raw = urllib.request.urlopen(url, timeout=60).read()
+            # arXiv answers Python's default User-Agent with HTTP 406, so name the client.
+            req = urllib.request.Request(url, headers={"User-Agent": "pinca-jax-bib/1.0"})
+            raw = urllib.request.urlopen(req, timeout=60).read()
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             print(f"[bib] query failed for {len(chunk)} ids ({type(exc).__name__}); "
                   f"leaving them unverified")
@@ -204,7 +207,7 @@ def main():
                     help="exit non-zero if any cited identifier does not resolve")
     ap.add_argument("--refresh", action="store_true", help="ignore the cache")
     ap.add_argument("--out", default=os.path.join(DOCS, "bibliography.md"))
-    ap.add_argument("--bibtex", default=os.path.join(ROOT, "paper", "refs.bib"),
+    ap.add_argument("--bibtex", default=None,
                     help="also emit a BibTeX file built from the verified entries")
     args = ap.parse_args()
     p = verify(refresh=args.refresh)
