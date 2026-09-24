@@ -147,4 +147,46 @@ training, and a different backend from every number in the paper — and they mu
 mixed into any table. What they suggest is recorded here so the GPU run can confirm or
 overturn it.
 
-See `results/bench_*_probe_cpu24.md` for the tables as they stand.
+### What the screen says
+
+**The flux head transfers, and on conservative dynamics it is the whole effect.** Same
+backbone, same budget, head swapped; every pair below is a paired test on shared initial
+conditions at $p\le0.04$.
+
+| backbone | heat | shallow water | Cahn--Hilliard |
+|---|---|---|---|
+| FNO | **2.13x better** | **2.38x better** | 0.78x (worse) |
+| ResNet-S | **1.65x better** | **2.99x better** | 0.97x (worse) |
+| U-Net-S | **1.47x better** | **1.31x better** | 0.94x (worse) |
+
+On the two conservative phenomena the head helps every backbone, including two that are
+not cellular automata and one that is global. On the stiff fourth-order equation it hurts
+all three. The head is not a property of the automaton, and it is not free either: it
+restricts what the update can represent, which is the same trade the paper's A4 ablation
+shows for PI-NCA itself.
+
+**It also transfers the conservation.** End-of-rollout mass error on heat: $2.4	imes10^{-4}$
+for `fno_flux` against $1.5$ for `fno`; $3.8	imes10^{-4}$ for `unet_iso_flux` against
+$5.1$ for `unet_iso`.
+
+**FINN is the strongest conservative model at this scale.** It beats PI-NCA on heat
+($2.65	imes$), shallow water ($1.20	imes$) and Cahn--Hilliard ($2.51	imes$), all
+significant, at a matched parameter count. It is not compute-matched, and that is the first
+thing to check at full scale, but a facewise flux parameterisation beating a cellwise one
+is the result that most directly bears on what the paper can claim as its own.
+
+**Per-field conservation has evidence now, not just an argument.** On shallow water the
+lumped control keeps the *total* to $6.7	imes10^{-4}$ while the three individual fields
+drift by $2.4$, $7.0$ and $4.7$ -- and it is $6	imes$ less accurate than PI-NCA
+($0.0236$ against $0.00403$). PI-NCA's own per-field errors on the same run are
+$1.8	imes10^{-4}$, $1.3	imes10^{-7}$ and $9.5	imes10^{-7}$. That is exactly the failure
+mode the per-field proposition describes, measured.
+
+**What the screen cannot settle.** At this scale Cahn--Hilliard does not reproduce the
+paper's regime at all: the bound projection buys nothing ($0.1784$ against $0.1786$
+unprojected, a tie), where at $48^2$ with the full budget it was worth $30\%$. Grid and
+horizon both matter here, so the projection result has to come from the GPU run. The same
+applies to `finn_src` scoring *better* than `finn` on Cahn--Hilliard, which contradicts
+the conservation argument and is most likely an artefact of the short horizon.
+
+Tables as they stand: `results/bench_*_probe_cpu24.md`.
