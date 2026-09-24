@@ -206,6 +206,23 @@ three least central studies and roughly a fifth of the trainings. The claims aud
 then correctly report the corresponding claims as NOT_YET_MEASURED rather than pretending
 they were.
 
+### The review experiments
+
+Seven opt-in stages answer questions the paper's current evidence cannot: whether the
+flux head or the cellular automaton does the work, how PI-NCA compares with the published
+FINN baseline, whether per-field conservation beats one lumped total, what a pre-declared
+configuration rule scores, whether the large baselines were under-trained, whether the
+ranking survives the full-size baselines at a larger grid, and the two axes (stability and
+out-of-distribution) that failed in the first GPU run. One command:
+
+```bash
+bash run_paper.sh --only fluxhead,declared,tuning,dispersion,scaling_wide,stability,ood
+```
+
+Roughly eight to ten hours on a 4090 at the `paper` preset, and every stage is resumable
+and non-fatal, so it can be interrupted. `docs/review_experiments.md` says what each one
+measures and what the reduced-scale screen already suggests.
+
 ### On a small GPU: the latent world-model screen
 
 `jepa_sweep` is the one **opt-in** stage: it never runs as part of the command above, and

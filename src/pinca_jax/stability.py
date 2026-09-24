@@ -164,7 +164,16 @@ def study(pde, archs, grid=24, epochs=150, rollout=12, train_eval=48, horizon_mu
                                  epochs=epochs, batch=batch, n_eval=n_ic, seed=seed,
                                  warmup_epochs=30,
                                  preseed_steps=0 if pde == "cahn_hilliard" else 10)
-            tr = train_emulator(registry.REGISTRY[arch].make(C, bounds=bounds), cfg)
+            # Retry at half the batch on out-of-memory instead of losing the stage. The
+            # first GPU run of this study died at grid 48 for exactly this reason, which
+            # cost the paper its long-horizon numbers; the accuracy matrix already had
+            # this protection and this driver did not.
+            def attempt(b, cfg=cfg):
+                c = EmuConfig(**{**cfg.__dict__, "batch": b})
+                return train_emulator(registry.REGISTRY[arch].make(C, bounds=bounds), c)
+
+            tr, used = bench.run_with_oom_backoff(attempt, cfg.batch, min_batch=1,
+                                                  label=f"{pde}/{arch}")
             model, prm = tr["model"], tr["params"]
             x0 = ic.make_state(jax.random.PRNGKey(seed + 10_000), pde, n_ic, grid)
             r = failure_curve(model, prm, x0, long_h, bounds)
@@ -174,6 +183,7 @@ def study(pde, archs, grid=24, epochs=150, rollout=12, train_eval=48, horizon_mu
                                                    mid_rollout=True)
             r["dt_sensitivity"] = dt_sensitivity(model, prm, x0, cfg, train_eval)
             r["params"] = metrics.param_count(prm)
+            r["batch_used"] = used
             recs.append(r)
         out[arch] = _fold(recs, long_h)
         o = out[arch]

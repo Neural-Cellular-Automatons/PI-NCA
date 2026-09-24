@@ -87,3 +87,37 @@ class MultiChannelFluxNCA(nn.Module):
         flux = nn.Conv(2 * self.out_channels, (1, 1), use_bias=False,
                        kernel_init=nn.initializers.zeros, name="flux_head")(h)
         return multichannel_divergence_update(x, flux)
+
+
+class LumpedConsNCA(nn.Module):
+    """Ablation for the per-field conservation argument: conserve the LUMPED total.
+
+    Same trunk as `DeepFluxNCA`, but the head predicts an unconstrained state increment
+    and the result is projected so that the sum over *all* cells and *all* fields matches
+    the input's. That satisfies a single global conservation constraint while leaving each
+    individual field free to gain what another loses -- exactly the failure mode the
+    per-field divergence rules out.
+
+    Two things it is built to measure. On a multi-field system it should show a large
+    per-field mass drift with a near-zero lumped drift, which is the empirical content of
+    the per-field proposition. On a scalar field it is instead a control for *how* the
+    invariant is imposed: the same total is conserved by projection after the fact rather
+    than by the structure of the update, at the same parameter count.
+    """
+    out_channels: int = 1
+    perceive_features: int = 32
+    hidden_features: int = 64
+
+    @nn.compact
+    def __call__(self, x: jax.Array) -> jax.Array:
+        tgt = x.sum(axis=(1, 2, 3), keepdims=True)          # one lumped total per sample
+        p = nn.Conv(self.perceive_features, (3, 3), padding="CIRCULAR", kernel_init=_HE,
+                    name="perceive")(x)
+        h = nn.relu(p)
+        h = nn.relu(nn.Conv(self.hidden_features, (1, 1), kernel_init=_HE, name="proc1")(h))
+        h = nn.relu(nn.Conv(self.perceive_features, (1, 1), kernel_init=_HE, name="proc2")(h))
+        delta = nn.Conv(self.out_channels, (1, 1), use_bias=False,
+                        kernel_init=nn.initializers.zeros, name="update")(h)
+        out = x + delta
+        n = out.shape[1] * out.shape[2] * out.shape[3]
+        return out + (tgt - out.sum(axis=(1, 2, 3), keepdims=True)) / n

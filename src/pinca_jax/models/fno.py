@@ -14,6 +14,8 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
+from ..physics import multichannel_divergence_update
+
 
 class SpectralConv2d(nn.Module):
     out_channels: int
@@ -48,11 +50,20 @@ class SpectralConv2d(nn.Module):
 
 
 class FNO2d(nn.Module):
+    """Fourier neural operator as a one-step emulator.
+
+    `flux=True` replaces the residual state head with a conservative flux head: the
+    network emits a flux per axis per field and the state advances by its periodic
+    divergence, exactly as in PI-NCA. It exists to separate the two things PI-NCA changes
+    at once -- a local shared cellular-automaton rule, and predicting a flux rather than
+    an increment -- by giving the flux head to a global operator instead.
+    """
     out_channels: int = 1
     width: int = 24
     modes: int = 8
     depth: int = 4
     residual: bool = True  # True: emulator (x+delta); False: direct operator a↦u (Darcy)
+    flux: bool = False     # conservative flux-divergence head instead of a state head
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -62,6 +73,9 @@ class FNO2d(nn.Module):
             local = nn.Conv(self.width, (1, 1), name=f"w{d}")(v)
             v = nn.gelu(spec + local)
         v = nn.gelu(nn.Conv(self.width, (1, 1), name="proj1")(v))
-        out = nn.Conv(self.out_channels, (1, 1), name="proj2",
+        n_out = 2 * self.out_channels if self.flux else self.out_channels
+        out = nn.Conv(n_out, (1, 1), name="proj2",
                       kernel_init=nn.initializers.zeros)(v)
+        if self.flux:
+            return multichannel_divergence_update(x, out)
         return x + out if self.residual else out  # emulator vs direct operator

@@ -86,6 +86,16 @@ VIZ_3D = ["heat", "adv_diff", "allen_cahn", "nagumo", "gray_scott", "fitzhugh_na
 # spectral -- plus a physics-free control, so the subset can still answer the question the
 # study exists to ask.
 OOD_ARCHS = "plain_nca,pi_nca,multiscale_flux_nca,fno,resnet,unet"
+# The flux head given to backbones that are not cellular automata, plus the two
+# conservative controls. The reference models are in the same list so the paired tests
+# happen inside one results file.
+FLUX_PROBE_ARCHS = ("pi_nca,mc_flux_nca,bounded_cons_nca,pi_nca_lumped,finn,finn_src,"
+                    "fno,fno_flux,unet_iso,unet_iso_flux,resnet_iso,resnet_iso_flux,"
+                    "plain_nca,identity")
+# Rank stability including the full-size baselines that the paper's sweep leaves out.
+SCALING_WIDE_ARCHS = ("plain_nca,pi_nca,bounded_cons_nca,mc_flux_nca,fno,resnet,unet,"
+                      "identity")
+
 STAB_ARCHS = ("plain_nca,pi_nca,multiscale_flux_nca,bounded_multiscale_nca,"
               "abl_proj_uniform,abl_proj_headroom,fno,resnet,unet,identity")
 SCALING_ARCHS = "plain_nca,pi_nca,multiscale_flux_nca,fno,resnet_iso,identity"
@@ -105,6 +115,8 @@ PROFILES = {
                   sweep_grid=12, sweep_epochs=6, sweep_jepa_epochs=6,
                   sweep_probe_epochs=4, sweep_seeds=1,
                   sweep_variants="fno_oneshot,fno_multi,nca_multi",
+                  tune_epochs=6, tune_mult=2, tune_lrs="0.001,0.003",
+                  scalw_grids="12,16", scalw_seeds=1,
                   # A wiring check must still touch every phenomenon -- that is where
                   # shape and channel bugs live -- but it does not need every
                   # architecture, and running all fourteen turns "minutes" into an hour.
@@ -132,6 +144,8 @@ PROFILES = {
                   # `jepa` stage at the paper budget.
                   sweep_grid=32, sweep_epochs=400, sweep_jepa_epochs=300,
                   sweep_probe_epochs=200, sweep_seeds=2, sweep_variants=None,
+                  tune_epochs=1200, tune_mult=4, tune_lrs="0.0003,0.001,0.003",
+                  scalw_grids="48,96", scalw_seeds=3,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -148,6 +162,8 @@ PROFILES = {
                  jepa_epochs=1200, probe_epochs=600,
                  sweep_grid=48, sweep_epochs=800, sweep_jepa_epochs=600,
                  sweep_probe_epochs=400, sweep_seeds=3, sweep_variants=None,
+                 tune_epochs=2000, tune_mult=4, tune_lrs="0.0003,0.001,0.003",
+                 scalw_grids="48,128", scalw_seeds=3,
                   archs=None, ood_archs=OOD_ARCHS,
                   stab_archs=STAB_ARCHS, scal_archs=SCALING_ARCHS,
                   res_archs=None),
@@ -166,6 +182,11 @@ STAGES = [
     ("scaling", "does the ranking survive a change of grid, horizon and training budget?"),
     ("jepa", "latent self-supervised pretraining vs distillation, same architecture"),
     ("jepa_sweep", "OPT-IN (--only jepa_sweep): screen ten latent world-model variants"),
+    ("fluxhead", "OPT-IN: is it the automaton or the flux head? + FINN and lumped controls"),
+    ("declared", "OPT-IN: the pre-declared configuration on all ten phenomena"),
+    ("tuning", "OPT-IN: learning-rate and 4x-budget sweep for the large baselines"),
+    ("dispersion", "OPT-IN: numerical dispersion of the wave solver (no training)"),
+    ("scaling_wide", "OPT-IN: rank stability with the full-size baselines, 3 seeds, to 96^2"),
     ("bench3d", "the same comparison in three dimensions"),
     ("resolution", "train at one grid, evaluate at every other"),
     ("baselines", "PINN, DeepONet, Darcy, and the matched PINN-vs-emulator comparison"),
@@ -180,7 +201,7 @@ FINALISATION = {"plots", "claims", "report", "pdf"}
 # Stages that run only when named in --only. A variant screen is exploratory: it is a
 # sized-to-fit-a-small-GPU ranking, not a paper number, and it must not silently add
 # hours to the one-command run that produces the paper.
-OPT_IN = {"jepa_sweep"}
+OPT_IN = {"jepa_sweep", "fluxhead", "declared", "tuning", "dispersion", "scaling_wide"}
 
 
 class Run:
@@ -205,7 +226,7 @@ class Run:
             cmd.append("--force")
         if self.allow_cpu and module in ("bench_all", "bench3d", "res_study", "ood",
                                          "stability", "teacher_error", "matched",
-                                         "scaling", "jepa"):
+                                         "scaling", "jepa", "tuning", "dispersion"):
             cmd.append("--allow-cpu")
         return cmd
 
@@ -557,6 +578,66 @@ def main():
                          "--seeds", P["sweep_seeds"]]
                         + (["--variants", P["sweep_variants"]] if P.get("sweep_variants") else []),
                         fatal=False, outputs=res(f"jepa_sweep_{pde}.json"))
+
+        # ---- review experiments: each answers one question a reviewer asked, and none
+        # ---- is part of the default run, so the paper pipeline's cost is unchanged.
+        if want("fluxhead"):
+            # PI-NCA changes two things at once relative to a standard surrogate: a shared
+            # local cellular-automaton rule, and a flux head instead of a state head. This
+            # gives the same flux head to a spectral, a multi-resolution and a local
+            # non-shared-weight backbone, adds the published facewise conservative
+            # baseline (FINN-style), and adds a variant that conserves one lumped total
+            # instead of each field -- the control the per-field proposition needs.
+            r.stage("flux head on non-automaton backbones, FINN, and lumped conservation",
+                    "bench_all",
+                    ["--archs", FLUX_PROBE_ARCHS, "--pdes", HEADLINE_PDES,
+                     "--tag", "probe", "--seeds", P["seeds"], "--epochs", P["epochs"],
+                     "--grid", P["grid"], "--batch", P["batch"],
+                     "--rollout", P["rollout"], "--eval", P["eval"]],
+                    fatal=False,
+                    outputs=res(*[f"bench_{q}_probe.json" for q in HEADLINE_PDES.split(",")]))
+
+        if want("declared"):
+            # The configuration rule the paper declares in advance (wide width; the bound
+            # projection iff the state has a hard physical range) needs the wide+bounded
+            # cell measured on every phenomenon, not only the compact one.
+            r.stage("the pre-declared configuration on every phenomenon", "bench_all",
+                    ["--archs", "mc_flux_nca,bounded_mc_nca", "--tag", "declared",
+                     "--seeds", P["seeds"], "--epochs", P["epochs"], "--grid", P["grid"],
+                     "--batch", P["batch"], "--rollout", P["rollout"], "--eval", P["eval"]],
+                    fatal=False)
+
+        if want("tuning"):
+            # Is a baseline that loses simply under-trained? Sweeps the learning rate and
+            # then trains the best setting for `tune_mult` times as long, on the two
+            # phenomena where the paper's claims depend on the answer.
+            for pde in ("cahn_hilliard", "shallow_water"):
+                r.stage(f"learning-rate and budget sweep: {pde}", "tuning",
+                        ["--pde", pde, "--grid", P["grid"], "--epochs", P["tune_epochs"],
+                         "--mult", P["tune_mult"], "--lrs", P["tune_lrs"],
+                         "--batch", P["batch"], "--rollout", P["rollout"],
+                         "--eval", P["eval"], "--n-eval", P["n_eval"]],
+                        fatal=False, outputs=res(f"tuning_{pde}.json"))
+
+        if want("dispersion"):
+            r.stage("numerical dispersion of the wave solver", "dispersion",
+                    ["--grid", P["grid"], "--steps", P["eval"]],
+                    fatal=False, outputs=res("dispersion_wave.json"))
+
+        if want("scaling_wide"):
+            # The rank-stability sweep the paper reports excludes the full-size ResNet and
+            # U-Net, which is exactly where the runner-up lives on Cahn-Hilliard. This one
+            # includes them, uses several seeds, and goes past the benchmark grid.
+            for pde in HEADLINE_PDES.split(","):
+                r.stage(f"rank stability with the full-size baselines: {pde}", "scaling",
+                        ["--pde", pde, "--archs", SCALING_WIDE_ARCHS,
+                         "--grids", P["scalw_grids"],
+                         "--rollouts", P["scal_rollouts"], "--epochs-sweep", P["scal_epochs"],
+                         "--grid", P["grid"], "--rollout", P["rollout"],
+                         "--epochs", P["epochs"], "--eval", P["eval"],
+                         "--batch", P["batch"], "--n-eval", P["n_eval"],
+                         "--seeds", P["scalw_seeds"], "--tag", "wide"],
+                        fatal=False, outputs=res(f"scaling_{pde}_wide.json"))
 
         if want("bench3d"):
             # Non-fatal on purpose: a 3-D out-of-memory error must not discard a completed

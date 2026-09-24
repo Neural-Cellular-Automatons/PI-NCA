@@ -194,6 +194,10 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--n-eval", type=int, default=16)
     ap.add_argument("--seeds", type=int, default=1)
+    ap.add_argument("--tag", default="",
+                    help="results/scaling_<pde>_<tag>.json; use a tag for a second sweep "
+                         "(a wider architecture set, more seeds) so it does not overwrite "
+                         "the one the paper reports")
     ap.add_argument("--allow-cpu", action="store_true")
     args = ap.parse_args()
     env.require_gpu("scaling", allow_cpu=args.allow_cpu)
@@ -205,7 +209,8 @@ def main():
     results = run(args.pde, archs, ints(args.grids), ints(args.rollouts),
                   ints(args.epochs_sweep), base, seeds=seeds)
     os.makedirs(RES, exist_ok=True)
-    out = os.path.join(RES, f"scaling_{args.pde}")
+    suffix = f"_{args.tag}" if args.tag else ""
+    out = os.path.join(RES, f"scaling_{args.pde}{suffix}")
     with open(out + ".json", "w", encoding="utf-8") as f:
         json.dump({"pde": args.pde, "base": base, "seeds": list(seeds),
                    "results": results, "device": env.provenance("scaling")}, f, indent=1)

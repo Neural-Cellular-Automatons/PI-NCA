@@ -187,7 +187,15 @@ def study(pde, archs, grid=24, epochs=150, rollout=12, eval_steps=48, batch=16,
         rows = {}
         for seed in seeds:
             c = EmuConfig(**{**cfg.__dict__, "seed": seed})
-            tr = train_emulator(registry.REGISTRY[arch].make(C, bounds=bounds), c)
+            # Same out-of-memory backoff as the accuracy matrix: this study also died at
+            # grid 48 in the first GPU run, and a held-out axis is worth more than the
+            # batch size it was measured at.
+            def attempt(b, c=c):
+                cc = EmuConfig(**{**c.__dict__, "batch": b})
+                return train_emulator(registry.REGISTRY[arch].make(C, bounds=bounds), cc)
+
+            tr, _ = bench.run_with_oom_backoff(attempt, c.batch, min_batch=1,
+                                               label=f"{pde}/{arch}")
             model, prm = tr["model"], tr["params"]
             base_spec = _spec_for(pde)
             for name in IC_SHIFTS:

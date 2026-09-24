@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .nca import NCA
-from .flux_nca import DeepFluxNCA, MultiChannelFluxNCA
+from .finn import FINN2d
+from .flux_nca import DeepFluxNCA, LumpedConsNCA, MultiChannelFluxNCA
 from .fno import FNO2d
 from .hybrids import BoundedConsFluxNCA, SpectralFluxNCA, MultiScaleFluxNCA
 from .ablation_nca import AblationNCA
@@ -31,6 +32,11 @@ class ArchSpec:
     # field range; only the bounded variants use it, the rest ignore it.
     make: Callable[..., Callable]
     scalar_only: bool = False
+    # `probe` keeps an entry out of the default comparison set. These are controls for a
+    # specific question (does the flux head need a cellular automaton? does per-field
+    # conservation matter?) and are run on the phenomena that question concerns, so
+    # putting them in the uniform matrix would add rows nothing else is compared against.
+    probe: bool = False
     note: str = ""
 
 
@@ -126,6 +132,55 @@ REGISTRY: dict[str, ArchSpec] = {
             out_channels=C, conserve=True, bounds=bounds or (-1.0, 1.0))),
         note="UNIFIED: multi-scale perception + bounded + mass-conserving (stiff bounded fields)"),
 
+    # --- flux head on backbones that are NOT cellular automata (probes) ---
+    # PI-NCA changes two things at once relative to a standard surrogate: the update rule
+    # is one shared local cellular-automaton rule, and the head predicts a flux instead of
+    # a state increment. These give the flux head to a global spectral backbone, a
+    # multi-resolution backbone and a local non-shared-weight backbone, so the two can be
+    # separated.
+    "fno_flux": ArchSpec(
+        "fno_flux",
+        lambda C, bounds=None: (lambda: FNO2d(out_channels=C, width=24, modes=8,
+                                              depth=4, flux=True)),
+        probe=True, note="FNO backbone + conservative flux head (~5.9e5 params)"),
+    "unet_iso_flux": ArchSpec(
+        "unet_iso_flux",
+        lambda C, bounds=None: (lambda: UNetEmulator(out_channels=C, width=4, levels=2,
+                                                     flux=True)),
+        probe=True, note="iso-parameter U-Net backbone + conservative flux head"),
+    "resnet_iso_flux": ArchSpec(
+        "resnet_iso_flux",
+        lambda C, bounds=None: (lambda: ResNetEmulator(out_channels=C, width=12, depth=2,
+                                                       flux=True)),
+        probe=True, note="iso-parameter CNN backbone + conservative flux head"),
+    # --- the published conservative baseline: facewise instead of cellwise fluxes ---
+    "finn": ArchSpec(
+        "finn", lambda C, bounds=None: (lambda: FINN2d(out_channels=C, hidden=32, depth=2)),
+        probe=True, note="FINN-style facewise flux network (diffusive + advective split)"),
+    "finn_src": ArchSpec(
+        "finn_src",
+        lambda C, bounds=None: (lambda: FINN2d(out_channels=C, hidden=32, depth=2,
+                                               source=True)),
+        probe=True, note="FINN-style with a learned source term (not conservative)"),
+    # --- the wide setting with the bound projection ---
+    # A pre-declared configuration rule ("wide width; projection iff the state has a hard
+    # physical range") needs this cell to exist for the bounded phenomena. Without it the
+    # rule could only be satisfied by falling back to the compact width there, which is a
+    # second, unstated choice.
+    "bounded_mc_nca": ArchSpec(
+        "bounded_mc_nca",
+        lambda C, bounds=None: (lambda: BoundedConsFluxNCA(
+            out_channels=C, bounds=bounds or (-1.0, 1.0),
+            perceive_features=48, hidden_features=96)),
+        probe=True,
+        note="wide PI-NCA (MC width) + bound projection: the pre-declared bounded cell"),
+    # --- lumped vs per-field conservation, for the per-field proposition ---
+    "pi_nca_lumped": ArchSpec(
+        "pi_nca_lumped",
+        lambda C, bounds=None: (lambda: LumpedConsNCA(out_channels=C)),
+        probe=True,
+        note="one lumped total conserved by projection instead of per-field flux"),
+
     # --- latent-space operator: encode, evolve spectrally in the latent, decode ---
     # The architecture a JEPA-style latent objective needs. Registered so that it is
     # measured by the same harness, the same paired statistics, and against the same
@@ -168,12 +223,18 @@ BUDGET_CLASS = {
     "latent_fno_iso": "small",
     "spectral_flux_nca": "large", "unet": "large", "fno": "large",
     "latent_fno": "large",
+    "unet_iso_flux": "small", "resnet_iso_flux": "small", "finn": "small",
+    "finn_src": "small", "pi_nca_lumped": "small", "bounded_mc_nca": "small",
+    "fno_flux": "large",
 }
 
 
-# Architectures compared on every phenomenon. The ablation entries (abl_*) are
-# excluded: they are matched-backbone probes for A4/A5, not competitors.
-BENCH_ARCHS = [k for k in REGISTRY if not k.startswith("abl_")]
+# Architectures compared on every phenomenon. Excluded: the matched-backbone ablation
+# entries (abl_*), which are probes for A4/A5 rather than competitors, and every entry
+# marked `probe`, which answers one targeted question on the phenomena that question
+# concerns. Both are run by name with `--archs`.
+BENCH_ARCHS = [k for k, v in REGISTRY.items()
+               if not k.startswith("abl_") and not v.probe]
 
 
 def applicable(channels: int):

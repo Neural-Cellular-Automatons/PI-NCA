@@ -24,7 +24,25 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
+from ..physics import multichannel_divergence_update
+
 _HE = nn.initializers.he_normal()
+
+
+def _head(x, h, out_channels, flux):
+    """Zero-initialised output head: a state increment, or a conservative flux.
+
+    With `flux=True` the head emits a flux per axis per field and the state advances by
+    its periodic divergence, so the total of every field is conserved for any weights --
+    the PI-NCA head, bolted onto a baseline backbone. This is what separates "a local
+    shared cellular-automaton rule" from "predicting a flux instead of an increment".
+    """
+    n_out = 2 * out_channels if flux else out_channels
+    delta = nn.Conv(n_out, (1, 1), name="head", use_bias=False,
+                    kernel_init=nn.initializers.zeros)(h)
+    return multichannel_divergence_update(x, delta) if flux else x + delta
+
+
 _CIRC = dict(padding="CIRCULAR", kernel_init=_HE)
 
 
@@ -38,6 +56,7 @@ class ResNetEmulator(nn.Module):
     width: int = 32
     depth: int = 4
     kernel: int = 3
+    flux: bool = False
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -47,9 +66,7 @@ class ResNetEmulator(nn.Module):
             r = nn.gelu(nn.Conv(self.width, k, name=f"b{d}c1", **_CIRC)(h))
             r = nn.Conv(self.width, k, name=f"b{d}c2", **_CIRC)(r)
             h = nn.gelu(h + r)
-        delta = nn.Conv(self.out_channels, (1, 1), name="head", use_bias=False,
-                        kernel_init=nn.initializers.zeros)(h)
-        return x + delta
+        return _head(x, h, self.out_channels, self.flux)
 
 
 def _down(u):
@@ -75,6 +92,7 @@ class UNetEmulator(nn.Module):
     width: int = 24
     levels: int = 2
     kernel: int = 3
+    flux: bool = False
 
     @nn.compact
     def __call__(self, x: jax.Array) -> jax.Array:
@@ -97,9 +115,7 @@ class UNetEmulator(nn.Module):
             h = _up(h)
             h = jnp.concatenate([h, skips[lv]], axis=-1)
             h = block(h, self.width * (2 ** lv), f"u{lv}")
-        delta = nn.Conv(self.out_channels, (1, 1), name="head", use_bias=False,
-                        kernel_init=nn.initializers.zeros)(h)
-        return x + delta
+        return _head(x, h, self.out_channels, self.flux)
 
 
 class IdentityEmulator(nn.Module):
@@ -123,7 +139,9 @@ def demo():
     for C in (1, 3):
         x = jax.random.normal(key, (2, 16, 16, C))
         for m in (ResNetEmulator(out_channels=C), UNetEmulator(out_channels=C),
-                  IdentityEmulator(out_channels=C)):
+                  IdentityEmulator(out_channels=C),
+                  ResNetEmulator(out_channels=C, flux=True),
+                  UNetEmulator(out_channels=C, flux=True)):
             p = m.init(key, x)
             y = m.apply(p, x)
             assert y.shape == x.shape, (type(m).__name__, y.shape)
